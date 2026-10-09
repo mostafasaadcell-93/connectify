@@ -1946,7 +1946,8 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
             <label>Product name<input id="npName" required maxlength="120" placeholder="e.g. Anker 20W USB-C charger"></label>
             <label>Brand<input id="npBrand" maxlength="40" placeholder="e.g. Anker"></label>
             <label>Department<select id="npDept"></select></label>
-            <label>Type<input id="npSub" maxlength="40" placeholder="e.g. Wall chargers"></label>
+            <label>Type<select id="npSubSel"></select></label>
+            <label id="npSubNewL" hidden>New type name<input id="npSub" maxlength="40" placeholder="e.g. Wall chargers"></label>
             <label>Price ($)<input id="npPrice" type="number" min="0" step="0.5" placeholder="Leave empty for “Price on WhatsApp”"></label>
             <label>Quantity<input id="npQty" type="number" min="0" step="1" value="1"></label>
             <label class="wide">Description<textarea id="npDesc" rows="3" maxlength="600" placeholder="What customers read on the product page"></textarea></label>
@@ -4376,7 +4377,7 @@ $("cQ").addEventListener("input",e=>{cadm.q=e.target.value;cadm.limit=30;renderC
 $("cDept").onchange=e=>{cadm.dept=e.target.value;cadm.sub="";cadm.limit=30;renderCatalog()};
 $("cTabs").addEventListener("click",e=>{const b=e.target.closest("[data-d]");if(!b)return;cadm.dept=b.dataset.d;cadm.sub="";cadm.limit=30;$("cDept").value=cadm.dept;renderCatalog()});
 $("cSubs").addEventListener("click",e=>{const b=e.target.closest("[data-s]");if(!b)return;cadm.sub=b.dataset.s;cadm.limit=30;renderCatalog()});
-$("cAddHere").onclick=()=>{const box=$("npBox");box.open=true;if(cadm.dept)$("npDept").value=cadm.dept;$("npSub").value=cadm.sub||"";box.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("npName").focus(),350)};
+$("cAddHere").onclick=()=>{const box=$("npBox");box.open=true;if(cadm.dept)$("npDept").value=cadm.dept;fillNpSub(cadm.sub||"");box.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("npName").focus(),350)};
 $("cFilter").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;cadm.f=b.dataset.v;cadm.limit=30;renderCatalog()});
 $("cMore").onclick=()=>{cadm.limit+=30;renderCatalog()};
 function bindRows(el){
@@ -4460,13 +4461,21 @@ function shrinkPhoto(f,max){return new Promise(res=>{const r=new FileReader();r.
 
 /* ---- add a brand new product ---- */
 $("npDept").innerHTML=PH.depts.map(([d,l])=>`<option value="${d}">${esc(l)}</option>`).join("");
+/* "Type" is a dropdown of the types already in the chosen department, plus "+ New type…" */
+function fillNpSub(pick){const d=$("npDept").value,subs=[...new Set(PHI.filter(p=>p.dept==d&&!isTablet(p)).map(p=>p.sub).filter(Boolean))].sort();
+  $("npSubSel").innerHTML=subs.map(x=>`<option ${x==pick?"selected":""}>${esc(x)}</option>`).join("")+`<option value="__new">+ New type…</option>`;
+  if(!subs.length||pick&&!subs.includes(pick)&&pick!="")$("npSubSel").value=subs.length&&!pick?subs[0]:"__new";
+  const nw=$("npSubSel").value=="__new";$("npSubNewL").hidden=!nw;$("npSub").value=nw?(pick||""):$("npSubSel").value}
+$("npDept").addEventListener("change",()=>fillNpSub(""));
+$("npSubSel").onchange=()=>{const nw=$("npSubSel").value=="__new";$("npSubNewL").hidden=!nw;$("npSub").value=nw?"":$("npSubSel").value;if(nw)$("npSub").focus()};
+fillNpSub("");
 $("npForm").addEventListener("submit",async e=>{e.preventDefault();const name=$("npName").value.trim();if(!name)return;
   const pics=(await Promise.all([...$("npPics").files].slice(0,4).map(f=>shrinkPhoto(f,900)))).filter(Boolean);
   const pr=$("npPrice").value,id="np"+Date.now().toString(36);
-  DB.newp=DB.newp||[];DB.newp.unshift({id,name,brand:$("npBrand").value.trim(),dept:$("npDept").value,sub:$("npSub").value.trim(),p:pr===""?null:Math.max(0,+pr),q:Math.max(0,Math.floor(+$("npQty").value||0)),desc:$("npDesc").value.trim(),c:new Date().toISOString().slice(0,10)});
+  DB.newp=DB.newp||[];DB.newp.unshift({id,name,brand:$("npBrand").value.trim(),dept:$("npDept").value,sub:($("npSubSel").value=="__new"?$("npSub").value:$("npSubSel").value).trim(),p:pr===""?null:Math.max(0,+pr),q:Math.max(0,Math.floor(+$("npQty").value||0)),desc:$("npDesc").value.trim(),c:new Date().toISOString().slice(0,10)});
   if(pics.length)DB.ph[id]={pics};
   if(!save()){DB.newp.shift();delete DB.ph[id];return}
-  applyOwnerPhotos();$("npForm").reset();$("npQty").value=1;cadm.q=name;cadm.f="all";$("cQ").value=name;commit(`${name.slice(0,40)} added to the store`)});
+  applyOwnerPhotos();$("npForm").reset();$("npQty").value=1;fillNpSub("");cadm.q=name;cadm.f="all";$("cQ").value=name;commit(`${name.slice(0,40)} added to the store`)});
 
 /* ================= iPads & tablets: their own page ================= */
 PAGES.tabs=["iPads & tablets","Every iPad and tablet: prices, stock, photos, and new models or brands"];
