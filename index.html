@@ -1453,6 +1453,12 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
 .dragtoggle[aria-pressed=true]{background:rgba(46,211,198,.16);border-color:rgba(46,211,198,.7);color:#9ff0e0;box-shadow:0 0 18px rgba(46,211,198,.35)}
 .dragtoggle[hidden]{display:none}
 #admin select option{background:#0b1634;color:#EEF3FF}
+/* every dropdown on the site and in the admin: dark list, bright text (matches the design instead of the white system list) */
+select{color-scheme:dark}
+select option,select optgroup{background:#0b1634;color:#EEF3FF}
+select optgroup{color:#93A3C8;font-weight:700}
+select option:checked{background:#16357a;color:#fff}
+select option:disabled{color:#5d6b8c}
 
 </style>
 </head>
