@@ -3634,7 +3634,7 @@ function renderStore(){if(typeof applyOwnerPhotos=="function")applyOwnerPhotos()
 function renderStats(){
   const units=DB.units.filter(u=>u.qty>0),qty=units.reduce((s,u)=>s+u.qty,0),models=allModels().filter(m=>status(m).k=="ok").length;
   const low=units.filter(isLow).length,neu=DB.orders.filter(o=>o.status=="new").length;
-  $("aStats").innerHTML=[[neu,"new orders and requests","orders"],[qty,"phones in stock","stock"],[accUnits(),"accessories in stock","cat"],[low+accLow().length,"products running low","stock"]]
+  $("aStats").innerHTML=[[neu,"new orders and requests","orders"],[qty,"phones in stock","stock"],[accUnits(),`accessory pieces in stock · ${typeof PHI=="undefined"?0:PHI.filter(p=>!phHidden(p)&&phOK(p)).length} products`,"cat"],[low+accLow().length,"products running low","stock"]]
     .map(([b,s,g])=>`<button class="astat" data-goto="${g}" ${g=="orders"?'data-ostat="new"':""}><b>${b}</b><span>${s}</span></button>`).join("");
 }
 const accUnits=()=>typeof PHI=="undefined"?0:PHI.filter(p=>!phHidden(p)).reduce((t,p)=>t+phVars(p).reduce((a,v)=>a+(v.q>0?v.q:0),0),0);
