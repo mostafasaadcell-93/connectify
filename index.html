@@ -2906,7 +2906,7 @@ function seedOrders(){
   ];
 }
 function seedContent(){return{launch:["18promax","s26ultra","fold8ultra","flip8"],ticker:["18promax","s26ultra","fold8ultra","17pro","flip8","18pro","s26","air","duo","16promax","fold8","a57"],
-  badge:"iPhone 18 Pro now in stock",banner:{on:true,text:"October offers: open box iPhones with 1 year warranty. Free delivery all over Lebanon."},
+  badge:"iPhone 18 Pro now in stock",banner:{on:true,text:"Coming soon: iPhone Duo lands October 23. Message us on WhatsApp to reserve yours first."},
   badges:{"18promax":"new","s26ultra":"new","fold8ultra":"new","17pro":"best","16promax":"best","a20":"hot","a27":"best"},
   info:seedInfo()}}
 /* store details shown on product pages and the warranty page. Placeholders until Connectify confirms them, all editable in the admin */
@@ -2933,6 +2933,8 @@ const seedAcc=(a,i)=>{const x=Object.assign({},a,{fits:(FITS[a.id]||[]).slice(),
 const seedAccs=()=>ACC.map(seedAcc);
 function seedDB(){const acc=null;
   return{units:seedUnits(),accs:window.CX_ITEMS?[]:seedAccs(),accV:2,custom:[],trade:null,orders:seedOrders(),content:seedContent(),logs:seedLogs(),seq:1042}}
+/* old banner text saved before the change: swap it for the new one */
+function fixBanner(){const b=DB.content&&DB.content.banner;if(b&&b.text=='October offers: open box iPhones with 1 year warranty. Free delivery all over Lebanon.')b.text='Coming soon: iPhone Duo lands October 23. Message us on WhatsApp to reserve yours first.'}
 function load(){
   try{const r=localStorage.getItem(KEY);if(r)DB=JSON.parse(r)}catch(e){}
   if(!DB||!DB.units)DB=seedDB();
@@ -2940,6 +2942,7 @@ function load(){
   if(!DB.accV){DB.accV=2;ACC.forEach((a,i)=>{if(a.seedPhotos&&!accById(a.id))DB.accs.unshift(seedAcc(a,i))})}
   const sc=seedContent();DB.content=Object.assign(sc,DB.content||{});DB.content.info=Object.assign(seedInfo(),DB.content.info||{});if(DB.content.info.brands=="Apple, Samsung, Karl Lagerfeld, CKG, Disney, Nexacore")DB.content.info.brands=seedInfo().brands;
   DB.content.info.pay=Object.assign(seedInfo().pay,DB.content.info.pay||{});
+  fixBanner();
   DB.accs.forEach(a=>{if(!a.fits)a.fits=(FITS[a.id]||[]).slice()});DB.logs=DB.logs||seedLogs();DB.orders=DB.orders||[];
   if(!DB.trade)DB.trade={};const fresh=seedTrade();Object.keys(fresh).forEach(id=>{if(!DB.trade[id])DB.trade[id]=fresh[id]});
 }
@@ -4486,7 +4489,7 @@ let pushT=null,busy=false,lastNew=-1;
 
 /* first visit on the live site: drop demo orders, demo stats and any demo edits */
 if(!DB.live){DB=seedDB();DB.trade=null;load2();DB.orders=[];DB.logs={views:{},demand:{},misses:[]};DB.live=1}
-function load2(){try{const sc=seedContent();DB.content=Object.assign(sc,DB.content||{});DB.content.info=Object.assign(seedInfo(),DB.content.info||{});DB.content.info.pay=Object.assign(seedInfo().pay,DB.content.info.pay||{});
+function load2(){try{const sc=seedContent();DB.content=Object.assign(sc,DB.content||{});DB.content.info=Object.assign(seedInfo(),DB.content.info||{});DB.content.info.pay=Object.assign(seedInfo().pay,DB.content.info.pay||{});fixBanner();
   if(!DB.trade)DB.trade={};const fresh=seedTrade();Object.keys(fresh).forEach(id=>{if(!DB.trade[id])DB.trade[id]=fresh[id]})}catch(e){}}
 DB.orders=(DB.orders||[]).filter(o=>!o.demo);
 
