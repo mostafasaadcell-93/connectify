@@ -3374,12 +3374,15 @@ const TRADE_MODELS=()=>allModels().filter(m=>m.id!="duo"&&!m.custom&&RESALE[m.id
 function seedTrade(){const t={};TRADE_MODELS().forEach(m=>{const r=resaleFor(m);t[m.id]={};m.st.forEach(s=>t[m.id][s]=round5(r[s]*TRADE_RATE))});return t}
 const fmt$=n=>"$"+Math.round(n).toLocaleString("en-US");
 function tradeUI(){
-  const ms=TRADE_MODELS(),grp=b=>ms.filter(m=>brandOf(m)==b).sort((x,y)=>y.year-x.year||y.name.localeCompare(x.name)).map(m=>`<option value="${m.id}" ${m.id=="14pro"?"selected":""}>${esc(m.name)}</option>`).join("");
+  /* runs again when fresh prices arrive: keep whatever the customer already picked */
+  const ms=TRADE_MODELS(),prev=$("tModel").value,keep=prev&&ms.some(m=>m.id==prev),pick=keep?prev:"14pro",prevSt=keep&&tPick("tSt")?tPick("tSt").dataset.v:null;
+  const grp=b=>ms.filter(m=>brandOf(m)==b).sort((x,y)=>y.year-x.year||y.name.localeCompare(x.name)).map(m=>`<option value="${m.id}" ${m.id==pick?"selected":""}>${esc(m.name)}</option>`).join("");
   $("tModel").innerHTML=`<optgroup label="iPhone">${grp("apple")}</optgroup><optgroup label="Samsung Galaxy">${grp("samsung")}</optgroup>`;
-  tradeStorage();
+  $("tModel").value=pick;
+  tradeStorage(prevSt);
 }
-function tradeStorage(){const m=modelById($("tModel").value);
-  $("tSt").innerHTML=m.st.map((s,i)=>`<button type="button" data-v="${s}" aria-pressed="${i==0}">${fmtGB(s)}</button>`).join("");
+function tradeStorage(keepSt){const m=modelById($("tModel").value),k=typeof keepSt=="string"&&m.st.includes(+keepSt)?+keepSt:m.st[0];
+  $("tSt").innerHTML=m.st.map(s=>`<button type="button" data-v="${s}" aria-pressed="${s==k}">${fmtGB(s)}</button>`).join("");
   $("tSt").style.gridTemplateColumns=`repeat(${m.st.length},1fr)`;tradeCalc()}
 const tPick=id=>document.querySelector(`#${id} [aria-pressed=true]`);
 function tradeCalc(){
