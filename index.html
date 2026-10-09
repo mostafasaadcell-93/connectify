@@ -3373,9 +3373,10 @@ document.addEventListener("keydown",e=>{if(e.key=="Escape"){if($("waModal").clas
 const TRADE_MODELS=()=>allModels().filter(m=>m.id!="duo"&&!m.custom&&RESALE[m.id]);
 function seedTrade(){const t={};TRADE_MODELS().forEach(m=>{const r=resaleFor(m);t[m.id]={};m.st.forEach(s=>t[m.id][s]=round5(r[s]*TRADE_RATE))});return t}
 const fmt$=n=>"$"+Math.round(n).toLocaleString("en-US");
+const TRADE_PICK={m:"",st:""};   // the customer's last choice, in case the box is ever rebuilt
 function tradeUI(){
   /* runs again when fresh prices arrive: keep whatever the customer already picked */
-  const ms=TRADE_MODELS(),prev=$("tModel").value,keep=prev&&ms.some(m=>m.id==prev),pick=keep?prev:"14pro",prevSt=keep&&tPick("tSt")?tPick("tSt").dataset.v:null;
+  const ms=TRADE_MODELS(),prev=$("tModel").value||TRADE_PICK.m,keep=prev&&ms.some(m=>m.id==prev),pick=keep?prev:"14pro",prevSt=keep?(tPick("tSt")?tPick("tSt").dataset.v:TRADE_PICK.st||null):null;
   const grp=b=>ms.filter(m=>brandOf(m)==b).sort((x,y)=>y.year-x.year||y.name.localeCompare(x.name)).map(m=>`<option value="${m.id}" ${m.id==pick?"selected":""}>${esc(m.name)}</option>`).join("");
   $("tModel").innerHTML=`<optgroup label="iPhone">${grp("apple")}</optgroup><optgroup label="Samsung Galaxy">${grp("samsung")}</optgroup>`;
   $("tModel").value=pick;
@@ -3391,7 +3392,8 @@ function tradeCalc(){
   const base=(DB.trade[m.id]||{})[s]||0,v=base*c*b;
   $("tOut").textContent=v?`${fmt$(round5(v*.95))} – ${fmt$(round5(v*1.03))}`:"Ask us";
 }
-$("tModel").onchange=tradeStorage;
+$("tModel").onchange=()=>{TRADE_PICK.m=$("tModel").value;TRADE_PICK.st="";tradeStorage()};
+$("tSt").addEventListener("click",e=>{const b=e.target.closest("button");if(b)TRADE_PICK.st=b.dataset.v});
 ["tSt","tCd","tBat"].forEach(id=>$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));tradeCalc()}));
 $("tReqOpen").onclick=()=>{$("tReq").hidden=false;$("tReqOpen").hidden=true;$("tName").focus()};
 onSubmit("tReq",e=>{e.preventDefault();
@@ -4702,7 +4704,7 @@ async function pullState(){const{data,error}=await sb.from("store_state").select
   if(data.some(r=>r.key=="content"||r.key=="trade"))load2();
   KEYS.forEach(k=>{if(!(k in snap))snap[k]="__none__"});   // never saved yet: first staff login uploads it
   return true}
-function rerender(){_save();try{applyOwnerPhotos();renderStore();if(typeof tradeUI=="function")tradeUI();renderCart()}catch(e){console.warn(e)}
+function rerender(){_save();try{applyOwnerPhotos();renderStore();if(typeof tradeCalc=="function")tradeCalc();   /* new trade-in prices: only recalculate, never rebuild the customer's choices */renderCart()}catch(e){console.warn(e)}
   if(ADMIN_ON&&L.staff)try{renderPage()}catch(e){}}
 
 /* ---------- staff ---------- */
