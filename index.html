@@ -1459,6 +1459,44 @@ select option,select optgroup{background:#171717;color:#F3F3F3}
 select optgroup{color:#A2A2A2;font-weight:700}
 select option:checked{background:#333333;color:#fff}
 select option:disabled{color:#6A6A6A}
+/* ---------- shop menu ---------- */
+.catbar{display:flex;gap:2px;align-items:center;padding:0 18px 8px;overflow-x:auto;scrollbar-width:none;white-space:nowrap}
+.catbar::-webkit-scrollbar{display:none}
+.catbar .cb{display:inline-flex;align-items:center;gap:5px;height:34px;padding:0 12px;border-radius:999px;font:600 13.5px Manrope,sans-serif;color:var(--ice);background:none;border:0;cursor:pointer;transition:background .15s,color .15s}
+.catbar .cb:hover,.catbar .cb[aria-expanded=true]{background:rgba(255,255,255,.08)}
+.catbar .cb svg{opacity:.6;transition:transform .2s}.catbar .cb[aria-expanded=true] svg{transform:rotate(180deg)}
+.megamenu{position:fixed;z-index:60;min-width:240px;max-width:min(420px,calc(100vw - 24px));max-height:70vh;overflow:auto;padding:8px;border-radius:18px;background:rgba(14,14,16,.97);border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.55);backdrop-filter:blur(16px);display:grid;gap:2px;animation:mmIn .18s ease}
+.megamenu[hidden]{display:none}
+@keyframes mmIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.megamenu .mm{display:flex;justify-content:space-between;align-items:center;gap:16px;text-align:left;padding:10px 12px;border-radius:12px;font:600 14px Manrope,sans-serif;color:var(--ice);background:none;border:0;cursor:pointer}
+.megamenu .mm:hover{background:rgba(255,255,255,.08)}
+.megamenu .mm span{color:var(--mist);font-size:12px;font-weight:600}
+.megamenu .mm.all{border-bottom:1px solid var(--line);border-radius:12px 12px 4px 4px;margin-bottom:4px}
+.burger{display:none;width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid var(--line);flex-direction:column;justify-content:center;align-items:center;gap:4px;cursor:pointer}
+.burger span{display:block;width:18px;height:2px;border-radius:2px;background:var(--ice)}
+.navr{display:flex;align-items:center;gap:8px}
+.mdrawer{position:fixed;inset:0;z-index:90}
+.mdrawer[hidden]{display:none}
+.mdscrim{position:absolute;inset:0;background:rgba(0,0,0,.55);opacity:0;transition:opacity .3s}
+.mdpanel{position:absolute;top:0;left:0;bottom:0;width:min(86vw,360px);background:var(--deep);border-right:1px solid var(--line);display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+.mdrawer.on .mdscrim{opacity:1}.mdrawer.on .mdpanel{transform:none}
+.mdhead{display:flex;justify-content:space-between;align-items:center;padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+.mdlogo{font:800 22px Sora,sans-serif;letter-spacing:-.02em}.mdlogo .t{color:var(--teal)}
+.mdx{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ice);font-size:16px;cursor:pointer}
+.mdbody{overflow:auto;padding:10px 12px 28px;display:grid;gap:4px;align-content:start}
+.mdquick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.mdquick button{height:44px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ice);font:700 13.5px Manrope,sans-serif;cursor:pointer}
+.mdg{border-radius:14px}
+.mdg summary,.mdg.flat{display:flex;justify-content:space-between;align-items:center;padding:13px 12px;font:700 15px Manrope,sans-serif;color:var(--ice);cursor:pointer;list-style:none;border-radius:14px;width:100%;background:none;border:0;text-align:left}
+.mdg summary::-webkit-details-marker{display:none}
+.mdg summary span,.mdg.flat span,.mdi span{color:var(--mist);font-size:12px;font-weight:600}
+.mdg[open] summary{background:rgba(255,255,255,.06)}
+.mdi{display:flex;justify-content:space-between;width:100%;padding:11px 12px 11px 24px;font:600 14px Manrope,sans-serif;color:var(--ice);background:none;border:0;text-align:left;cursor:pointer;border-radius:12px}
+.mdi:active,.mdg.flat:active{background:rgba(255,255,255,.08)}
+.mdi.all{color:var(--teal)}
+.mdlinks{display:grid;gap:2px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.mdlinks a{padding:12px;font:600 14px Manrope,sans-serif;color:var(--mist);border-radius:12px}
+@media (max-width:999px){.catbar{display:none}.burger{display:inline-flex}}
 
 </style>
 </head>
@@ -1526,13 +1564,23 @@ select option:disabled{color:#6A6A6A}
       <a href="#shop">Shop</a><a href="#trade">Trade-in</a><a href="#how">How to order</a>
     </div>
     <div class="navr">
+    <button class="burger" id="burgerBtn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mDrawer"><span></span><span></span><span></span></button>
     <button class="cartbtn" id="openCart" aria-label="Open cart">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
       <span class="ctext">Cart</span> <span class="count" id="count">0</span>
     </button></div>
   </div>
+  <div class="catbar" id="catbar" role="menubar" aria-label="Shop by category"></div>
   <div class="progress" id="progress" aria-hidden="true"></div>
 </nav>
+<div class="megamenu" id="megaMenu" role="menu" hidden></div>
+<div class="mdrawer" id="mDrawer" hidden>
+  <div class="mdscrim" data-mclose></div>
+  <aside class="mdpanel" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="mdhead"><span class="mdlogo">Connec<span class="t">tify</span>.</span><button type="button" class="mdx" data-mclose aria-label="Close menu">✕</button></div>
+    <div class="mdbody" id="mdBody"></div>
+  </aside>
+</div>
 
 <canvas id="liquid" aria-hidden="true"></canvas><div id="liquidDim" aria-hidden="true"></div>
 <header class="hero" id="top">
@@ -3869,6 +3917,63 @@ function syncNewProducts(){for(let k=PHI.length-1;k>=0;k--)if(PHI[k].np){PHmap.d
     vars:a.vars?a.vars.map(v=>({t:v.t||"Standard",p:v.p??null,cp:v.cp||0,ok:v.q>0,img:"",q:v.q||0})):[{t:"Standard",p:a.p,cp:0,ok:a.q>0,img:"",q:a.q}],fits:[],fl:"",cx:1,np:1,tab:a.tab?1:0};PHI.unshift(p);PHmap.set(p.id,p)})}
 function applyOwnerPhotos(){syncNewProducts();PHI.forEach(p=>{if(!p._imgs0)p._imgs0=p.imgs.slice();const o=DB.ph&&DB.ph[p.id];p.imgs=o&&o.pics&&o.pics.length?[...o.pics,...p._imgs0.filter(hasImg)]:p._imgs0.slice()})}
 load();applyOwnerPhotos();tradeUI();renderContent();renderGrid();renderCart();
+
+/* ================= shop menu: category bar on desktop, burger drawer on phones ================= */
+(function(){
+const cnt=(cat,sub)=>{try{if(isPhoneCat(cat))return allModels().filter(m=>inPhoneCat(m,cat,sub||"all")&&status(m).k=="ok").length;
+  return storeItems().filter(x=>x.dept==cat&&(!sub||x.sub==sub)&&x.ok).length}catch(e){return 0}};
+function groups(){const G=[];
+  G.push({label:"iPhone",cat:"apple",items:SERIES.filter(([v])=>v!="all").map(([v,l])=>({label:/^\d/.test(l)?"iPhone "+l:l=="SE"?"iPhone SE":"iPhone "+l,sub:v}))});
+  G.push({label:"Samsung",cat:"samsung",items:SSERIES.filter(([v])=>v!="all").map(([v,l])=>({label:"Galaxy "+l.replace(/^Z /,"Z "),sub:v}))});
+  if(allModels().some(m=>phoneTab(m)=="other"))G.push({label:"Other phones",cat:"other",items:otherSeries().filter(([v])=>v!="all").map(([v,l])=>({label:l,sub:v}))});
+  G.push({label:"iPads & tablets",cat:"ipad",items:deptSubs("ipad").map(s=>({label:s,sub:s}))});
+  PH.depts.forEach(([d,l])=>{const subs=deptSubs(d);if(!subs.length)return;G.push({label:l,cat:d,items:subs.length>1?subs.map(s=>({label:s,sub:s})):[]})});
+  return G}
+const FLAT=[{label:"🔥 Price drops",cat:"all",sort:"deals"},{label:"✨ New arrivals",cat:"all",sort:"new"}];
+function go(cat,sub,sort){closeMega();closeDrawer();
+  setShopCat(cat,sort);if(sub){shop.series=sub;renderSeries();renderGrid(true)}
+  const el=document.getElementById("shop"),nav=document.querySelector(".nav");
+  setTimeout(()=>scrollTo({top:el.getBoundingClientRect().top+scrollY-(nav?nav.offsetHeight+16:80),behavior:"smooth"}),30)}
+window.menuGo=go;
+/* ---- desktop bar + dropdown ---- */
+const bar=$("catbar"),mega=$("megaMenu");let G=[],hideT=null,openIdx=-1;
+function renderBar(){G=groups();
+  bar.innerHTML=G.map((g,i)=>`<button type="button" class="cb" data-gi="${i}" aria-haspopup="${g.items.length?"true":"false"}" aria-expanded="false">${esc(g.label)}${g.items.length?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`:""}</button>`).join("")
+    +FLAT.map((f,i)=>`<button type="button" class="cb flat" data-fi="${i}">${f.label}</button>`).join("")}
+function openMega(i,btn){clearTimeout(hideT);const g=G[i];if(!g||!g.items.length){closeMega();return}
+  openIdx=i;bar.querySelectorAll(".cb").forEach(b=>b.setAttribute("aria-expanded",b===btn?"true":"false"));
+  mega.innerHTML=`<button type="button" class="mm all" data-cat="${g.cat}">All ${esc(g.label)} <span>${cnt(g.cat)} in stock</span></button>`
+    +g.items.map(it=>`<button type="button" class="mm" data-cat="${g.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}<span>${cnt(g.cat,it.sub)||""}</span></button>`).join("");
+  mega.hidden=false;const r=btn.getBoundingClientRect(),w=mega.offsetWidth;
+  mega.style.top=(r.bottom+8)+"px";mega.style.left=Math.max(12,Math.min(innerWidth-w-12,r.left))+"px"}
+function closeMega(){openIdx=-1;mega.hidden=true;bar.querySelectorAll(".cb").forEach(b=>b.setAttribute("aria-expanded","false"))}
+bar.addEventListener("mouseover",e=>{const b=e.target.closest("[data-gi]");if(b&&matchMedia("(hover:hover)").matches)openMega(+b.dataset.gi,b)});
+bar.addEventListener("mouseleave",()=>{hideT=setTimeout(closeMega,220)});
+mega.addEventListener("mouseenter",()=>clearTimeout(hideT));mega.addEventListener("mouseleave",()=>{hideT=setTimeout(closeMega,220)});
+bar.addEventListener("click",e=>{const b=e.target.closest("[data-gi]");if(b){const i=+b.dataset.gi;if(!G[i].items.length){go(G[i].cat);return}
+    if(openIdx===i&&!matchMedia("(hover:hover)").matches)closeMega();else if(openIdx===i)go(G[i].cat);else openMega(i,b);return}
+  const f=e.target.closest("[data-fi]");if(f){const x=FLAT[+f.dataset.fi];go(x.cat,null,x.sort)}});
+mega.addEventListener("click",e=>{const b=e.target.closest("[data-cat]");if(b)go(b.dataset.cat,b.dataset.sub||null)});
+addEventListener("scroll",()=>{if(!mega.hidden)closeMega()},{passive:true});
+document.addEventListener("keydown",e=>{if(e.key=="Escape"){closeMega();closeDrawer()}});
+document.addEventListener("click",e=>{if(!mega.hidden&&!e.target.closest("#megaMenu,#catbar"))closeMega()});
+/* ---- phone drawer ---- */
+const dr=$("mDrawer"),burger=$("burgerBtn");
+function renderDrawer(){const g=groups();
+  $("mdBody").innerHTML=`<div class="mdquick">${FLAT.map((f,i)=>`<button type="button" data-mfi="${i}">${f.label}</button>`).join("")}</div>`
+    +g.map(x=>x.items.length?`<details class="mdg"><summary>${esc(x.label)}<span>${cnt(x.cat)}</span></summary><button type="button" class="mdi all" data-cat="${x.cat}">All ${esc(x.label)}</button>${x.items.map(it=>`<button type="button" class="mdi" data-cat="${x.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}<span>${cnt(x.cat,it.sub)||""}</span></button>`).join("")}</details>`
+      :`<button type="button" class="mdg flat" data-cat="${x.cat}">${esc(x.label)}<span>${cnt(x.cat)}</span></button>`).join("")
+    +`<div class="mdlinks"><a href="#trade" data-mlink>Trade-in your phone</a><a href="#how" data-mlink>How to order</a><a href="#reviews" data-mlink>Reviews</a><a href="https://wa.me/${WA_NUM}" target="_blank" rel="noopener">WhatsApp ${WA_SHOW}</a></div>`}
+function openDrawer(){renderDrawer();dr.hidden=false;requestAnimationFrame(()=>dr.classList.add("on"));burger.setAttribute("aria-expanded","true");document.documentElement.style.overflow="hidden"}
+function closeDrawer(){if(dr.hidden)return;dr.classList.remove("on");burger.setAttribute("aria-expanded","false");document.documentElement.style.overflow="";setTimeout(()=>{if(!dr.classList.contains("on"))dr.hidden=true},320)}
+burger.onclick=()=>dr.hidden?openDrawer():closeDrawer();
+dr.addEventListener("click",e=>{if(e.target.closest("[data-mclose]")){closeDrawer();return}
+  const f=e.target.closest("[data-mfi]");if(f){const x=FLAT[+f.dataset.mfi];go(x.cat,null,x.sort);return}
+  const b=e.target.closest("[data-cat]");if(b){go(b.dataset.cat,b.dataset.sub||null);return}
+  if(e.target.closest("[data-mlink]"))closeDrawer()});
+renderBar();
+window.menuRefresh=renderBar;
+})();
 
 /* ================= ADMIN ================= */
 const AUTH_KEY=KEY+"-auth";
