@@ -1512,6 +1512,11 @@ select option:disabled{color:#6A6A6A}
 .mdi.mdsec span{font-weight:600}
 .mdg.flat{margin-top:2px}
 .mdi.mdsec{color:var(--mist);font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:14px 12px 6px 16px}
+.oaddr{display:block;margin-top:4px;color:var(--ice);font-size:13px;white-space:pre-line}
+#oAddr{width:100%;min-height:84px;resize:vertical;box-sizing:border-box;font:inherit;line-height:1.45}
+.frow textarea{border-radius:12px;border:1px solid var(--line);background:#111111;color:var(--ice);font:600 15px Manrope,sans-serif;padding:12px 14px}
+.frow textarea:focus{outline:2px solid var(--teal);outline-offset:1px}
+.frow textarea::placeholder{color:var(--mist);opacity:.8;font-weight:500}
 
 </style>
 </head>
@@ -1853,8 +1858,9 @@ select option:disabled{color:#6A6A6A}
     <div class="frow"><label for="oName">Your name</label><input id="oName" autocomplete="name" placeholder="e.g. Karim"><small class="ferr" id="oNameErr"></small></div>
     <div class="frow two"><div><label for="oPhone">Phone</label><input id="oPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="70 123 456"><small class="ferr" id="oPhoneErr"></small></div>
       <div><label for="oArea">Area</label><select id="oArea"></select><small class="ferr" id="oAreaErr"></small></div></div>
+    <div class="frow"><label for="oAddr">Delivery address</label><textarea id="oAddr" rows="3" maxlength="300" autocomplete="street-address" placeholder="Town, street, building, floor, and a landmark near you"></textarea><small class="ferr" id="oAddrErr"></small></div>
     <div class="payinfo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg><span><b>Delivery all over Lebanon</b>Cash on delivery. Check the phone, then pay.</span></div>
-    <button class="btn btn-wa" type="submit" id="checkout">Place order</button>
+    <button class="btn btn-main" type="submit" id="checkout">Place order</button>
   </form>
 </aside>
 
@@ -3585,15 +3591,16 @@ $("closeCart").onclick=$("scrim").onclick=()=>openCart(false);
 $("oArea").innerHTML=`<option value="">Choose your area</option>`+AREAS.map(a=>`<option>${a}</option>`).join("");
 function fieldErr(id,msg){const f=$(id);f.setAttribute("aria-invalid",msg?"true":"false");const e=$(id+"Err");if(e)e.textContent=msg||""}
 onSubmit("dfoot",e=>{e.preventDefault();
-  const name=$("oName").value.trim(),phone=$("oPhone").value.replace(/[^\d]/g,""),area=$("oArea").value,pay="Cash on delivery";
+  const name=$("oName").value.trim(),phone=$("oPhone").value.replace(/[^\d]/g,""),area=$("oArea").value,pay="Cash on delivery",address=$("oAddr").value.trim().replace(/\s+\n/g,"\n").slice(0,300);
   fieldErr("oName",name?"":"Add your name so we know who to call");
   fieldErr("oPhone",phone.length>=7?"":"Add a Lebanese number, like 70 123 456");
   fieldErr("oArea",area?"":"Pick your area so we can plan delivery");
-  if(!name||phone.length<7||!area){toast("A few details are missing");return}
+  fieldErr("oAddr",address.length>=4?"":"Add your address so the driver finds you");
+  if(!name||phone.length<7||!area||address.length<4){toast("A few details are missing");return}
   const id=nextCode("C");
-  DB.orders.unshift({id,type:"order",t:now(),name,phone:$("oPhone").value.trim(),area,pay,status:"new",items:cart.map(i=>({kind:i.kind,id:i.id,vi:i.vi,unit:i.unit,title:i.title,detail:i.detail,hex:i.hex,price:i.price}))});
+  DB.orders.unshift({id,type:"order",t:now(),name,phone:$("oPhone").value.trim(),area,address,pay,status:"new",items:cart.map(i=>({kind:i.kind,id:i.id,vi:i.vi,unit:i.unit,title:i.title,detail:i.detail,hex:i.hex,price:i.price}))});
   save();
-  showWA(`Hi Connectify! Order ${id}\n${cart.map(i=>`• ${i.title}, ${i.detail}${i.price!=null?` (${money(i.price)})`:""}`).join("\n")}${cart.some(i=>i.price!=null)?`\nSubtotal: ${money(cart.filter(i=>i.price!=null).reduce((s,i)=>s+i.price,0))} + delivery`:""}\nDelivery to ${area}, cash on delivery\nName: ${name}\nCan you confirm the prices and send me real photos?`,`Order ${id} saved`,`Last step: send it to us on WhatsApp (${WA_SHOW}). We reply with prices and real photos.`);
+  showWA(`Hi Connectify! Order ${id}\n${cart.map(i=>`• ${i.title}, ${i.detail}${i.price!=null?` (${money(i.price)})`:""}`).join("\n")}${cart.some(i=>i.price!=null)?`\nSubtotal: ${money(cart.filter(i=>i.price!=null).reduce((s,i)=>s+i.price,0))} + delivery`:""}\nDelivery to ${area}, cash on delivery\nAddress: ${address}\nName: ${name}\nCan you confirm the prices and send me real photos?`,`Order ${id} saved`,`Last step: send it to us on WhatsApp (${WA_SHOW}). We reply with prices and real photos.`);
   cart.length=0;renderCart();renderGrid();openCart(false);if(window.adminRefresh)adminRefresh();
 });
 document.addEventListener("keydown",e=>{if(e.key=="Escape"){if($("waModal").classList.contains("on"))closeWA();else{openCart(false);closeModals()}}});
@@ -3932,6 +3939,7 @@ function syncNewProducts(){for(let k=PHI.length-1;k>=0;k--)if(PHI[k].np){PHmap.d
     vars:a.vars?a.vars.map(v=>({t:v.t||"Standard",p:v.p??null,cp:v.cp||0,ok:v.q>0,img:"",q:v.q||0})):[{t:"Standard",p:a.p,cp:0,ok:a.q>0,img:"",q:a.q}],fits:[],fl:"",cx:1,np:1,tab:a.tab?1:0};PHI.unshift(p);PHmap.set(p.id,p)})}
 function applyOwnerPhotos(){syncNewProducts();PHI.forEach(p=>{if(!p._imgs0)p._imgs0=p.imgs.slice();const o=DB.ph&&DB.ph[p.id];p.imgs=o&&o.pics&&o.pics.length?[...o.pics,...p._imgs0.filter(hasImg)]:p._imgs0.slice()})}
 load();applyOwnerPhotos();tradeUI();renderContent();renderGrid();renderCart();
+$("oAddr").addEventListener("input",()=>{if($("oAddr").value.trim().length>=4)fieldErr("oAddr","")});
 
 /* ================= shop menu: category bar on desktop, burger drawer on phones ================= */
 (function(){
@@ -4079,7 +4087,7 @@ function renderOrders(){
   const list=DB.orders.filter(o=>adm.ostat=="all"||(adm.ostat=="tradein"?o.type=="tradein":o.status==adm.ostat));
   $("oList").innerHTML=list.length?list.map(o=>`<article class="ocard st-${o.status}">
     <header><span class="otag ${o.type}">${o.type=="tradein"?"Trade-in":"Order"}</span><b>${esc(o.id)}</b><small>${ago(o.t)}${o.demo?" · demo":""}</small></header>
-    <div class="ocust"><b>${esc(o.name)}</b><span>${esc(o.phone)}${o.area?` · ${esc(o.area)}`:""}${o.pay?` · ${esc(o.pay)}`:""}</span>
+    <div class="ocust"><b>${esc(o.name)}</b><span>${esc(o.phone)}${o.area?` · ${esc(o.area)}`:""}${o.pay?` · ${esc(o.pay)}`:""}</span>${(o.address||(o.trade&&o.trade.address))?`<span class="oaddr">📍 ${esc(o.address||o.trade.address)}</span>`:""}
       <a class="abtn sm wa" href="${waLink(o.phone)}" target="_blank" rel="noopener">WhatsApp</a></div>
     <div class="oitems">${o.type=="tradein"?`<div class="oitem"><span class="mini">${modelById(o.trade.id)?mSVG(modelById(o.trade.id)):""}</span><span><b>${esc(o.trade.title)}</b><small>${esc(o.trade.detail)} · estimate ${esc(o.trade.est)}</small></span></div>`
       :o.items.map(i=>{const m=i.kind=="phone"?modelById(i.id):null,a=i.kind=="acc"?accById(i.id):null;return `<div class="oitem"><span class="mini">${m?mSVG(m,i.hex):a?art(a):i.kind=="ph"?((p=>p&&hasImg(p.imgs[0])?`<img src="${phImg(p.imgs[0],160)}" alt="">`:"")(PHI.find(x=>x.id==i.id))):""}</span><span><b>${esc(i.title)}</b><small>${esc(i.detail)}${i.price!=null?" · "+money(i.price):""}</small></span></div>`}).join("")}${(o.items||[]).some(i=>i.price!=null)?`<div class="ototal">Total <b>${money(o.items.reduce((t,i)=>t+(i.price||0),0))}</b>${o.items.some(i=>i.price==null&&i.kind!="trade")?" + items priced on WhatsApp":""}</div>`:""}</div>
@@ -5062,8 +5070,12 @@ async function push(){pushT=null;if(!L.staff||busy){if(busy)schedulePush();retur
 
 /* ---------- customer orders and trade-in requests ---------- */
 function sendOrders(){(DB.orders||[]).forEach(o=>{if(o.remote||o.demo||o.sent||o.sending)return;o.sending=1;
-  sb.from("orders").insert({code:o.id,type:o.type,name:(o.name||"").slice(0,80),phone:(o.phone||"").slice(0,25),area:o.area||null,pay:o.pay||null,items:o.items||[],trade:o.trade||null})
-    .then(({error})=>{delete o.sending;
+  const row={code:o.id,type:o.type,name:(o.name||"").slice(0,80),phone:(o.phone||"").slice(0,25),area:o.area||null,pay:o.pay||null,items:o.items||[],trade:o.trade||null};
+  if(o.address)row.address=o.address.slice(0,300);
+  const send=r=>sb.from("orders").insert(r).then(({error})=>{
+      if(error&&r.address&&/address/i.test(error.message||"")){const r2=Object.assign({},r);delete r2.address;r2.trade=Object.assign({},r.trade||{},{address:r.address});return send(r2)}
+      return{error}});
+  send(row).then(({error})=>{delete o.sending;
       if(!error){o.sent=1;_save();if(L.staff)refreshStaff();return}
       console.warn(error);if(error.code=="23505")o.id=nextCode(o.type=="tradein"?"T":"C");setTimeout(sendOrders,10000)})})}
 
@@ -5085,7 +5097,7 @@ function rerender(){_save();try{applyOwnerPhotos();renderStore();if(typeof trade
 
 /* ---------- staff ---------- */
 const fromRow=r=>({id:r.code,dbid:r.id,remote:1,type:r.type,t:Date.parse(r.created_at),name:r.name,phone:r.phone,area:r.area||"",pay:r.pay||"",status:r.status,
-  items:r.items||[],trade:r.trade||undefined,stockApplied:r.stock_applied?1:0,_sig:r.status+"|"+(r.stock_applied?1:0)});
+  items:r.items||[],trade:r.trade||undefined,address:r.address||(r.trade&&r.trade.address)||"",stockApplied:r.stock_applied?1:0,_sig:r.status+"|"+(r.stock_applied?1:0)});
 async function pullOrders(){const{data,error}=await sb.from("orders").select("*").order("created_at",{ascending:false}).limit(300);if(error){console.warn(error);return}
   const mine=DB.orders.filter(o=>!o.remote&&!o.sent),old=new Map(DB.orders.filter(o=>o.remote).map(o=>[o.dbid,o]));
   DB.orders=[...mine,...data.map(r=>{const o=old.get(r.id);return o&&o._sig!==(o.status+"|"+(o.stockApplied?1:0))?o:fromRow(r)})];
