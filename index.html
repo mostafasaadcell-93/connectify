@@ -1438,6 +1438,15 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
 .ufields input[type=file]{color:var(--mist);font-size:13px;max-width:100%}
 #tForm,#tForm .ufields,#tForm label{min-width:0;max-width:100%}
 #tForm{box-sizing:border-box;width:100%}
+/* catalog department tabs */
+.ctabs{margin:4px 0 10px}
+.ctabs .tab .tn{opacity:.55;font-size:12px;margin-left:3px}
+.ctabs .tab[aria-pressed=true]{background:var(--ice);color:var(--ink)}
+.csubrow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.csubrow .series:empty{display:none}
+.csubrow #cAddHere{height:40px;display:inline-flex;align-items:center;margin-left:auto}
+#cSubs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;max-width:100%}#cSubs button{white-space:nowrap}#cSubs button span{opacity:.55;margin-left:3px}
+@media (max-width:700px){.csubrow #cAddHere{width:100%;justify-content:center;margin-left:0}}
 
 </style>
 </head>
@@ -1947,9 +1956,11 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
           <p>These apply to the products in the current view, so filter first (for example, Department: Audio).</p>
           <div class="bulkrow"><label class="tin">Change prices by <input type="number" id="bPctV" step="1" placeholder="10" aria-label="Percent"> %</label><button type="button" class="abtn" id="bPct">Apply</button><button type="button" class="abtn" id="bRound">Round to whole dollars</button></div>
           <div class="bulkrow"><button type="button" class="abtn" id="bIn">All in stock</button><button type="button" class="abtn" id="bOut">All sold out</button><button type="button" class="abtn" id="bHide">Hide all</button><button type="button" class="abtn" id="bShow">Show all</button><button type="button" class="abtn danger" id="bReset">Reset to original</button></div></details>
+        <div class="tabs ctabs" id="cTabs" role="group" aria-label="Department"></div>
+        <div class="csubrow"><div class="series" id="cSubs" role="group" aria-label="Type"></div><button type="button" class="abtn" id="cAddHere">+ Add a product here</button></div>
         <div class="atools catbar">
           <label class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93A3C8" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="cQ" type="search" placeholder="Find a product or brand" aria-label="Find a product"></label>
-          <select id="cDept" aria-label="Department"></select>
+          <select id="cDept" aria-label="Department" hidden></select>
         </div>
         <div class="series" id="cFilter" role="group" aria-label="Show"><button data-v="all">All</button><button data-v="in">In stock</button><button data-v="out">Sold out</button><button data-v="hidden">Hidden</button><button data-v="sale">On sale</button><button data-v="nopic">No photo</button><button data-v="edited">Edited by you</button></div>
         <p class="count-line" id="cCount"></p>
@@ -4308,7 +4319,7 @@ renderFormChips();addColRow("Black","#2B2C30");addColRow("White","#F3F3F1");rout
 
 /* ================= admin: catalog (all products), prices, stock compare ================= */
 PAGES.cat=["Catalog","Every product in the store. Edit prices, mark sold out, or hide what Connectify doesn't sell"];
-const cadm={q:"",dept:"",f:"all",limit:30,open:new Set()};
+const cadm={q:"",dept:"",sub:"",f:"all",limit:30,open:new Set()};
 const _renderPage=renderPage;
 renderPage=function(){if(adm.page!="cat"&&adm.page!="tabs")return _renderPage();
   if(adm.page=="tabs"){const n=DB.orders.filter(o=>o.status=="new").length;$("navOrders").textContent=n;$("navOrders").hidden=!n;renderTablets();return}
@@ -4317,7 +4328,7 @@ const phEdited=p=>{const o=phO(p.id);return!!(o&&((o.v&&Object.keys(o.v).length)
 const phSet=(p,i,k,val)=>{const o=DB.ph[p.id]||(DB.ph[p.id]={});o.v=o.v||{};const ov=o.v[i]||(o.v[i]={});
   if(val===p.vars[i][k])delete ov[k];else ov[k]=val;if(!Object.keys(ov).length)delete o.v[i];if(!Object.keys(o.v).length)delete o.v;if(!Object.keys(o).length)delete DB.ph[p.id]};
 function catList(){const q=lc2(cadm.q).trim();
-  return PHI.filter(p=>!isTablet(p)&&(!cadm.dept||p.dept==cadm.dept)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+p.sub).includes(t)))&&
+  return PHI.filter(p=>!isTablet(p)&&(!cadm.dept||p.dept==cadm.dept)&&(!cadm.sub||p.sub==cadm.sub)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+p.sub).includes(t)))&&
     ({all:1,in:phOK(p),out:!phHidden(p)&&!phOK(p),hidden:phHidden(p),sale:phOff(p)>0,nopic:!hasImg(p.imgs[0]),edited:phEdited(p)})[cadm.f]).sort((a,b)=>(phOK(b)-phOK(a))||((b.cx?1:0)-(a.cx?1:0)))}
 function rowHTML(p){const vs=phVars(p),hid=phHidden(p),open=cadm.open.has(p.id),show=open?vs:vs.slice(0,4);
     return `<div class="crow ${hid?"hid":""}" data-c="${p.id}">
@@ -4337,6 +4348,13 @@ function rowHTML(p){const vs=phVars(p),hid=phHidden(p),open=cadm.open.has(p.id),
 function renderCatalog(){
   if(!$("cDept").options.length)$("cDept").innerHTML=`<option value="">All departments</option>`+PH.depts.map(([d,l])=>`<option value="${d}">${esc(l)}</option>`).join("");
   const all=PHI.filter(p=>!isTablet(p)),list=catList();
+  /* department tabs (scrollable, like the store) and the types inside the chosen department */
+  const cnt=d=>all.filter(p=>!d||p.dept==d).length;
+  $("cTabs").innerHTML=[["","All"],...PH.depts].filter(([d])=>!d||cnt(d)).map(([d,l])=>`<button class="tab" data-d="${d}" aria-pressed="${cadm.dept==d}">${esc(l)} <span class="tn">${cnt(d)}</span></button>`).join("");
+  const subs=cadm.dept?[...new Set(all.filter(p=>p.dept==cadm.dept).map(p=>p.sub).filter(Boolean))].sort():[];
+  $("cSubs").innerHTML=subs.length>1?[["","All types"],...subs.map(x=>[x,x])].map(([v,l])=>`<button data-s="${esc(v)}" aria-pressed="${cadm.sub==v}">${esc(l)}${v?` <span>${all.filter(p=>p.dept==cadm.dept&&p.sub==v).length}</span>`:""}</button>`).join(""):"";
+  {const T=$("cTabs"),on=T.querySelector('[aria-pressed="true"]');if(on)T.scrollLeft=on.offsetLeft-(T.clientWidth-on.offsetWidth)/2}
+  $("cAddHere").textContent=cadm.dept?`+ Add a product in ${DEPT_LABEL[cadm.dept]}${cadm.sub?" › "+cadm.sub:""}`:"+ Add a new product";
   const st={in:all.filter(phOK).length,out:all.filter(p=>!phHidden(p)&&!phOK(p)).length,hidden:all.filter(phHidden).length,edited:all.filter(phEdited).length};
   $("cStats").innerHTML=`<div><b>${all.length}</b><span>products</span></div><div><b>${st.in}</b><span>in stock</span></div><div><b>${st.out}</b><span>sold out</span></div><div><b>${st.hidden}</b><span>hidden</span></div><div><b>${st.edited}</b><span>edited by you</span></div>`;
   $("cFilter").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v==cadm.f));
@@ -4345,7 +4363,10 @@ function renderCatalog(){
   const left=list.length-Math.min(list.length,cadm.limit);$("cMore").hidden=left<=0;$("cMore").textContent=`Show more (${left} left)`;
 }
 $("cQ").addEventListener("input",e=>{cadm.q=e.target.value;cadm.limit=30;renderCatalog()});
-$("cDept").onchange=e=>{cadm.dept=e.target.value;cadm.limit=30;renderCatalog()};
+$("cDept").onchange=e=>{cadm.dept=e.target.value;cadm.sub="";cadm.limit=30;renderCatalog()};
+$("cTabs").addEventListener("click",e=>{const b=e.target.closest("[data-d]");if(!b)return;cadm.dept=b.dataset.d;cadm.sub="";cadm.limit=30;$("cDept").value=cadm.dept;renderCatalog()});
+$("cSubs").addEventListener("click",e=>{const b=e.target.closest("[data-s]");if(!b)return;cadm.sub=b.dataset.s;cadm.limit=30;renderCatalog()});
+$("cAddHere").onclick=()=>{const box=$("npBox");box.open=true;if(cadm.dept)$("npDept").value=cadm.dept;$("npSub").value=cadm.sub||"";box.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("npName").focus(),350)};
 $("cFilter").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;cadm.f=b.dataset.v;cadm.limit=30;renderCatalog()});
 $("cMore").onclick=()=>{cadm.limit+=30;renderCatalog()};
 function bindRows(el){
