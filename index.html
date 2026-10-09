@@ -1389,6 +1389,26 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
 .drow .mini img,.oitem .mini img{width:100%;height:100%;object-fit:contain;border-radius:8px}
 @media (max-width:860px){#ap-dash .dgrid{grid-template-columns:1fr}}
 #ap-dash .dcard>div{min-width:0}#ap-dash .drow{max-width:100%;overflow:hidden}
+/* ---------- admin alignment pass ---------- */
+#admin [hidden]{display:none!important}
+.stockbar{align-items:center}
+.stockbar .btn,.stockbar .abtn{height:44px;display:inline-flex;align-items:center;justify-content:center;padding:0 18px;line-height:1;white-space:nowrap;box-sizing:border-box}
+.stockbar label.abtn{cursor:pointer}
+#ap-dash .dgrid{align-items:start}
+.atools .series{align-items:center}
+@media (max-width:700px){.stockbar{display:grid;grid-template-columns:1fr 1fr}.stockbar .btn,.stockbar .abtn{width:100%;padding:0 10px;font-size:13.5px}.stockbar #ciOpen{grid-column:1/-1}}
+@media (max-width:700px){.stockbar #zeroAll{grid-column:1/-1}}
+/* catalog option rows on phones: tidy 2-column grid */
+@media (max-width:760px){
+  .crow{grid-template-columns:44px 1fr;gap:10px}.cimg{width:44px;height:44px}
+  .cvar{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+  .cvar .vt{grid-column:1/-1;min-width:0}
+  .cvar .tin{display:flex;align-items:center;gap:4px;width:100%;box-sizing:border-box}
+  .cvar .tin input,.cvar .was input{width:100%;min-width:0;flex:1}
+  .cvar .margin{grid-column:1/-1;margin:0}
+  .cvar .switch{justify-self:start}
+  .cside{gap:8px;flex-wrap:wrap}.cside .abtn{flex:1;min-width:120px;height:40px;display:inline-flex;align-items:center;justify-content:center}
+}
 
 </style>
 </head>
