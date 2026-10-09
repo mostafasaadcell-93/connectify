@@ -4447,14 +4447,16 @@ const dirty=()=>KEYS.some(k=>(k in snap)&&JSON.stringify(DB[k]??null)!==snap[k])
 function schedulePush(){clearTimeout(pushT);pushT=setTimeout(push,700)}
 async function push(){pushT=null;if(!L.staff||busy){if(busy)schedulePush();return}busy=true;
   try{
-    const rows=KEYS.filter(k=>(k in snap)&&JSON.stringify(DB[k]??null)!==snap[k]).map(k=>({key:k,data:DB[k]??null,updated_at:new Date().toISOString()}));
+    const ch=KEYS.filter(k=>(k in snap)&&JSON.stringify(DB[k]??null)!==snap[k]);
+    ch.filter(k=>DB[k]==null).forEach(k=>snap[k]="null");   // nothing to store for this key yet (the column can't be empty)
+    const rows=ch.filter(k=>DB[k]!=null).map(k=>({key:k,data:DB[k],updated_at:new Date().toISOString()}));
     if(rows.length){const{error}=await sb.from("store_state").upsert(rows);
       if(error)throw error;rows.forEach(r=>snap[r.key]=JSON.stringify(r.data))}
     for(const o of DB.orders){if(!o.remote)continue;const sig=o.status+"|"+(o.stockApplied?1:0);if(sig===o._sig)continue;
       const{error}=await sb.from("orders").update({status:o.status,stock_applied:!!o.stockApplied}).eq("id",o.dbid);
       if(error)throw error;o._sig=sig}
     _save();setSync("ok");
-  }catch(e){console.warn(e);setSync("err");toast("Couldn't save to the database. Check the internet, it will retry.");setTimeout(schedulePush,8000)}
+  }catch(e){console.warn(e);setSync("err",e&&(e.message||e.code));toast("Couldn't save to the database. Check the internet, it will retry.");setTimeout(schedulePush,8000)}
   busy=false}
 
 /* ---------- customer orders and trade-in requests ---------- */
@@ -4513,8 +4515,8 @@ shrinkPhoto=async(f,max)=>{const u=await _shrink(f,max);if(!u||!L.staff)return u
   catch(e){console.warn(e);toast("Photo upload failed. Try again.");return null}};
 
 /* ---------- admin look in live mode ---------- */
-function setSync(s){const d=document.querySelector(".demo-strip");if(!d)return;d.classList.add("live");d.classList.toggle("err",s=="err");
-  d.textContent=s=="err"?"Not saved yet: no connection to the database. Your changes are kept on this device and will retry.":"Live: changes save to the store's database and show to customers right away."}
+function setSync(s,why){const d=document.querySelector(".demo-strip");if(!d)return;d.classList.add("live");d.classList.toggle("err",s=="err");
+  d.textContent=s=="err"?"Not saved yet: "+(why?why+". ":"no connection to the database. ")+"Your changes are kept on this device and will retry.":"Live: changes save to the store's database and show to customers right away."}
 document.querySelectorAll(".ldemo").forEach(e=>e.hidden=true);
 if($("aReset"))$("aReset").hidden=true;
 setSync("ok");
