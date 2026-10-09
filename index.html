@@ -1497,6 +1497,21 @@ select option:disabled{color:#6A6A6A}
 .mdlinks{display:grid;gap:2px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .mdlinks a{padding:12px;font:600 14px Manrope,sans-serif;color:var(--mist);border-radius:12px}
 @media (max-width:999px){.catbar{display:none}.burger{display:inline-flex}}
+/* own menu layout */
+.megamenu{display:block}
+.megamenu.cols{display:grid;grid-template-columns:repeat(2,minmax(200px,1fr));gap:8px;max-width:min(560px,calc(100vw - 24px))}
+.megamenu.wide{display:grid;grid-template-columns:repeat(3,minmax(190px,1fr));gap:4px 10px;max-width:min(820px,calc(100vw - 24px))}
+.megamenu .msec{display:grid;gap:1px;align-content:start;padding:4px}
+.megamenu .mh{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 12px;border-radius:12px;font:700 14.5px Manrope,sans-serif;color:var(--ice);background:none;border:0;cursor:pointer;text-align:left}
+.megamenu .mh:hover{background:rgba(255,255,255,.08)}
+.megamenu .mh span{color:var(--mist);font-size:11.5px;font-weight:600}
+.megamenu .mm{padding:7px 12px;font-size:13.5px;color:var(--mist)}
+.megamenu .mm:hover{color:var(--ice)}
+.catbar{justify-content:center;flex-wrap:nowrap}
+.mdi.mdsec{padding-left:16px;font-weight:700}
+.mdi.mdsec span{font-weight:600}
+.mdg.flat{margin-top:2px}
+.mdi.mdsec{color:var(--mist);font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:14px 12px 6px 16px}
 
 </style>
 </head>
@@ -3922,14 +3937,19 @@ load();applyOwnerPhotos();tradeUI();renderContent();renderGrid();renderCart();
 (function(){
 const cnt=(cat,sub)=>{try{if(isPhoneCat(cat))return allModels().filter(m=>inPhoneCat(m,cat,sub||"all")&&status(m).k=="ok").length;
   return storeItems().filter(x=>x.dept==cat&&(!sub||x.sub==sub)&&x.ok).length}catch(e){return 0}};
+/* our own menu: only what Connectify has in stock right now */
 function groups(){const G=[];
-  G.push({label:"iPhone",cat:"apple",items:SERIES.filter(([v])=>v!="all").map(([v,l])=>({label:/^\d/.test(l)?"iPhone "+l:l=="SE"?"iPhone SE":"iPhone "+l,sub:v}))});
-  G.push({label:"Samsung",cat:"samsung",items:SSERIES.filter(([v])=>v!="all").map(([v,l])=>({label:"Galaxy "+l.replace(/^Z /,"Z "),sub:v}))});
-  if(allModels().some(m=>phoneTab(m)=="other"))G.push({label:"Other phones",cat:"other",items:otherSeries().filter(([v])=>v!="all").map(([v,l])=>({label:l,sub:v}))});
-  G.push({label:"iPads & tablets",cat:"ipad",items:deptSubs("ipad").map(s=>({label:s,sub:s}))});
-  PH.depts.forEach(([d,l])=>{const subs=deptSubs(d);if(!subs.length)return;G.push({label:l,cat:d,items:subs.length>1?subs.map(s=>({label:s,sub:s})):[]})});
+  const ph=[{title:"iPhone",cat:"apple",items:SERIES.filter(([v])=>v!="all").map(([v,l])=>({label:"iPhone "+l,sub:v}))},
+            {title:"Samsung Galaxy",cat:"samsung",items:SSERIES.filter(([v])=>v!="all").map(([v,l])=>({label:"Galaxy "+l,sub:v}))}];
+  if(allModels().some(m=>phoneTab(m)=="other"))ph.push({title:"Other brands",cat:"other",items:otherSeries().filter(([v])=>v!="all").map(([v,l])=>({label:l,sub:v}))});
+  ph.forEach(sec=>sec.items=sec.items.filter(it=>cnt(sec.cat,it.sub)>0));
+  G.push({label:"Phones",secs:ph.filter(sec=>cnt(sec.cat)>0)});
+  const tabs=deptSubs("ipad").filter(s=>cnt("ipad",s)>0);
+  if(cnt("ipad")>0)G.push({label:"iPads",secs:[{title:"iPads & tablets",cat:"ipad",items:tabs.length>1?tabs.map(s=>({label:s,sub:s})):[]}]});
+  const acc=PH.depts.filter(([d])=>cnt(d)>0).map(([d,l])=>({title:l,cat:d,items:deptSubs(d).filter(s=>cnt(d,s)>0).map(s=>({label:s,sub:s}))}));
+  if(acc.length)G.push({label:"Accessories",secs:acc,wide:true});
   return G}
-const FLAT=[{label:"🔥 Price drops",cat:"all",sort:"deals"},{label:"✨ New arrivals",cat:"all",sort:"new"}];
+const FLAT=[{label:"Deals",cat:"all",sort:"deals"},{label:"New in",cat:"all",sort:"new"}];
 function go(cat,sub,sort){closeMega();closeDrawer();
   setShopCat(cat,sort);if(sub){shop.series=sub;renderSeries();renderGrid(true)}
   const el=document.getElementById("shop"),nav=document.querySelector(".nav");
@@ -3938,21 +3958,22 @@ window.menuGo=go;
 /* ---- desktop bar + dropdown ---- */
 const bar=$("catbar"),mega=$("megaMenu");let G=[],hideT=null,openIdx=-1;
 function renderBar(){G=groups();
-  bar.innerHTML=G.map((g,i)=>`<button type="button" class="cb" data-gi="${i}" aria-haspopup="${g.items.length?"true":"false"}" aria-expanded="false">${esc(g.label)}${g.items.length?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`:""}</button>`).join("")
+  bar.innerHTML=G.map((g,i)=>`<button type="button" class="cb" data-gi="${i}" aria-haspopup="true" aria-expanded="false">${esc(g.label)}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`).join("")
     +FLAT.map((f,i)=>`<button type="button" class="cb flat" data-fi="${i}">${f.label}</button>`).join("")}
-function openMega(i,btn){clearTimeout(hideT);const g=G[i];if(!g||!g.items.length){closeMega();return}
+const secHTML=sec=>`<div class="msec"><button type="button" class="mh" data-cat="${sec.cat}">${esc(sec.title)}<span>${cnt(sec.cat)} in stock</span></button>${sec.items.map(it=>`<button type="button" class="mm" data-cat="${sec.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}<span>${cnt(sec.cat,it.sub)}</span></button>`).join("")}</div>`;
+function openMega(i,btn){clearTimeout(hideT);const g=G[i];if(!g){closeMega();return}
   openIdx=i;bar.querySelectorAll(".cb").forEach(b=>b.setAttribute("aria-expanded",b===btn?"true":"false"));
-  mega.innerHTML=`<button type="button" class="mm all" data-cat="${g.cat}">All ${esc(g.label)} <span>${cnt(g.cat)} in stock</span></button>`
-    +g.items.map(it=>`<button type="button" class="mm" data-cat="${g.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}<span>${cnt(g.cat,it.sub)||""}</span></button>`).join("");
+  mega.className="megamenu"+(g.wide?" wide":"")+(g.secs.length>1&&!g.wide?" cols":"");
+  mega.innerHTML=g.secs.map(secHTML).join("");
   mega.hidden=false;const r=btn.getBoundingClientRect(),w=mega.offsetWidth;
   mega.style.top=(r.bottom+8)+"px";mega.style.left=Math.max(12,Math.min(innerWidth-w-12,r.left))+"px"}
 function closeMega(){openIdx=-1;mega.hidden=true;bar.querySelectorAll(".cb").forEach(b=>b.setAttribute("aria-expanded","false"))}
 bar.addEventListener("mouseover",e=>{const b=e.target.closest("[data-gi]");if(b&&matchMedia("(hover:hover)").matches)openMega(+b.dataset.gi,b)});
 bar.addEventListener("mouseleave",()=>{hideT=setTimeout(closeMega,220)});
 mega.addEventListener("mouseenter",()=>clearTimeout(hideT));mega.addEventListener("mouseleave",()=>{hideT=setTimeout(closeMega,220)});
-bar.addEventListener("click",e=>{const b=e.target.closest("[data-gi]");if(b){const i=+b.dataset.gi;if(!G[i].items.length){go(G[i].cat);return}
-    if(openIdx===i&&!matchMedia("(hover:hover)").matches)closeMega();else if(openIdx===i)go(G[i].cat);else openMega(i,b);return}
-  const f=e.target.closest("[data-fi]");if(f){const x=FLAT[+f.dataset.fi];go(x.cat,null,x.sort)}});
+bar.addEventListener("click",e=>{const b=e.target.closest("[data-gi]");if(b){const i=+b.dataset.gi;if(openIdx===i)closeMega();else openMega(i,b);return}
+  const f=e.target.closest("[data-fi]");if(f)flat(FLAT[+f.dataset.fi])});
+function flat(x){if(x.href){closeMega();closeDrawer();const el=document.querySelector(x.href);if(el)el.scrollIntoView({behavior:"smooth"});return}go(x.cat,null,x.sort)}
 mega.addEventListener("click",e=>{const b=e.target.closest("[data-cat]");if(b)go(b.dataset.cat,b.dataset.sub||null)});
 addEventListener("scroll",()=>{if(!mega.hidden)closeMega()},{passive:true});
 document.addEventListener("keydown",e=>{if(e.key=="Escape"){closeMega();closeDrawer()}});
@@ -3960,15 +3981,15 @@ document.addEventListener("click",e=>{if(!mega.hidden&&!e.target.closest("#megaM
 /* ---- phone drawer ---- */
 const dr=$("mDrawer"),burger=$("burgerBtn");
 function renderDrawer(){const g=groups();
-  $("mdBody").innerHTML=`<div class="mdquick">${FLAT.map((f,i)=>`<button type="button" data-mfi="${i}">${f.label}</button>`).join("")}</div>`
-    +g.map(x=>x.items.length?`<details class="mdg"><summary>${esc(x.label)}<span>${cnt(x.cat)}</span></summary><button type="button" class="mdi all" data-cat="${x.cat}">All ${esc(x.label)}</button>${x.items.map(it=>`<button type="button" class="mdi" data-cat="${x.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}<span>${cnt(x.cat,it.sub)||""}</span></button>`).join("")}</details>`
-      :`<button type="button" class="mdg flat" data-cat="${x.cat}">${esc(x.label)}<span>${cnt(x.cat)}</span></button>`).join("")
+  $("mdBody").innerHTML=g.map(x=>`<details class="mdg"><summary>${esc(x.label)}<span>${x.secs.reduce((t,sec)=>t+cnt(sec.cat),0)}</span></summary>${x.secs.map(sec=>
+      `<button type="button" class="mdi mdsec" data-cat="${sec.cat}">${esc(sec.title)}<span>${cnt(sec.cat)}</span></button>${sec.items.map(it=>`<button type="button" class="mdi" data-cat="${sec.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}<span>${cnt(sec.cat,it.sub)}</span></button>`).join("")}`).join("")}</details>`).join("")
+    +FLAT.map((f,i)=>`<button type="button" class="mdg flat" data-mfi="${i}">${f.label}</button>`).join("")
     +`<div class="mdlinks"><a href="#trade" data-mlink>Trade-in your phone</a><a href="#how" data-mlink>How to order</a><a href="#reviews" data-mlink>Reviews</a><a href="https://wa.me/${WA_NUM}" target="_blank" rel="noopener">WhatsApp ${WA_SHOW}</a></div>`}
 function openDrawer(){renderDrawer();dr.hidden=false;requestAnimationFrame(()=>dr.classList.add("on"));burger.setAttribute("aria-expanded","true");document.documentElement.style.overflow="hidden"}
 function closeDrawer(){if(dr.hidden)return;dr.classList.remove("on");burger.setAttribute("aria-expanded","false");document.documentElement.style.overflow="";setTimeout(()=>{if(!dr.classList.contains("on"))dr.hidden=true},320)}
 burger.onclick=()=>dr.hidden?openDrawer():closeDrawer();
 dr.addEventListener("click",e=>{if(e.target.closest("[data-mclose]")){closeDrawer();return}
-  const f=e.target.closest("[data-mfi]");if(f){const x=FLAT[+f.dataset.mfi];go(x.cat,null,x.sort);return}
+  const f=e.target.closest("[data-mfi]");if(f){flat(FLAT[+f.dataset.mfi]);return}
   const b=e.target.closest("[data-cat]");if(b){go(b.dataset.cat,b.dataset.sub||null);return}
   if(e.target.closest("[data-mlink]"))closeDrawer()});
 renderBar();
