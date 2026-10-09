@@ -4522,7 +4522,13 @@ setSync("ok");
 /* ---------- start ---------- */
 pullState().then(ok=>{if(ok)rerender();L.ready=true});
 checkStaff().then(s=>{if(s)refreshStaff().then(()=>{if(ADMIN_ON)showAdmin()})});
-sb.auth.onAuthStateChange((ev)=>{if(ev=="SIGNED_OUT"){L.staff=false;if(ADMIN_ON)showAdmin()}});
+sb.auth.onAuthStateChange((ev)=>{if(ev=="SIGNED_OUT"){L.staff=false;if(ADMIN_ON)showAdmin()}
+  /* "reset password" email link lands here: let the owner pick a new password */
+  if(ev=="PASSWORD_RECOVERY")setTimeout(async()=>{let np=null;
+    while(true){np=prompt("Choose a new admin password (at least 8 characters):");if(np==null)return;if(np.length>=8)break;alert("Too short. Use at least 8 characters.")}
+    const{error}=await sb.auth.updateUser({password:np});
+    if(error){alert("Couldn't change the password: "+error.message);return}
+    history.replaceState(null,"",location.pathname);await checkStaff();toast("Password changed. You're signed in.");if(L.staff){await refreshStaff();setAdmin(true);showAdmin()}},300)});
 setInterval(()=>{if(L.staff&&document.visibilityState=="visible"&&!pushT&&!busy)refreshStaff()},30000);
 sendOrders();
 })();
