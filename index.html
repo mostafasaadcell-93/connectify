@@ -1447,6 +1447,12 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
 .csubrow #cAddHere{height:40px;display:inline-flex;align-items:center;margin-left:auto}
 #cSubs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;max-width:100%}#cSubs button{white-space:nowrap}#cSubs button span{opacity:.55;margin-left:3px}
 @media (max-width:700px){.csubrow #cAddHere{width:100%;justify-content:center;margin-left:0}}
+/* hero: drag on/off button */
+.dragtoggle{position:absolute;top:10px;right:8px;z-index:3;display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-radius:999px;font:700 13px Manrope,sans-serif;color:var(--ice);background:rgba(10,21,48,.55);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);cursor:pointer;transition:background .2s,border-color .2s,color .2s,box-shadow .2s}
+.dragtoggle:hover{border-color:rgba(46,211,198,.5)}
+.dragtoggle[aria-pressed=true]{background:rgba(46,211,198,.16);border-color:rgba(46,211,198,.7);color:#9ff0e0;box-shadow:0 0 18px rgba(46,211,198,.35)}
+.dragtoggle[hidden]{display:none}
+.stage.dragon{outline:1px dashed rgba(46,211,198,.35);outline-offset:-6px;border-radius:28px}
 
 </style>
 </head>
@@ -1556,7 +1562,7 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
     <div class="stage">
       <canvas id="phone3d" aria-label="3D iPhone 18 Pro you can rotate by dragging" role="img"></canvas>
       <div class="nogl" id="nogl">3D preview needs WebGL</div>
-      <span class="hint" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>Drag any way · double-click to reset</span>
+      <button type="button" class="dragtoggle" id="dragToggle" aria-pressed="false" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg><span>Enable iPhone drag</span></button>
       <div class="finish" role="group" aria-label="Choose a color">
         <div><b>iPhone 18 Pro</b><small id="finishName">Burgundy</small></div>
         <button class="sw" style="background:#6B1E2E" data-c="#6B1E2E" data-n="Burgundy" aria-pressed="true" aria-label="Burgundy"></button>
@@ -2885,14 +2891,16 @@ function Viewer(canvas,opts={}){
     model.g=wrap;pivot.add(wrap);V.tgt=null;
     if(instant){V.targetY=V.curY=model.startY}};
   V.setColor=hex=>{V.tgt=lin(hex)};
-  canvas.addEventListener("pointerdown",e=>{V.drag=true;V.lastX=e.clientX;V.lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
+  canvas.addEventListener("pointerdown",e=>{if(V.locked)return;V.drag=true;V.lastX=e.clientX;V.lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
   // drag any direction: sideways spins, up/down tips the phone to show the top, bottom and ports
   canvas.addEventListener("pointermove",e=>{if(!V.drag)return;const dx=e.clientX-V.lastX,dy=e.clientY-V.lastY;V.lastX=e.clientX;V.lastY=e.clientY;
     V.targetY+=dx*.012;V.vel=dx*.012;V.targetX=Math.max(-1.45,Math.min(1.45,V.targetX+dy*.01));V.hold=performance.now()});
   canvas.addEventListener("dblclick",()=>{V.targetX=0});
-  canvas.style.touchAction="none";   // touching the phone moves the phone, never the page (iPhone Safari needs both lines)
-  canvas.addEventListener("touchstart",ev=>{if(ev.touches.length==1)ev.preventDefault()},{passive:false});
-  canvas.addEventListener("touchmove",ev=>{if(ev.touches.length==1)ev.preventDefault()},{passive:false});
+  /* locked = the page scrolls normally over the phone; unlocked = touching the phone turns it (iPhone Safari needs both the style and the touch handlers) */
+  V.setLock=b=>{V.locked=!!b;V.drag=false;canvas.style.touchAction=b?"auto":"none";canvas.style.cursor=b?"":"grab"};
+  V.setLock(!!opts.locked);
+  canvas.addEventListener("touchstart",ev=>{if(!V.locked&&ev.touches.length==1)ev.preventDefault()},{passive:false});
+  canvas.addEventListener("touchmove",ev=>{if(!V.locked&&ev.touches.length==1)ev.preventDefault()},{passive:false});
   canvas.addEventListener("pointerup",()=>V.drag=false);canvas.addEventListener("pointercancel",()=>V.drag=false);
   const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
   const clock=new THREE.Clock();let t=0;
@@ -3057,12 +3065,15 @@ function buildHeroPro(color){
 (function(){
   const canvas=$("phone3d");
   if(!HAS3D){window.__heroOff=1;$("nogl").style.display="grid";return}
-  let V;try{V=Viewer(canvas,{extraZ:.3,pauseWhenCovered:true,onFrame:(V,t,dt,reduce)=>{window.__heroFrames=(window.__heroFrames||0)+1;
+  let V;try{V=Viewer(canvas,{extraZ:.3,pauseWhenCovered:true,locked:true,onFrame:(V,t,dt,reduce)=>{window.__heroFrames=(window.__heroFrames||0)+1;
     const sT=Math.min(scrollY/innerHeight,1);
     V.pivot.rotation.x=(reduce?0:Math.sin(t*.8)*.05)+V.mouseY*.22+sT*.45+V.curX;
     V.pivot.rotation.z=-.1-V.mouseX*.08;
     V.pivot.position.y+=((reduce?.15:.15+Math.sin(t*1.1)*.1)-sT*1.2-V.pivot.position.y)*(1-Math.pow(.94,dt*60));
   }})}catch(e){window.__heroOff=1;$("nogl").style.display="grid";return}
+  /* hero: free scrolling by default, a button turns dragging the iPhone on and off */
+  const dt=$("dragToggle");if(dt){const upd=()=>{dt.setAttribute("aria-pressed",String(!V.locked));dt.querySelector("span").textContent=V.locked?"Enable iPhone drag":"Back to free scroll";$("phone3d").parentElement.classList.toggle("dragon",!V.locked)};
+    dt.hidden=false;upd();dt.onclick=()=>{V.setLock(!V.locked);upd()}}
   V.mouseX=V.mouseY=0;
   addEventListener("pointermove",e=>{if(e.pointerType!="mouse")return;V.mouseX=e.clientX/innerWidth-.5;V.mouseY=e.clientY/innerHeight-.5}); // touch screens use tilt.js
   V.set(typeof buildHeroPro=="function"?buildHeroPro("#6B1E2E"):buildPhone("#6B1E2E",{cam:"17pro",front:"island",size:"6.3",cc:true,action:true}));
