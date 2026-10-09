@@ -3958,7 +3958,8 @@ function groups(){const G=[];
   if(acc.length)G.push({label:"Accessories",secs:acc,wide:true});
   return G}
 const FLAT=[{label:"Deals",cat:"all",sort:"deals"},{label:"New in",cat:"all",sort:"new"}];
-function go(cat,sub,sort){closeMega();closeDrawer();
+let suppress=false;   // after a choice, the menu stays closed until the pointer leaves the bar
+function go(cat,sub,sort){suppress=true;closeMega();closeDrawer();if(document.activeElement)document.activeElement.blur();
   setShopCat(cat,sort);if(sub){shop.series=sub;renderSeries();renderGrid(true)}
   const el=document.getElementById("shop"),nav=document.querySelector(".nav");
   setTimeout(()=>scrollTo({top:el.getBoundingClientRect().top+scrollY-(nav?nav.offsetHeight+16:80),behavior:"smooth"}),30)}
@@ -3976,10 +3977,12 @@ function openMega(i,btn){clearTimeout(hideT);const g=G[i];if(!g){closeMega();ret
   mega.hidden=false;const r=btn.getBoundingClientRect(),w=mega.offsetWidth;
   mega.style.top=(r.bottom+8)+"px";mega.style.left=Math.max(12,Math.min(innerWidth-w-12,r.left))+"px"}
 function closeMega(){openIdx=-1;mega.hidden=true;bar.querySelectorAll(".cb").forEach(b=>b.setAttribute("aria-expanded","false"))}
-bar.addEventListener("mouseover",e=>{const b=e.target.closest("[data-gi]");if(b&&matchMedia("(hover:hover)").matches)openMega(+b.dataset.gi,b)});
-bar.addEventListener("mouseleave",()=>{hideT=setTimeout(closeMega,220)});
+bar.addEventListener("mouseover",e=>{const b=e.target.closest("[data-gi]");if(b&&!suppress&&matchMedia("(hover:hover)").matches)openMega(+b.dataset.gi,b)});
+bar.addEventListener("mouseleave",()=>{suppress=false;hideT=setTimeout(closeMega,220)});
+mega.addEventListener("mouseleave",()=>{suppress=false});
+addEventListener("scrollend",()=>{if(!bar.matches(":hover"))suppress=false});
 mega.addEventListener("mouseenter",()=>clearTimeout(hideT));mega.addEventListener("mouseleave",()=>{hideT=setTimeout(closeMega,220)});
-bar.addEventListener("click",e=>{const b=e.target.closest("[data-gi]");if(b){const i=+b.dataset.gi;if(openIdx===i)closeMega();else openMega(i,b);return}
+bar.addEventListener("click",e=>{const b=e.target.closest("[data-gi]");if(b){suppress=false;const i=+b.dataset.gi;if(openIdx===i)closeMega();else openMega(i,b);return}
   const f=e.target.closest("[data-fi]");if(f)flat(FLAT[+f.dataset.fi])});
 function flat(x){if(x.href){closeMega();closeDrawer();const el=document.querySelector(x.href);if(el)el.scrollIntoView({behavior:"smooth"});return}go(x.cat,null,x.sort)}
 mega.addEventListener("click",e=>{const b=e.target.closest("[data-cat]");if(b)go(b.dataset.cat,b.dataset.sub||null)});
