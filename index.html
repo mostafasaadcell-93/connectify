@@ -1427,6 +1427,17 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
   .cvar .switch{justify-self:start}
   .cside{gap:8px;flex-wrap:wrap}.cside .abtn{flex:1;min-width:120px;height:40px;display:inline-flex;align-items:center;justify-content:center}
 }
+.tstats{grid-template-columns:repeat(4,1fr)}
+.topts{display:grid;gap:10px;margin:6px 0 10px}
+.topt{padding:12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.02)}
+.topt .rmopt{grid-column:1/-1;justify-self:start;color:#ff9b8a;font-size:13px}
+.tfh{font-size:15px;margin:14px 0 2px}.tfh small{color:var(--mist);font-weight:500;font-size:12.5px;margin-left:6px}
+#tBrand button span{opacity:.6;margin-left:4px}
+@media (max-width:700px){.tstats{grid-template-columns:repeat(2,1fr)}}
+.ufields textarea{border-radius:10px;border:1px solid var(--line);background:var(--deep);color:var(--ice);font:600 14px Manrope,sans-serif;padding:10px;width:100%;box-sizing:border-box;resize:vertical}
+.ufields input[type=file]{color:var(--mist);font-size:13px;max-width:100%}
+#tForm,#tForm .ufields,#tForm label{min-width:0;max-width:100%}
+#tForm{box-sizing:border-box;width:100%}
 
 </style>
 </head>
@@ -1822,6 +1833,7 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
         <button data-go="stock"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Phones</button>
         <button data-go="acc" id="navAcc"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v4M8 7h8l-1 6H9z"/><path d="M12 13v8"/></svg>Accessories</button>
         <button data-go="cat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 12l9 4 9-4M3 17l9 4 9-4"/></svg>Catalog</button>
+        <button data-go="tabs"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>iPads</button>
         <button data-go="reviews"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>Reviews<span class="nbadge" id="navRev" hidden></span></button>
         <button data-go="trade"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>Trade-in prices</button>
         <button data-go="front"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>Storefront</button>
@@ -1945,6 +1957,32 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
         <button type="button" class="btn btn-ghost more" id="cMore" hidden>Show more</button>
       </section>
 
+      <section class="apage" id="ap-tabs" hidden>
+        <div class="catstats tstats" id="tStats"></div>
+        <div class="stockbar"><button class="btn btn-main" id="tAddOpen">+ Add a tablet</button></div>
+        <form class="checkin" id="tForm" hidden novalidate>
+          <div class="cihead"><h3>Add a tablet</h3><button type="button" class="x" id="tfClose" aria-label="Close">✕</button></div>
+          <div class="ufields ci">
+            <label><span>Brand</span><select id="tfBrand"></select></label>
+            <label id="tfBrandNewL" hidden><span>New brand name</span><input type="text" id="tfBrandNew" maxlength="30" placeholder="e.g. Xiaomi"></label>
+            <label class="wide"><span>Model name</span><input type="text" id="tfName" maxlength="80" placeholder="e.g. iPad Air M4 11-inch, Galaxy Tab S10 FE"></label>
+          </div>
+          <h4 class="tfh">Options <small>one line per color / storage / condition you have</small></h4>
+          <div id="tOpts" class="topts"></div>
+          <button type="button" class="abtn sm" id="tfAddOpt">+ Add another option</button>
+          <div class="ufields ci">
+            <label class="wide"><span>Description (optional)</span><textarea id="tfDesc" rows="3" maxlength="600" placeholder="What customers read on the product page"></textarea></label>
+            <label class="wide"><span>Photos (optional)</span><input type="file" id="tfPics" accept="image/*" multiple></label>
+          </div>
+          <button class="btn btn-main" type="submit">Add to the store</button>
+        </form>
+        <div class="atools">
+          <label class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93A3C8" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="tQ" type="search" placeholder="Find a tablet, e.g. Air M4" aria-label="Find a tablet"></label>
+          <div class="series" id="tBrand" role="group" aria-label="Brand"></div>
+          <div class="series" id="tFilter" role="group" aria-label="Show"><button data-v="all">All</button><button data-v="in">In stock</button><button data-v="out">Sold out</button><button data-v="hidden">Hidden</button></div>
+        </div>
+        <div class="crows" id="tRows"></div>
+      </section>
       <section class="apage" id="ap-reviews" hidden>
         <div class="series" id="rvFilter" role="group" aria-label="Show"></div>
         <div id="rvRows" style="display:grid;gap:12px;margin-top:14px"></div>
@@ -3701,7 +3739,7 @@ $("grid").addEventListener("keydown",e=>{if(e.key=="Enter"){const c=e.target.clo
 const pvp={p:null,sel:[],photo:0};
 const optVals=(p,k)=>[...new Set(p.vars.map(v=>(v.t||"").split(" / ")[k]).filter(Boolean))];
 /* tablets and iPads get the 3D model too (after the real photos) */
-const isTablet=p=>p.dept=="ipad"&&/ipad|tab\b|tablet|galaxy tab|matepad|pad\b/i.test(p.name);
+const isTablet=p=>!!p.tab||p.dept=="ipad"&&/ipad|tab\b|tablet|galaxy tab|matepad|pad\b/i.test(p.name);
 const tabColor=t=>{t=(t||"").toLowerCase();return /space ?gr[ae]y|graphite|gr[ae]y/.test(t)?"#5E6168":/silver|white/.test(t)?"#D9DCE1":/starlight|gold|cream/.test(t)?"#E4DACA":/blue/.test(t)?"#7E9CC4":/purple|lavender|violet/.test(t)?"#B6A6D3":/pink|rose/.test(t)?"#E4B9C3":/black|midnight/.test(t)?"#2C2D31":/green|mint/.test(t)?"#AFC7B4":"#8A909A"};
 function phVarIdx(p,sel){return p.vars.findIndex(v=>{const parts=(v.t||"").split(" / ");return sel.every((s,k)=>!s||parts[k]==s)})}
 function openPH(id){const p=PHmap.get(id);if(!p)return;PV_KIND="ph";pvp.p=p;pvp.tabKey=null;
@@ -3799,7 +3837,7 @@ $("sres").addEventListener("click",e=>{const b=e.target.closest("[data-ph]");if(
 /* products the owner adds himself in the admin (saved with the rest of the store data) */
 function syncNewProducts(){for(let k=PHI.length-1;k>=0;k--)if(PHI[k].np){PHmap.delete(PHI[k].id);PHI.splice(k,1)}
   (DB.newp||[]).forEach(a=>{const p={id:a.id,h:"",name:a.name,brand:a.brand||"Connectify",dept:a.dept,sub:a.sub||"",desc:a.desc||"",c:a.c,imgs:[],opts:[],
-    vars:[{t:"Standard",p:a.p,cp:0,ok:a.q>0,img:"",q:a.q}],fits:[],fl:"",cx:1,np:1};PHI.unshift(p);PHmap.set(p.id,p)})}
+    vars:a.vars?a.vars.map(v=>({t:v.t||"Standard",p:v.p??null,cp:v.cp||0,ok:v.q>0,img:"",q:v.q||0})):[{t:"Standard",p:a.p,cp:0,ok:a.q>0,img:"",q:a.q}],fits:[],fl:"",cx:1,np:1,tab:a.tab?1:0};PHI.unshift(p);PHmap.set(p.id,p)})}
 function applyOwnerPhotos(){syncNewProducts();PHI.forEach(p=>{if(!p._imgs0)p._imgs0=p.imgs.slice();const o=DB.ph&&DB.ph[p.id];p.imgs=o&&o.pics&&o.pics.length?[...o.pics,...p._imgs0.filter(hasImg)]:p._imgs0.slice()})}
 load();applyOwnerPhotos();tradeUI();renderContent();renderGrid();renderCart();
 
@@ -4272,25 +4310,19 @@ renderFormChips();addColRow("Black","#2B2C30");addColRow("White","#F3F3F1");rout
 PAGES.cat=["Catalog","Every product in the store. Edit prices, mark sold out, or hide what Connectify doesn't sell"];
 const cadm={q:"",dept:"",f:"all",limit:30,open:new Set()};
 const _renderPage=renderPage;
-renderPage=function(){if(adm.page!="cat")return _renderPage();
+renderPage=function(){if(adm.page!="cat"&&adm.page!="tabs")return _renderPage();
+  if(adm.page=="tabs"){const n=DB.orders.filter(o=>o.status=="new").length;$("navOrders").textContent=n;$("navOrders").hidden=!n;renderTablets();return}
   const n=DB.orders.filter(o=>o.status=="new").length;$("navOrders").textContent=n;$("navOrders").hidden=!n;renderCatalog()};
 const phEdited=p=>{const o=phO(p.id);return!!(o&&((o.v&&Object.keys(o.v).length)||o.hide!=null||o.desc!=null||(o.pics&&o.pics.length)))};
 const phSet=(p,i,k,val)=>{const o=DB.ph[p.id]||(DB.ph[p.id]={});o.v=o.v||{};const ov=o.v[i]||(o.v[i]={});
   if(val===p.vars[i][k])delete ov[k];else ov[k]=val;if(!Object.keys(ov).length)delete o.v[i];if(!Object.keys(o.v).length)delete o.v;if(!Object.keys(o).length)delete DB.ph[p.id]};
 function catList(){const q=lc2(cadm.q).trim();
-  return PHI.filter(p=>(!cadm.dept||p.dept==cadm.dept)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+p.sub).includes(t)))&&
+  return PHI.filter(p=>!isTablet(p)&&(!cadm.dept||p.dept==cadm.dept)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+p.sub).includes(t)))&&
     ({all:1,in:phOK(p),out:!phHidden(p)&&!phOK(p),hidden:phHidden(p),sale:phOff(p)>0,nopic:!hasImg(p.imgs[0]),edited:phEdited(p)})[cadm.f]).sort((a,b)=>(phOK(b)-phOK(a))||((b.cx?1:0)-(a.cx?1:0)))}
-function renderCatalog(){
-  if(!$("cDept").options.length)$("cDept").innerHTML=`<option value="">All departments</option>`+PH.depts.map(([d,l])=>`<option value="${d}">${esc(l)}</option>`).join("");
-  const all=PHI,list=catList();
-  const st={in:all.filter(phOK).length,out:all.filter(p=>!phHidden(p)&&!phOK(p)).length,hidden:all.filter(phHidden).length,edited:all.filter(phEdited).length};
-  $("cStats").innerHTML=`<div><b>${all.length}</b><span>products</span></div><div><b>${st.in}</b><span>in stock</span></div><div><b>${st.out}</b><span>sold out</span></div><div><b>${st.hidden}</b><span>hidden</span></div><div><b>${st.edited}</b><span>edited by you</span></div>`;
-  $("cFilter").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v==cadm.f));
-  $("cCount").textContent=`${list.length} product${list.length==1?"":"s"} in this view`;
-  $("cRows").innerHTML=list.slice(0,cadm.limit).map(p=>{const vs=phVars(p),hid=phHidden(p),open=cadm.open.has(p.id),show=open?vs:vs.slice(0,4);
+function rowHTML(p){const vs=phVars(p),hid=phHidden(p),open=cadm.open.has(p.id),show=open?vs:vs.slice(0,4);
     return `<div class="crow ${hid?"hid":""}" data-c="${p.id}">
       <span class="cimg">${hasImg(p.imgs[0])?`<img src="${phImg(p.imgs[0],140)}" alt="" loading="lazy">`:`<span class="noimg">${DEPT_ICON[p.dept]||"✨"}</span>`}</span>
-      <div class="cmain"><b>${esc(p.name)}</b><small>${esc(p.brand)} · ${esc(DEPT_LABEL[p.dept])}${p.sub&&p.sub!=DEPT_LABEL[p.dept]?` › ${esc(p.sub)}`:""} · ${vs.length} option${vs.length>1?"s":""}${hid?" · <em>hidden from the store</em>":""}</small>
+      <div class="cmain"><b>${esc(p.name)}</b><small>${esc(p.brand)} · ${[DEPT_LABEL[p.dept],p.sub].filter((x,i,arr)=>x&&arr.indexOf(x)==i).map(esc).join(" › ")} · ${vs.length} option${vs.length>1?"s":""}${hid?" · <em>hidden from the store</em>":""}</small>
         <div class="cvars">${show.map((v,j)=>{const i=open?j:j;return `<div class="cvar ${v.ok?"":"off"}">
           <span class="vt">${esc(v.t||"Standard")}</span>
           <label class="tin" title="Price">$<input type="number" min="0" step="0.5" data-cp="${i}" value="${v.p??""}" placeholder="ask" aria-label="Price"></label>
@@ -4301,14 +4333,23 @@ function renderCatalog(){
           ${vs.length>4?`<button type="button" class="linkbtn" data-copen>${open?"Show less":`Show all ${vs.length} options`}</button>`:""}</div>
         <details class="cdesc priv"><summary>🔒 Private note${privP(p.id).note?" · has a note":""}</summary><textarea data-cpnote rows="2" maxlength="300" placeholder="Only staff see this: supplier, where it's stored, reorder info…">${esc(privP(p.id).note||"")}</textarea></details>
         <details class="cdesc"><summary>Description${(phO(p.id)||{}).desc!=null?" · edited":""}</summary><textarea data-cdesc rows="3" placeholder="What customers read on the product page">${esc((phO(p.id)||{}).desc??p.desc??"")}</textarea></details></div>
-      <div class="cside"><label class="abtn cpic">${((phO(p.id)||{}).pics||[]).length?"Add photo":"Upload photo"}<input type="file" accept="image/*" multiple data-cpic hidden></label>${((phO(p.id)||{}).pics||[]).length?`<button type="button" class="abtn" data-cpicdel>Remove my photos (${phO(p.id).pics.length})</button>`:""}${p.np?`<button type="button" class="abtn danger" data-npdel>Delete</button>`:""}<button type="button" class="abtn" data-chide>${hid?"Show on store":"Hide"}</button>${phEdited(p)?`<button type="button" class="abtn" data-creset>Reset</button>`:""}</div></div>`}).join("")||`<div class="dempty">Nothing matches.</div>`;
+      <div class="cside"><label class="abtn cpic">${((phO(p.id)||{}).pics||[]).length?"Add photo":"Upload photo"}<input type="file" accept="image/*" multiple data-cpic hidden></label>${((phO(p.id)||{}).pics||[]).length?`<button type="button" class="abtn" data-cpicdel>Remove my photos (${phO(p.id).pics.length})</button>`:""}${p.np?`<button type="button" class="abtn danger" data-npdel>Delete</button>`:""}<button type="button" class="abtn" data-chide>${hid?"Show on store":"Hide"}</button>${phEdited(p)?`<button type="button" class="abtn" data-creset>Reset</button>`:""}</div></div>`}
+function renderCatalog(){
+  if(!$("cDept").options.length)$("cDept").innerHTML=`<option value="">All departments</option>`+PH.depts.map(([d,l])=>`<option value="${d}">${esc(l)}</option>`).join("");
+  const all=PHI.filter(p=>!isTablet(p)),list=catList();
+  const st={in:all.filter(phOK).length,out:all.filter(p=>!phHidden(p)&&!phOK(p)).length,hidden:all.filter(phHidden).length,edited:all.filter(phEdited).length};
+  $("cStats").innerHTML=`<div><b>${all.length}</b><span>products</span></div><div><b>${st.in}</b><span>in stock</span></div><div><b>${st.out}</b><span>sold out</span></div><div><b>${st.hidden}</b><span>hidden</span></div><div><b>${st.edited}</b><span>edited by you</span></div>`;
+  $("cFilter").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v==cadm.f));
+  $("cCount").textContent=`${list.length} product${list.length==1?"":"s"} in this view`;
+  $("cRows").innerHTML=list.slice(0,cadm.limit).map(rowHTML).join("")||`<div class="dempty">Nothing matches.</div>`;
   const left=list.length-Math.min(list.length,cadm.limit);$("cMore").hidden=left<=0;$("cMore").textContent=`Show more (${left} left)`;
 }
 $("cQ").addEventListener("input",e=>{cadm.q=e.target.value;cadm.limit=30;renderCatalog()});
 $("cDept").onchange=e=>{cadm.dept=e.target.value;cadm.limit=30;renderCatalog()};
 $("cFilter").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;cadm.f=b.dataset.v;cadm.limit=30;renderCatalog()});
 $("cMore").onclick=()=>{cadm.limit+=30;renderCatalog()};
-$("cRows").addEventListener("change",e=>{const row=e.target.closest("[data-c]");if(!row)return;const p=PHmap.get(row.dataset.c),t=e.target;
+function bindRows(el){
+el.addEventListener("change",e=>{const row=e.target.closest("[data-c]");if(!row)return;const p=PHmap.get(row.dataset.c),t=e.target;
   if(t.dataset.cpic!=null&&t.files&&t.files.length){Promise.all([...t.files].slice(0,4).map(f=>shrinkPhoto(f,900))).then(us=>{const o=DB.ph[p.id]||(DB.ph[p.id]={});o.pics=[...us.filter(Boolean),...(o.pics||[])].slice(0,6);if(!save()){o.pics=o.pics.slice(us.length);if(!o.pics.length)delete o.pics;return}applyOwnerPhotos();commit(`${p.name.slice(0,40)}: photo added`)});return}
   if(t.dataset.cp!=null){const v=t.value===""?null:Math.max(0,Math.round((+t.value||0)*100)/100);phSet(p,+t.dataset.cp,"p",v);commit(`${p.name.slice(0,40)}: ${v==null?"price on WhatsApp":money(v)}`)}
   if(t.dataset.ccost!=null){const o=privP(p.id,true),i=+t.dataset.ccost,v=t.value===""?0:Math.max(0,+t.value||0);o.cost=o.cost||{};if(v)o.cost[i]=v;else delete o.cost[i];cleanPriv();commit(v?`Cost $${v} saved (only staff see it)`:"Cost removed");return}
@@ -4316,12 +4357,16 @@ $("cRows").addEventListener("change",e=>{const row=e.target.closest("[data-c]");
   if(t.dataset.cdesc!=null){const o=DB.ph[p.id]||(DB.ph[p.id]={}),v=t.value.trim();if(v===(p.desc||""))delete o.desc;else o.desc=v;if(!Object.keys(o).length)delete DB.ph[p.id];commit(`${p.name.slice(0,40)}: description saved`)}
   if(t.dataset.cq!=null){const v=Math.max(0,Math.floor(+t.value||0));phSet(p,+t.dataset.cq,"q",v);phSet(p,+t.dataset.cq,"ok",v>0);commit(`${p.name.slice(0,40)}: ${v} in stock`)}
   if(t.dataset.ccp!=null){const v=t.value===""?0:Math.max(0,+t.value);phSet(p,+t.dataset.ccp,"cp",v);commit(v?`Old price ${money(v)} shown crossed out`:"Old price removed")}});
-$("cRows").addEventListener("click",e=>{const row=e.target.closest("[data-c]");if(!row)return;const p=PHmap.get(row.dataset.c);
+el.addEventListener("click",e=>{const row=e.target.closest("[data-c]");if(!row)return;const p=PHmap.get(row.dataset.c);
   const ok=e.target.closest("[data-cok]");if(ok){const i=+ok.dataset.cok;phSet(p,i,"ok",!phV(p,i).ok);commit(`${p.name.slice(0,40)}: ${phV(p,i).ok?"in stock":"sold out"}`);return}
-  if(e.target.closest("[data-copen]")){cadm.open.has(p.id)?cadm.open.delete(p.id):cadm.open.add(p.id);renderCatalog();return}
+  if(e.target.closest("[data-copen]")){cadm.open.has(p.id)?cadm.open.delete(p.id):cadm.open.add(p.id);renderPage();return}
   if(e.target.closest("[data-chide]")){const o=DB.ph[p.id]||(DB.ph[p.id]={}),def=(window.PH_DEFAULT_HIDE||[]).includes(p.id.slice(2));o.hide=!phHidden(p);if(o.hide===def)delete o.hide;if(!Object.keys(o).length)delete DB.ph[p.id];commit(phHidden(p)?"Hidden from the store":"Back on the store");return}
   if(e.target.closest("[data-cpicdel]")){if(!confirm("Remove the photos you uploaded for this product?"))return;const o=DB.ph[p.id];if(o){delete o.pics;if(!Object.keys(o).length)delete DB.ph[p.id]}applyOwnerPhotos();commit("Your photos were removed");return}
   if(e.target.closest("[data-creset]")){if(!confirm("Undo all your changes to this product (price, stock, description, photos)?"))return;delete DB.ph[p.id];applyOwnerPhotos();commit("Back to the original price and stock")}});
+el.addEventListener("click",e=>{const b=e.target.closest("[data-npdel]");if(!b)return;const id=b.closest("[data-c]").dataset.c;
+  if(!confirm("Delete this product from the store?"))return;DB.newp=(DB.newp||[]).filter(a=>a.id!=id);delete DB.ph[id];cadm.q="";$("cQ").value="";applyOwnerPhotos();commit("Product deleted")});
+}
+bindRows($("cRows"));
 
 /* ---- bulk tools on the products in view ---- */
 function bulk(fn,msg){const list=catList();if(!list.length){toast("No products in this view");return}
@@ -4391,8 +4436,64 @@ $("npForm").addEventListener("submit",async e=>{e.preventDefault();const name=$(
   if(pics.length)DB.ph[id]={pics};
   if(!save()){DB.newp.shift();delete DB.ph[id];return}
   applyOwnerPhotos();$("npForm").reset();$("npQty").value=1;cadm.q=name;cadm.f="all";$("cQ").value=name;commit(`${name.slice(0,40)} added to the store`)});
-$("cRows").addEventListener("click",e=>{const b=e.target.closest("[data-npdel]");if(!b)return;const id=b.closest("[data-c]").dataset.c;
-  if(!confirm("Delete this product from the store?"))return;DB.newp=(DB.newp||[]).filter(a=>a.id!=id);delete DB.ph[id];cadm.q="";$("cQ").value="";applyOwnerPhotos();commit("Product deleted")});
+
+/* ================= iPads & tablets: their own page ================= */
+PAGES.tabs=["iPads & tablets","Every iPad and tablet: prices, stock, photos, and new models or brands"];
+const tadm={q:"",b:"all",f:"all"};
+const TAB_BRANDS={apple:"Apple",samsung:"Samsung",xiaomi:"Xiaomi",lenovo:"Lenovo",huawei:"Huawei",honor:"Honor",microsoft:"Microsoft",amazon:"Amazon",oneplus:"OnePlus",realme:"Realme",oppo:"Oppo",tcl:"TCL"};
+const tabSub=b=>b=="Apple"?"iPads":b=="Samsung"?"Galaxy Tab":"Tablets";
+function renderTablets(){
+  const all=PHI.filter(isTablet),q=lc2(tadm.q).trim();
+  const brands=[...new Set(all.map(p=>p.brand||"Other"))].sort((a,b)=>(a=="Apple"?-2:a=="Samsung"?-1:0)-(b=="Apple"?-2:b=="Samsung"?-1:0)||a.localeCompare(b));
+  if(tadm.b!="all"&&!brands.includes(tadm.b))tadm.b="all";
+  const units=all.filter(p=>!phHidden(p)).reduce((t,p)=>t+phVars(p).reduce((a,v)=>a+(v.q>0?v.q:0),0),0);
+  $("tStats").innerHTML=`<div><b>${all.length}</b><span>tablets</span></div><div><b>${all.filter(phOK).length}</b><span>in stock</span></div><div><b>${units}</b><span>pieces in stock</span></div><div><b>${brands.length}</b><span>brands</span></div>`;
+  $("tBrand").innerHTML=[["all","All brands"],...brands.map(b=>[b,b])].map(([v,l])=>`<button data-v="${esc(v)}" aria-pressed="${tadm.b==v}">${esc(l)} <span>${v=="all"?all.length:all.filter(p=>(p.brand||"Other")==v).length}</span></button>`).join("");
+  $("tFilter").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v==tadm.f));
+  const list=all.filter(p=>(tadm.b=="all"||(p.brand||"Other")==tadm.b)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+phVars(p).map(v=>v.t).join(" ")).includes(t)))&&
+    ({all:1,in:phOK(p),out:!phHidden(p)&&!phOK(p),hidden:phHidden(p)})[tadm.f]).sort((a,b)=>(phOK(b)-phOK(a))||a.name.localeCompare(b.name));
+  $("tRows").innerHTML=list.map(rowHTML).join("")||`<div class="dempty">${all.length?"Nothing matches.":"No tablets yet. Tap “Add a tablet”."}</div>`;
+}
+bindRows($("tRows"));
+$("tQ").addEventListener("input",e=>{tadm.q=e.target.value;renderTablets()});
+$("tBrand").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;tadm.b=b.dataset.v;renderTablets()});
+$("tFilter").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;tadm.f=b.dataset.v;renderTablets()});
+
+/* ---- add a tablet: brand (or a new one), model, and as many options as needed ---- */
+function tBrandSel(){const known=[...new Set([...Object.values(TAB_BRANDS),...PHI.filter(isTablet).map(p=>p.brand).filter(Boolean)])];
+  $("tfBrand").innerHTML=known.map(b=>`<option>${esc(b)}</option>`).join("")+`<option value="__new">+ New brand…</option>`}
+const ST_OPTS=["32GB","64GB","128GB","256GB","512GB","1TB","2TB"],CD_OPTS=["New","Open box","Used","Refurbished"];
+function tOptRow(){const d=document.createElement("div");d.className="ufields ci topt";
+  d.innerHTML=`<label><span>Color</span><input type="text" data-o="c" maxlength="30" placeholder="e.g. Space Gray"></label>
+    <label><span>Storage</span><select data-o="st">${ST_OPTS.map(s=>`<option ${s=="128GB"?"selected":""}>${s}</option>`).join("")}</select></label>
+    <label><span>RAM (optional)</span><input type="text" data-o="ram" maxlength="10" placeholder="e.g. 8GB"></label>
+    <label><span>Condition</span><select data-o="cd">${CD_OPTS.map(s=>`<option>${s}</option>`).join("")}</select></label>
+    <label><span>Price</span><span class="tin">$<input type="number" data-o="p" min="0" step="1" placeholder="empty = ask"></span></label>
+    <label><span>Compare price</span><span class="tin">$<input type="number" data-o="cp" min="0" step="1" placeholder="crossed out"></span></label>
+    <label><span>Quantity</span><span class="tin"><input type="number" data-o="q" min="0" step="1" value="1"></span></label>
+    <label class="priv"><span>🔒 Cost</span><span class="tin">$<input type="number" data-o="cost" min="0" step="1" placeholder="what you paid"></span></label>
+    <button type="button" class="linkbtn rmopt">Remove this option</button>`;
+  d.querySelector(".rmopt").onclick=()=>{if($("tOpts").children.length>1)d.remove();else toast("A tablet needs at least one option")};
+  $("tOpts").appendChild(d)}
+$("tAddOpen").onclick=()=>{tBrandSel();$("tOpts").innerHTML="";tOptRow();$("tForm").hidden=false;$("tAddOpen").hidden=true;$("tfName").focus()};
+$("tfClose").onclick=()=>{$("tForm").hidden=true;$("tAddOpen").hidden=false};
+$("tfAddOpt").onclick=tOptRow;
+$("tfBrand").onchange=()=>{const nw=$("tfBrand").value=="__new";$("tfBrandNewL").hidden=!nw;if(nw)$("tfBrandNew").focus()};
+onSubmit("tForm",async()=>{
+  let brand=$("tfBrand").value;if(brand=="__new"){brand=$("tfBrandNew").value.trim();if(!brand){toast("Type the new brand name");$("tfBrandNew").focus();return}}
+  const name=$("tfName").value.trim();if(!name){toast("Add the model name, e.g. iPad Air M4");$("tfName").focus();return}
+  const opts=[...$("tOpts").children].map(r=>{const g=k=>r.querySelector(`[data-o="${k}"]`).value.trim();
+    const t=[g("c"),g("st")+(g("ram")?" / "+g("ram").replace(/\s*ram$/i,"")+" RAM":""),g("cd")].filter(Boolean).join(", ");
+    return{t,p:g("p")===""?null:Math.max(0,+g("p")),cp:Math.max(0,+g("cp")||0),q:Math.max(0,Math.floor(+g("q")||0)),cost:Math.max(0,+g("cost")||0)}});
+  const pics=(await Promise.all([...$("tfPics").files].slice(0,4).map(f=>shrinkPhoto(f,900)))).filter(Boolean);
+  const id="np"+Date.now().toString(36),full=(new RegExp("^"+brand.split(" ")[0],"i").test(name)||/^ipad|^galaxy tab/i.test(name)?name:brand+" "+name).split(/\s+/).filter((w,i,a)=>!i||w.toLowerCase()!=a[i-1].toLowerCase()).join(" ");   // "Xiaomi Pad" + "Pad 7" = "Xiaomi Pad 7"
+  DB.newp=DB.newp||[];DB.newp.unshift({id,name:full,brand,dept:"ipad",sub:tabSub(brand),tab:1,desc:$("tfDesc").value.trim(),c:new Date().toISOString().slice(0,10),
+    vars:opts.map(o=>({t:o.t,p:o.p,cp:o.cp,q:o.q}))});
+  if(pics.length)DB.ph[id]={pics};
+  opts.forEach((o,i)=>{if(o.cost){const pv=privP(id,true);pv.cost=pv.cost||{};pv.cost[i]=o.cost}});
+  if(!save()){DB.newp.shift();delete DB.ph[id];return}
+  applyOwnerPhotos();$("tForm").reset();$("tfBrandNewL").hidden=true;$("tForm").hidden=true;$("tAddOpen").hidden=false;tadm.q="";$("tQ").value="";tadm.b="all";
+  commit(`${full.slice(0,40)} added with ${opts.length} option${opts.length>1?"s":""}. It's live on the store.`)});
 
 /* ================= customer reviews with stars =================
    Customers write a review (1 to 5 stars, name, optional text and order code).
