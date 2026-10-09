@@ -48,14 +48,14 @@ create policy "staff delete orders" on public.orders for delete to authenticated
 
 -- ---------- store settings: prices, stock, new products, storefront text, trade-in prices ----------
 create table if not exists public.store_state (
-  key text primary key check (key in ('ph','units','newp','content','trade','custom')),
+  key text primary key check (key in ('ph','units','newp','content','trade','custom','priv')),
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
 alter table public.store_state enable row level security;
 
 drop policy if exists "everyone reads the store" on public.store_state;
-create policy "everyone reads the store" on public.store_state for select to anon, authenticated using (true);
+create policy "everyone reads the store" on public.store_state for select to anon, authenticated using (key <> 'priv' or public.is_staff());
 drop policy if exists "staff insert store" on public.store_state;
 create policy "staff insert store" on public.store_state for insert to authenticated with check (public.is_staff());
 drop policy if exists "staff update store" on public.store_state;

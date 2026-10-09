@@ -931,6 +931,11 @@ html.locked,html.locked body{overflow:hidden}
 .demo-strip.live{background:rgba(45,212,191,.08);border-color:rgba(45,212,191,.35);color:#9ff0e0}
 .demo-strip.live.err{background:rgba(255,120,90,.1);border-color:rgba(255,120,90,.4);color:#ffc2b3}
 .odel{margin-top:8px;color:#ff9b8a;font-size:13px}
+.priv>span:first-child,.tin.priv,.cdesc.priv summary{color:#f5c26b}
+.priv input{border-color:rgba(245,194,107,.35)!important}
+.margin{font-style:normal;font-size:12px;font-weight:700;margin-left:6px;white-space:nowrap}
+.margin.up{color:#5fe0b5}.margin.down{color:#ff8f7a}
+.from b{color:var(--ink,#fff)}
 
 /* ===== store details: badges, fits, shop by phone, delivery band, brands, warranty page ===== */
 .bdg{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:800;letter-spacing:.02em;white-space:nowrap;vertical-align:middle}
@@ -1469,6 +1474,7 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
       <div class="tabs" role="group" aria-label="Category" id="tabs">
         <button class="tab" data-v="apple" aria-pressed="true">iPhone</button>
         <button class="tab" data-v="samsung" aria-pressed="false">Samsung Galaxy</button>
+        <button class="tab" data-v="other" aria-pressed="false" id="tabOther" hidden>Other phones</button>
         <button class="tab" data-v="ipad" aria-pressed="false">iPads</button>
         <button class="tab" data-v="all" aria-pressed="false">All accessories</button>
         <button class="tab" data-v="cases" aria-pressed="false">Cases &amp; protection</button>
@@ -1662,12 +1668,12 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
       <nav class="anav" aria-label="Admin">
         <button data-go="dash"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Dashboard</button>
         <button data-go="orders"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v12H5.2L4 17.5z"/><path d="M8 9h8M8 12h5"/></svg>Orders<span class="nbadge" id="navOrders" hidden>0</span></button>
-        <button data-go="stock"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Stock</button>
+        <button data-go="stock"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Phones</button>
         <button data-go="acc" id="navAcc"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v4M8 7h8l-1 6H9z"/><path d="M12 13v8"/></svg>Accessories</button>
         <button data-go="cat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 12l9 4 9-4M3 17l9 4 9-4"/></svg>Catalog</button>
         <button data-go="trade"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>Trade-in prices</button>
         <button data-go="front"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>Storefront</button>
-        <button data-go="add"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Add a model</button>
+        <button data-go="add" id="navAdd"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Add a model</button>
       </nav>
       <div class="afoot">
         <button class="abtn" id="aExit">View store</button>
@@ -1697,6 +1703,7 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
       <section class="apage" id="ap-stock" hidden>
         <div class="stockbar">
           <button class="btn btn-main" id="ciOpen">+ Check in a phone</button>
+          <button class="abtn" id="addPhoneBtn">+ Add a new phone model</button>
           <label class="abtn" id="impBtn"><input type="file" id="impFile" accept=".xlsx,.xls,.csv" hidden>Import from Excel</label>
           <button class="abtn" id="impTpl">Download template</button>
           <button class="abtn" id="expBtn">Export stock</button>
@@ -1713,14 +1720,18 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
             <label><span>SIM</span><select id="ciSim"></select></label>
             <label><span>Battery health</span><span class="tin"><input type="number" id="ciBat" min="50" max="100" value="100" aria-label="Battery health">%</span></label>
             <label><span>Quantity</span><span class="tin"><input type="number" id="ciQty" min="1" max="99" value="1" aria-label="Quantity"></span></label>
+            <label><span>Price</span><span class="tin">$<input type="number" id="ciPrice" min="0" step="1" placeholder="empty = ask" aria-label="Price"></span></label>
+            <label><span>Compare price</span><span class="tin">$<input type="number" id="ciCp" min="0" step="1" placeholder="crossed out" aria-label="Compare price"></span></label>
+            <label class="priv"><span>🔒 Cost price</span><span class="tin">$<input type="number" id="ciCost" min="0" step="1" placeholder="what you paid" aria-label="Cost price"></span></label>
             <label class="wide"><span>Note for customers (optional)</span><input type="text" id="ciNote" maxlength="80" placeholder="e.g. tiny scratch on the frame"></label>
+            <label class="wide priv"><span>🔒 Private note (only staff see it)</span><input type="text" id="ciPNote" maxlength="200" placeholder="e.g. bought from…, IMEI, needs screen check"></label>
           </div>
           <div class="ciprev" id="ciPrev"></div>
           <button class="btn btn-main" type="submit">Check in</button>
         </form>
         <div class="atools">
           <label class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93A3C8" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="aQ" type="search" placeholder="Find a model, e.g. 17 Pro" aria-label="Find a model"></label>
-          <div class="series" id="aBrand" role="group" aria-label="Brand"><button data-v="all" aria-pressed="true">All brands</button><button data-v="apple" aria-pressed="false">iPhone</button><button data-v="samsung" aria-pressed="false">Samsung</button></div>
+          <div class="series" id="aBrand" role="group" aria-label="Brand"></div>
           <div class="series" id="aFilter" role="group" aria-label="Availability"><button data-v="all" aria-pressed="true">All</button><button data-v="in" aria-pressed="false">In stock</button><button data-v="out" aria-pressed="false">Unavailable</button></div>
         </div>
         <div class="arows" id="aRows"></div>
@@ -1810,14 +1821,18 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
 
       <section class="apage" id="ap-add" hidden>
         <form class="aform" id="aForm">
-          <p style="color:var(--mist);font-size:15px">For phones that come out later (iPhone 18, Galaxy S27…). After adding it, add units under the colors you have.</p>
+          <p style="color:var(--mist);font-size:15px">Any phone that isn't in the list yet: a new iPhone or Galaxy, or another brand like Infinix, Xiaomi or Tecno. After adding it, check in the units you have.</p>
           <div class="two">
-            <label>Model name<input type="text" id="fName" placeholder="iPhone 18 or Galaxy S27" required></label>
+            <label>Brand<select id="fBrand"></select></label>
+            <label id="fBrandNewL" hidden>New brand name<input type="text" id="fBrandNew" maxlength="30" placeholder="e.g. Nothing"></label>
+          </div>
+          <div class="two">
+            <label>Model name<input type="text" id="fName" placeholder="e.g. Note 50 Pro" required></label>
             <label>Release year<input type="number" id="fYear" value="2027" min="2019" max="2035"></label>
           </div>
           <div class="two">
             <label>Display size<select id="fSize"><option>6.1</option><option selected>6.3</option><option>6.5</option><option>6.7</option><option>6.9</option></select></label>
-            <label>Chip<input type="text" id="fChip" placeholder="A20"></label>
+            <label>Chip<input type="text" id="fChip" placeholder="e.g. Helio G100"></label>
           </div>
           <label>Design (used for the 3D model)
             <select id="fCam">
@@ -1831,7 +1846,7 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
               <optgroup label="Samsung Galaxy">
               <option value="s:ultra">Galaxy Ultra, boxy with S Pen</option>
               <option value="s:sbar">Galaxy S, camera bar</option>
-              <option value="s:aisland">Galaxy A, raised camera island</option>
+              <option value="s:aisland">Galaxy A, raised camera island (also fits most Android phones)</option>
               <option value="s:fold">Galaxy Z Fold, book foldable</option>
               <option value="s:flip">Galaxy Z Flip, clamshell foldable</option>
               </optgroup>
@@ -1840,7 +1855,7 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
           <fieldset><legend>Storage options</legend><div class="cg" id="fSt"></div></fieldset>
           <fieldset><legend>SIM options</legend><div class="cg" id="fSim"></div></fieldset>
           <fieldset><legend>Colors</legend><div id="fCols" style="display:grid;gap:10px"></div><button type="button" class="linkbtn" id="fAddCol">+ Add another color</button></fieldset>
-          <button class="btn btn-main" type="submit">Add to catalog</button>
+          <button class="btn btn-main" type="submit">Add this phone</button>
         </form>
       </section>
     </main>
@@ -2848,7 +2863,7 @@ function buildHeroPro(color){
 
 
 function buildDevice(m,hex){
-  if(m.brand=="samsung"){
+  if(looksGalaxy(m)){
     if(m.fold)return buildFoldable(hex,m.fold);
     return buildGalaxy(hex,m);
   }
@@ -2948,7 +2963,7 @@ const showColor=m=>(stockColors(m)[0]||m.colors[0]);
 const hexOf=(m,c)=>(m.colors.find(k=>k[0]==c)||m.colors[0])[1];
 const mPic=m=>m&&window.MPICS&&MPICS[m.id]||"";
 const mSVG=(m,hex)=>mPic(m)?`<img class="mpic" src="${mPic(m)}" alt="${esc(m.name)}" loading="lazy" decoding="async" draggable="false">`:mSVG0(m,hex);
-const mSVG0=(m,hex)=>{hex=hex||showColor(m)[1];if(m.fold&&m.brand=="samsung")return foldSVG(hex,m.fold.kind,m.fold.lenses?m.fold.lenses.length:2);if(m.brand=="samsung")return galaxySVG(hex,m.cam);return phoneSVG(hex,svgCam(m))};
+const mSVG0=(m,hex)=>{hex=hex||showColor(m)[1];if(m.fold&&looksGalaxy(m))return foldSVG(hex,m.fold.kind,m.fold.lenses?m.fold.lenses.length:2);if(looksGalaxy(m))return galaxySVG(hex,m.cam);return phoneSVG(hex,svgCam(m))};
 const stRange=m=>m.st.length>1?`${fmtGB(m.st[0])} to ${fmtGB(m.st[m.st.length-1])}`:fmtGB(m.st[0]);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ago=t=>{const d=now()-t;return d<HOUR?`${Math.max(1,Math.round(d/6e4))} min ago`:d<DAY?`${Math.round(d/HOUR)} h ago`:d<2*DAY?"Yesterday":`${Math.round(d/DAY)} days ago`};
@@ -3043,8 +3058,17 @@ $("lineup").addEventListener("keydown",e=>{if(e.key=="Enter"&&e.target.classList
 
 /* ================= shop grid ================= */
 const shop={cat:"apple",series:"all",only:false,q:"",fit:"",limit:24};
-const isPhoneCat=c=>c=="apple"||c=="samsung";
-function renderSeries(){$("series").innerHTML=(shop.cat=="samsung"?SSERIES:SERIES).map(([v,l])=>`<button data-v="${v}" aria-pressed="${v==shop.series}">${l}</button>`).join("")}
+const isPhoneCat=c=>c=="apple"||c=="samsung"||c=="other";
+/* phone brands: Apple and Samsung have their own tabs, every other brand goes under "Other phones" */
+const BRAND_NAMES={apple:"Apple",samsung:"Samsung",xiaomi:"Xiaomi",redmi:"Redmi",poco:"Poco",infinix:"Infinix",tecno:"Tecno",itel:"itel",honor:"Honor",huawei:"Huawei",oppo:"Oppo",realme:"Realme",vivo:"Vivo",oneplus:"OnePlus",google:"Google Pixel",motorola:"Motorola",nokia:"Nokia",nothing:"Nothing",zte:"ZTE"};
+const brandName=b=>BRAND_NAMES[b]||((typeof DB!="undefined"&&DB?allModels():[]).find(m=>m.brand==b&&m.brandLabel)||{}).brandLabel||(b?b.charAt(0).toUpperCase()+b.slice(1):"");
+const phoneTab=m=>{const b=brandOf(m);return b=="apple"||b=="samsung"?b:"other"};
+const inPhoneCat=(m,cat,series)=>phoneTab(m)==cat&&(series=="all"||(cat=="other"?brandOf(m)==series:(cat=="samsung"?seriesOfS(m):seriesOf(m))==series));
+const looksGalaxy=m=>(m.look||m.brand)=="samsung"||(m.brand&&m.brand!="apple"&&!m.look);
+/* phone prices come from the units the owner checks in */
+const otherSeries=()=>[["all","All"],...[...new Set(allModels().filter(m=>phoneTab(m)=="other").map(brandOf))].map(b=>[b,brandName(b)])];
+const unitPrice=us=>{const ps=us.filter(u=>u.qty>0&&u.p>0).map(u=>u.p);return ps.length?Math.min(...ps):null};
+function renderSeries(){$("series").innerHTML=(shop.cat=="other"?otherSeries():shop.cat=="samsung"?SSERIES:SERIES).map(([v,l])=>`<button data-v="${v}" aria-pressed="${v==shop.series}">${l}</button>`).join("")}
 renderSeries();
 $("series").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("series").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));shop.series=b.dataset.v;renderGrid()});
 $("onlyStock").onclick=()=>{shop.only=!shop.only;$("onlyStock").setAttribute("aria-checked",shop.only);renderGrid()};
@@ -3063,7 +3087,7 @@ function phoneCard(m,i){const s=status(m),q=qtyOf(m);
   <div class="art">${pill(s)}${q==1?`<span class="one">Only 1 left</span>`:""}${badgeHTML(m.id)}${mSVG(m)}</div>
   <div class="info"><h3>${esc(m.name)}</h3><div class="meta">${m.year}, ${esc(m.chip)}, ${m.size}"</div>
   <div class="cdots">${m.colors.map(([c,h])=>`<span class="cdot ${colorOK(m,c)?"":"x"}" style="background:${h}" title="${esc(c)} ${colorOK(m,c)?"in stock":"unavailable"}"></span>`).join("")}</div>
-  <div class="buy"><span class="from">${stRange(m)}</span><button class="add view">View options</button></div></div></article>`}
+  <div class="buy"><span class="from">${(p=>p?`From <b>$${p}</b> · `:"")(unitPrice(DB.units.filter(u=>u.m==m.id)))}${stRange(m)}</span><button class="add view">View options</button></div></div></article>`}
 function accCard(a,i){const ok=accOK(a),s=ok?{k:"ok",t:"In stock"}:{k:"na",t:"Unavailable"};
   return `<article class="card pcard ${ok?"":"na"}" data-acc="${a.id}" tabindex="0" style="animation-delay:${(i%8)*50}ms" aria-label="${esc(a.name)}, ${s.t}">
   <div class="art">${pill(s)}${ok&&a.qty==1?`<span class="one">Only 1 left</span>`:""}${badgeHTML(a.id)}${a.photos.length?`<img class="cardphoto" src="${a.photos[0]}" alt="">`:art(a)}</div>
@@ -3073,7 +3097,7 @@ function renderGrid(reanimate){
   const q=shop.q.toLowerCase();let html="",n=0;
   if(isPhoneCat(shop.cat)){
     let list=q?searchModels(q).map(r=>r.m):allModels().slice().sort((a,b)=>b.year-a.year);
-    list=list.filter(m=>brandOf(m)==shop.cat&&(shop.series=="all"||(shop.cat=="samsung"?seriesOfS(m):seriesOf(m))==shop.series));
+    list=list.filter(m=>inPhoneCat(m,shop.cat,shop.series));
     if(shop.only)list=list.filter(m=>status(m).k=="ok");
     n=list.length;html=list.slice(0,shop.limit).map(phoneCard).join("");
     $("countLine").textContent=`${n} model${n==1?"":"s"} shown, ${list.filter(m=>status(m).k=="ok").length} in stock right now`;
@@ -3165,13 +3189,14 @@ function renderPV(){
   <div class="opt"><h4>SIM</h4><div class="chips2">${chipsHTML("sim",m.sims,v=>SIMS[v].label,v=>test("sim",v))}</div><div class="tip">${SIMS[pvs.sim].tip}</div></div>
   <div class="verdict ${ok?"ok":"na"}" aria-live="polite">
     <b>${ok?`✓ In stock${left==1?", only 1 left":left>1?`, ${left} available`:""}`:"✕ Unavailable right now"}</b>
+    ${u&&u.p>0?`<div class="pvprice"><b>$${u.p}</b>${u.cp>u.p?`<s>$${u.cp}</s><span class="offb">-${Math.round((1-u.p/u.cp)*100)}%</span>`:""}</div>`:""}
     <span>${esc(desc)}</span>
     ${u&&u.cond!="new"?`<span>${u.bat?`Battery health ${u.bat}%`:"Battery health: ask us"}${u.note?`. ${esc(u.note)}`:""}</span>`:u&&u.note?`<span>${esc(u.note)}</span>`:""}
     ${ok?"":`<span>${m.soon&&!s.n?esc(m.soon)+". Reserve yours on WhatsApp.":"We can try to source this one for you. Ask us on WhatsApp."}</span>`}
   </div>
   <div class="pvacts">
     ${ok?`<button class="btn btn-main" id="pvAdd" ${cartHas(variantKey())?"disabled":""}>${cartHas(variantKey())?"In your cart":"Add to cart"}</button>`:""}
-    <a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(ok?`Hi Connectify! What's the price of the ${desc}?\nCould you also send me real photos of the one you have?`:`Hi Connectify! I'm looking for the ${desc}. Can you get it for me?`)}">${WA_SVG}${ok?"Ask for price and real photos":"Ask us to find it"}</a>
+    <a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(ok?`Hi Connectify! What's the price of the ${desc}?\nCould you also send me real photos of the one you have?`:`Hi Connectify! I'm looking for the ${desc}. Can you get it for me?`)}">${WA_SVG}${ok?(u&&u.p>0?"Ask for real photos":"Ask for price and real photos"):"Ask us to find it"}</a>
   </div>
   ${realPics(ok,u&&u.photos.length,`Hi Connectify! Can you send me real photos and a short video of the ${desc}? And the price please.`)}
   ${infoBlocks(pvs.cond,true)}
@@ -3189,7 +3214,7 @@ function renderPV(){
     <div><span>Released</span><b>${m.year}</b></div>
   </div>`;
   $("pvClose").onclick=closeModals;
-  const a=$("pvAdd");if(a)a.onclick=()=>{cart.push({key:variantKey(),kind:"phone",id:m.id,unit:u&&u.id,title:m.name,hex:hexOf(m,pvs.color),detail:`${fmtGB(pvs.st)}, ${pvs.color}, ${CONDS[pvs.cond].label}, ${SIMS[pvs.sim].label}`});renderCart();closeModals();openCart(true)};
+  const a=$("pvAdd");if(a)a.onclick=()=>{cart.push({key:variantKey(),kind:"phone",id:m.id,unit:u&&u.id,price:u&&u.p>0?u.p:null,title:m.name,hex:hexOf(m,pvs.color),detail:`${fmtGB(pvs.st)}, ${pvs.color}, ${CONDS[pvs.cond].label}, ${SIMS[pvs.sim].label}`});renderCart();closeModals();openCart(true)};
   renderMedia();
 }
 const variantKey=()=>`${pvs.m.id}|${pvs.color}|${pvs.st}|${pvs.cond}|${pvs.sim}`;
@@ -3421,7 +3446,7 @@ const deptSubs=d=>{const set=new Set(storeItems().filter(x=>x.dept==d).map(x=>x.
 /* ---------- shop ---------- */
 shop.brand="";shop.sort="featured";
 function renderSeries(){
-  if(shop.cat=="apple"||shop.cat=="samsung"){$("series").innerHTML=(shop.cat=="samsung"?SSERIES:SERIES).map(([v,l])=>`<button data-v="${v}" aria-pressed="${v==shop.series}">${l}</button>`).join("");return}
+  if(isPhoneCat(shop.cat)){$("series").innerHTML=(shop.cat=="other"?otherSeries():shop.cat=="samsung"?SSERIES:SERIES).map(([v,l])=>`<button data-v="${v}" aria-pressed="${v==shop.series}">${l}</button>`).join("");return}
   const subs=shop.cat=="ipad"||shop.cat=="all"?[]:(typeof DB!="undefined"&&DB?deptSubs(shop.cat):(PH.subs[shop.cat]||[]));
   $("series").innerHTML=[["all","All"],...subs.map(s=>[s,s])].map(([v,l])=>`<button data-v="${esc(v)}" aria-pressed="${v==shop.series}">${esc(l)}</button>`).join("");
 }
@@ -3467,11 +3492,12 @@ function phCard(p,i){const ok=phOK(p),off=phOff(p),nv=p.vars.length,inCart=cartH
 function anyCard(x,i){return x.leg?accCard(x.leg,i):phCard(x.p,i)}
 
 function renderGrid(reanimate){
+  if($("tabOther"))$("tabOther").hidden=!allModels().some(m=>phoneTab(m)=="other");
   let html="",n=0;
   if(isPhoneCat(shop.cat)&&shop.cat!="ipad"){
     const q=shop.q.toLowerCase();
     let list=q?searchModels(q).map(r=>r.m):allModels().slice().sort((a,b)=>b.year-a.year);
-    list=list.filter(m=>brandOf(m)==shop.cat&&(shop.series=="all"||(shop.cat=="samsung"?seriesOfS(m):seriesOf(m))==shop.series));
+    list=list.filter(m=>inPhoneCat(m,shop.cat,shop.series));
     if(shop.only)list=list.filter(m=>status(m).k=="ok");
     n=list.length;html=list.slice(0,shop.limit).map(phoneCard).join("");
     $("countLine").textContent=`${n} model${n==1?"":"s"} shown, ${list.filter(m=>status(m).k=="ok").length} in stock right now`;
@@ -3598,7 +3624,7 @@ const DEMO_USER="owner@connectify.lb",DEMO_PASS="connectify";
 const isAuthed=()=>{if(window.LIVE)return LIVE.staff;try{return sessionStorage.getItem(AUTH_KEY)=="1"}catch(e){return !!window.__auth}};
 const setAuthed=v=>{try{v?sessionStorage.setItem(AUTH_KEY,"1"):sessionStorage.removeItem(AUTH_KEY)}catch(e){}window.__auth=v};
 const adm={page:"dash",q:"",f:"all",b:"all",open:new Set(),ostat:"all"};
-const PAGES={dash:["Dashboard","How the shop is doing today"],orders:["Orders","Orders and trade-in requests from the website"],stock:["Stock","Check in the phones you have. At zero they show as unavailable, but stay in the catalog"],acc:["Accessories","Add accessories, set quantities and upload real photos. At zero they show as unavailable"],trade:["Trade-in prices","What you pay for a like-new phone with good battery"],front:["Storefront","Edit what customers see first"],add:["Add a model","For phones that come out later"]};
+const PAGES={dash:["Dashboard","How the shop is doing today"],orders:["Orders","Orders and trade-in requests from the website"],stock:["Phones","Check in the phones you have, set prices, add new models. At zero they show as unavailable"],acc:["Accessories","Add accessories, set quantities and upload real photos. At zero they show as unavailable"],trade:["Trade-in prices","What you pay for a like-new phone with good battery"],front:["Storefront","Edit what customers see first"],add:["Add a phone","A new model or a new brand"]};
 const STATUS={new:"New",confirmed:"Confirmed",delivered:"Delivered",cancelled:"Cancelled"};
 
 /* ---------- login ---------- */
@@ -3695,8 +3721,15 @@ $("oList").addEventListener("click",e=>{const d=e.target.closest("[data-odel]");
   o.status=st;commit(`${o.id}: ${STATUS[st]}.${note}`);
 });
 
+/* ---------- staff-only data: cost prices and private notes (never shown to customers) ---------- */
+const privRoot=()=>DB.priv||(DB.priv={u:{},ph:{}});
+const privU=(id,mk)=>{const r=privRoot();r.u=r.u||{};return r.u[id]||(mk?(r.u[id]={}):{})};
+const privP=(id,mk)=>{const r=privRoot();r.ph=r.ph||{};return r.ph[id]||(mk?(r.ph[id]={}):{})};
+function cleanPriv(){const r=privRoot();["u","ph"].forEach(k=>Object.keys(r[k]||{}).forEach(id=>{const o=r[k][id];if(o.cost&&typeof o.cost=="object"&&!Object.keys(o.cost).length)delete o.cost;if(!Object.keys(o).length)delete r[k][id]}))}
+const marginTxt=(p,c)=>p>0&&c>0?`<em class="margin ${p-c>=0?"up":"down"}">${p-c>=0?"+":"−"}$${Math.abs(Math.round((p-c)*100)/100)} profit</em>`:"";
+
 /* ---------- stock (units) ---------- */
-function renderStock(){
+function renderStock(){renderBrandChips();
   let list=allModels().slice().sort((a,b)=>(b.custom?1:0)-(a.custom?1:0)||b.year-a.year);
   if(adm.q)list=searchModels(adm.q).map(r=>r.m);
   if(adm.b!="all")list=list.filter(m=>brandOf(m)==adm.b);
@@ -3726,7 +3759,11 @@ function colorBlock(m,c,h){
         <label><span>Condition</span><select data-f="cond">${opt(CK,v=>CONDS[v].label,u.cond)}</select></label>
         <label><span>SIM</span><select data-f="sim">${opt(m.sims,v=>SIMS[v].label,u.sim)}</select></label>
         <label><span>Battery</span><span class="tin"><input type="number" min="0" max="100" data-f="bat" value="${u.bat||""}" placeholder="?" aria-label="Battery health">%</span></label>
+        <label><span>Price</span><span class="tin">$<input type="number" min="0" step="1" data-f="p" value="${u.p||""}" placeholder="ask" aria-label="Price"></span></label>
+        <label><span>Compare price</span><span class="tin">$<input type="number" min="0" step="1" data-f="cp" value="${u.cp||""}" placeholder="–" aria-label="Compare price, shown crossed out"></span></label>
+        <label class="priv"><span>🔒 Cost</span><span class="tin">$<input type="number" min="0" step="1" data-pf="cost" value="${privU(u.id).cost||""}" placeholder="–" aria-label="Cost price, staff only"></span>${marginTxt(u.p,privU(u.id).cost)}</label>
         <label class="wide"><span>Note for customers</span><input type="text" data-f="note" value="${esc(u.note)}" placeholder="e.g. tiny scratch on the frame" maxlength="80"></label>
+        <label class="wide priv"><span>🔒 Private note (only staff see it)</span><input type="text" data-pf="note" value="${esc(privU(u.id).note||"")}" placeholder="e.g. bought from…, IMEI, needs screen check" maxlength="200"></label>
       </div>
       <div class="uside">
         <div class="qty" role="group" aria-label="Quantity"><button data-q="-1" aria-label="One less">−</button><b>${u.qty}</b><button data-q="1" aria-label="One more">+</button></div>
@@ -3754,9 +3791,10 @@ $("aRows").addEventListener("change",async e=>{
   if(e.target.matches("[data-upload]")){const files=[...e.target.files].slice(0,4);toast("Adding photos…");
     try{for(const f of files)u.photos.push(await shrink(f));if(save()){renderPage();renderStore();toast(`${files.length} photo${files.length>1?"s":""} added. Customers now see them first.`)}else{u.photos.splice(-files.length);}}
     catch(err){toast("That file couldn't be read as a photo")}return}
+  const pf=e.target.dataset.pf;if(pf){const o=privU(u.id,true);let v=e.target.value.trim();if(pf=="cost")v=v===""?0:Math.max(0,+v||0);if(v)o[pf]=v;else delete o[pf];cleanPriv();commit(pf=="cost"?"Cost saved (only staff see it)":"Private note saved");return}
   const f=e.target.dataset.f;if(!f)return;
-  let v=e.target.value;if(f=="st")v=+v;if(f=="bat")v=String(v).trim()===""?0:Math.min(100,Math.max(50,+v||50));
-  u[f]=v;commit(f=="note"?"Note saved":`${unitLabel(u)} updated`);
+  let v=e.target.value;if(f=="st")v=+v;if(f=="p"||f=="cp")v=String(v).trim()===""?0:Math.max(0,Math.round(+v||0));if(f=="bat")v=String(v).trim()===""?0:Math.min(100,Math.max(50,+v||50));
+  u[f]=v;commit(f=="note"?"Note saved":f=="p"?(v?`Price set to $${v}`:"Price removed, customers ask on WhatsApp"):f=="cp"?(v?`Compare price $${v} shown crossed out`:"Compare price removed"):`${unitLabel(u)} updated`);
 });
 $("aRows").addEventListener("keydown",e=>{if(e.key=="Enter"&&e.target.dataset.toggle){e.target.click()}});
 $("aQ").addEventListener("input",e=>{adm.q=e.target.value.trim();renderStock()});
@@ -3764,8 +3802,7 @@ $("aBrand").addEventListener("click",e=>{const b=e.target.closest("button");if(!
 $("aFilter").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("aFilter").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));adm.f=b.dataset.v;renderStock()});
 
 /* ---------- check in ---------- */
-function ciModels(){const g=b=>allModels().filter(m=>brandOf(m)==b).sort((x,y)=>y.year-x.year).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join("");
-  $("ciModel").innerHTML=`<optgroup label="iPhone">${g("apple")}</optgroup><optgroup label="Samsung Galaxy">${g("samsung")}</optgroup>`}
+function ciModels(){$("ciModel").innerHTML=modelOptions()}
 function ciFill(){const m=modelById($("ciModel").value);
   $("ciColor").innerHTML=m.colors.map(([c])=>`<option>${esc(c)}</option>`).join("");
   $("ciSt").innerHTML=m.st.map(v=>`<option value="${v}">${fmtGB(v)}</option>`).join("");
@@ -3779,10 +3816,12 @@ $("ciModel").onchange=ciFill;["ciColor","ciSt","ciCond","ciSim"].forEach(id=>$(i
 $("ciOpen").onclick=()=>{if(!$("ciModel").options.length)ciModels();$("ciForm").hidden=false;$("ciOpen").hidden=true;if(!$("ciColor").options.length)ciFill();$("ciModel").focus()};
 $("ciClose").onclick=()=>{$("ciForm").hidden=true;$("ciOpen").hidden=false};
 onSubmit("ciForm",e=>{e.preventDefault();
-  const m=modelById($("ciModel").value),u={m:m.id,c:$("ciColor").value,st:+$("ciSt").value,cond:$("ciCond").value,sim:$("ciSim").value,bat:Math.min(100,Math.max(50,+$("ciBat").value||100)),note:$("ciNote").value.trim()},qty=Math.max(1,+$("ciQty").value||1);
-  const same=DB.units.find(x=>x.m==u.m&&x.c==u.c&&x.st==u.st&&x.cond==u.cond&&x.sim==u.sim&&x.bat==u.bat&&x.note==u.note);
-  if(same)same.qty+=qty;else DB.units.push(Object.assign({id:newId("u"),qty,photos:[],added:now()},u));
-  adm.open.add(m.id);$("ciQty").value=1;$("ciNote").value="";
+  const m=modelById($("ciModel").value),u={m:m.id,c:$("ciColor").value,st:+$("ciSt").value,cond:$("ciCond").value,sim:$("ciSim").value,bat:Math.min(100,Math.max(50,+$("ciBat").value||100)),note:$("ciNote").value.trim(),p:Math.max(0,Math.round(+$("ciPrice").value||0)),cp:Math.max(0,Math.round(+$("ciCp").value||0))},qty=Math.max(1,+$("ciQty").value||1);
+  const cost=Math.max(0,+$("ciCost").value||0),pnote=$("ciPNote").value.trim();
+  const same=DB.units.find(x=>x.m==u.m&&x.c==u.c&&x.st==u.st&&x.cond==u.cond&&x.sim==u.sim&&x.bat==u.bat&&x.note==u.note&&(x.p||0)==u.p&&(x.cp||0)==u.cp);
+  let nu=same;if(same)same.qty+=qty;else{nu=Object.assign({id:newId("u"),qty,photos:[],added:now()},u);DB.units.push(nu)}
+  if(cost||pnote){const o=privU(nu.id,true);if(cost)o.cost=cost;if(pnote)o.note=pnote}
+  adm.open.add(m.id);$("ciQty").value=1;["ciNote","ciPrice","ciCp","ciCost","ciPNote"].forEach(id=>$(id).value="");
   commit(`Checked in: ${qty} × ${m.name} ${fmtGB(u.st)} ${u.c}. It's live on the store.`)});
 $("zeroAll").onclick=()=>{if(!confirm("Set every phone and accessory to 0? Everything stays in the catalog as Unavailable, then you check in what you really have."))return;
   DB.units=[];DB.accs.forEach(x=>x.qty=0);adm.open.clear();commit("Everything is at 0. Check in what you have in stock.")};
@@ -3872,7 +3911,9 @@ $("aTQ").addEventListener("input",renderTradeAdmin);
 $("aTReset").onclick=()=>{if(confirm("Reset all trade-in prices to this month's market reference?")){DB.trade=seedTrade();save();renderTradeAdmin();tradeCalc();toast("Trade-in prices reset")}};
 
 /* ---------- storefront editor ---------- */
-function modelOptions(sel){return `<optgroup label="iPhone">${allModels().filter(m=>brandOf(m)=="apple").map(m=>`<option value="${m.id}" ${m.id==sel?"selected":""}>${esc(m.name)}</option>`).join("")}</optgroup><optgroup label="Samsung Galaxy">${allModels().filter(m=>brandOf(m)=="samsung").map(m=>`<option value="${m.id}" ${m.id==sel?"selected":""}>${esc(m.name)}</option>`).join("")}</optgroup>`}
+function modelOptions(sel){return phoneBrands().map(b=>`<optgroup label="${esc(b=="apple"?"iPhone":b=="samsung"?"Samsung Galaxy":brandName(b))}">${allModels().filter(m=>brandOf(m)==b).sort((x,y)=>y.year-x.year).map(m=>`<option value="${m.id}" ${m.id==sel?"selected":""}>${esc(m.name)}</option>`).join("")}</optgroup>`).join("")}
+const phoneBrands=()=>{const s=[...new Set(allModels().map(brandOf))];return ["apple","samsung",...s.filter(b=>b!="apple"&&b!="samsung").sort()].filter(b=>s.includes(b))};
+function renderBrandChips(){$("aBrand").innerHTML=[["all","All brands"],...phoneBrands().map(b=>[b,b=="apple"?"iPhone":brandName(b)])].map(([v,l])=>`<button data-v="${v}" aria-pressed="${adm.b==v}">${esc(l)}</button>`).join("")}
 function renderFront(){
   const c=DB.content;
   $("fbOn").setAttribute("aria-checked",c.banner.on);$("fbText").value=c.banner.text;$("fBadge").value=c.badge;
@@ -3917,20 +3958,29 @@ $("aForm").addEventListener("click",e=>{const b=e.target.closest("[data-f]");if(
   fState[k]=fState[k].includes(v)?fState[k].filter(x=>x!==v):[...fState[k],v];renderFormChips()});
 function addColRow(name="",hex="#8A9BB8"){const d=document.createElement("div");d.className="colrow";d.innerHTML=`<input type="text" placeholder="Color name" value="${esc(name)}" aria-label="Color name"><input type="color" value="${hex}" aria-label="Color"><button type="button" class="rm" aria-label="Remove color">Remove</button>`;d.querySelector(".rm").onclick=()=>d.remove();$("fCols").appendChild(d)}
 $("fAddCol").onclick=()=>addColRow();
+function fillBrandSel(){const known=[...new Set(["apple","samsung",...Object.keys(BRAND_NAMES),...allModels().map(brandOf)])];
+  $("fBrand").innerHTML=known.map(b=>`<option value="${b}">${esc(b=="apple"?"Apple (iPhone)":b=="samsung"?"Samsung (Galaxy)":brandName(b))}</option>`).join("")+`<option value="__new">+ New brand…</option>`}
+$("fBrand").onchange=()=>{const nw=$("fBrand").value=="__new",b=$("fBrand").value;$("fBrandNewL").hidden=!nw;if(nw)$("fBrandNew").focus();
+  if(b!="apple"&&b!="__new"&&!$("fCam").value.startsWith("s:"))$("fCam").value="s:aisland";if(b=="apple")$("fCam").value="pill"};
+$("addPhoneBtn").onclick=()=>{fillBrandSel();go("add")};
+if($("navAdd"))$("navAdd").style.display="none";
+fillBrandSel();
 onSubmit("aForm",e=>{e.preventDefault();
   const name=$("fName").value.trim();if(!name)return;
   const colors=[...$("fCols").querySelectorAll(".colrow")].map(r=>[r.querySelector("input[type=text]").value.trim(),r.querySelector("input[type=color]").value.toUpperCase()]).filter(c=>c[0]);
   if(!colors.length){toast("Add at least one color");return}
   if(!fState.st.length||!fState.sim.length){toast("Pick at least one storage and one SIM option");return}
+  let brand=$("fBrand").value;if(brand=="__new"){const nb=$("fBrandNew").value.trim();if(!nb){toast("Type the new brand name");$("fBrandNew").focus();return}brand=nb.toLowerCase().replace(/[^a-z0-9]+/g,"");if(!BRAND_NAMES[brand])BRAND_NAMES[brand]=nb}
   let cam=$("fCam").value;const size=$("fSize").value,sam=cam.startsWith("s:");if(sam)cam=cam.slice(2);
+  const bn=brand=="apple"?"iPhone":brand=="samsung"?"Galaxy":brandName(brand),fullName=new RegExp("^"+bn.replace(/[^a-z0-9 ]/gi,"").split(" ")[0],"i").test(name)?name:bn+" "+name;
   const fold=cam=="fold"?{kind:"book",PW:2.08,PH:4.5,R:.3,lenses:[.24,.24,.24]}:cam=="flip"?{kind:"flip",PW:2.06,PH:2.37,R:.42}:null;
   const mm={"6.1":[147,71.5],"6.3":[150,72],"6.5":[156,75],"6.7":[160,77],"6.9":[163,78]}[size];
-  const m={id:"c"+Date.now().toString(36),brand:sam?"samsung":"apple",fold,mm,spen:cam=="ultra",name:/^(iphone|galaxy)/i.test(name)?name:(sam?"Galaxy ":"iPhone ")+name,year:+$("fYear").value||2027,cam,front:cam=="single"?"notch":"island",size,
-    display:`${size}" display`,chip:$("fChip").value.trim()||(sam?"Snapdragon":"Apple silicon"),camera:"See Apple or Samsung for full specs",
-    port:"USB-C",unlock:sam?"Fingerprint, face":"Face ID",colors,st:fState.st.slice().sort((a,b)=>a-b),sims:fState.sim.slice(),cc:1,action:1,custom:true};
+  const m={id:"c"+Date.now().toString(36),brand,brandLabel:brandName(brand),look:sam?"samsung":"apple",fold,mm,spen:cam=="ultra",name:fullName,year:+$("fYear").value||2027,cam,front:cam=="single"?"notch":"island",size,
+    display:`${size}" display`,chip:$("fChip").value.trim()||(sam?"Snapdragon":"Apple silicon"),camera:"Ask us for full specs",
+    port:"USB-C",unlock:brand=="apple"?"Face ID":"Fingerprint, face",colors,st:fState.st.slice().sort((a,b)=>a-b),sims:fState.sim.slice(),cc:1,action:1,custom:true};
   DB.custom.unshift(m);adm.open.add(m.id);adm.q="";$("aQ").value="";adm.focus=m.id;
   $("aForm").reset();$("fCols").innerHTML="";addColRow("Black","#2B2C30");addColRow("White","#F3F3F1");
-  save();renderStore();go("stock");toast(`${m.name} added. Add units under each color you have.`);
+  save();renderStore();go("stock");fillBrandSel();toast(`${m.name} added. Now check in the units you have.`);
 });
 
 
@@ -4060,8 +4110,10 @@ function renderCatalog(){
           <label class="tin" title="Price">$<input type="number" min="0" step="0.5" data-cp="${i}" value="${v.p??""}" placeholder="ask" aria-label="Price"></label>
           <label class="tin qty" title="Quantity in stock">Qty <input type="number" min="0" step="1" data-cq="${i}" value="${v.q??""}" aria-label="Quantity"></label>
           <label class="tin was" title="Old price, shown crossed out">was $<input type="number" min="0" step="0.5" data-ccp="${i}" value="${v.cp||""}" placeholder="–" aria-label="Old price"></label>
+          <label class="tin was priv" title="Cost price, only staff see it">🔒 cost $<input type="number" min="0" step="0.5" data-ccost="${i}" value="${(privP(p.id).cost||{})[i]||""}" placeholder="–" aria-label="Cost price"></label>${marginTxt(v.p,(privP(p.id).cost||{})[i])}
           <button type="button" class="switch" role="switch" aria-checked="${v.ok}" data-cok="${i}" aria-label="In stock"></button><span class="okl">${v.ok?"In stock":"Sold out"}</span></div>`}).join("")}
           ${vs.length>4?`<button type="button" class="linkbtn" data-copen>${open?"Show less":`Show all ${vs.length} options`}</button>`:""}</div>
+        <details class="cdesc priv"><summary>🔒 Private note${privP(p.id).note?" · has a note":""}</summary><textarea data-cpnote rows="2" maxlength="300" placeholder="Only staff see this: supplier, where it's stored, reorder info…">${esc(privP(p.id).note||"")}</textarea></details>
         <details class="cdesc"><summary>Description${(phO(p.id)||{}).desc!=null?" · edited":""}</summary><textarea data-cdesc rows="3" placeholder="What customers read on the product page">${esc((phO(p.id)||{}).desc??p.desc??"")}</textarea></details></div>
       <div class="cside"><label class="abtn cpic">${((phO(p.id)||{}).pics||[]).length?"Add photo":"Upload photo"}<input type="file" accept="image/*" multiple data-cpic hidden></label>${((phO(p.id)||{}).pics||[]).length?`<button type="button" class="abtn" data-cpicdel>Remove my photos (${phO(p.id).pics.length})</button>`:""}${p.np?`<button type="button" class="abtn danger" data-npdel>Delete</button>`:""}<button type="button" class="abtn" data-chide>${hid?"Show on store":"Hide"}</button>${phEdited(p)?`<button type="button" class="abtn" data-creset>Reset</button>`:""}</div></div>`}).join("")||`<div class="dempty">Nothing matches.</div>`;
   const left=list.length-Math.min(list.length,cadm.limit);$("cMore").hidden=left<=0;$("cMore").textContent=`Show more (${left} left)`;
@@ -4073,6 +4125,8 @@ $("cMore").onclick=()=>{cadm.limit+=30;renderCatalog()};
 $("cRows").addEventListener("change",e=>{const row=e.target.closest("[data-c]");if(!row)return;const p=PHmap.get(row.dataset.c),t=e.target;
   if(t.dataset.cpic!=null&&t.files&&t.files.length){Promise.all([...t.files].slice(0,4).map(f=>shrinkPhoto(f,900))).then(us=>{const o=DB.ph[p.id]||(DB.ph[p.id]={});o.pics=[...us.filter(Boolean),...(o.pics||[])].slice(0,6);if(!save()){o.pics=o.pics.slice(us.length);if(!o.pics.length)delete o.pics;return}applyOwnerPhotos();commit(`${p.name.slice(0,40)}: photo added`)});return}
   if(t.dataset.cp!=null){const v=t.value===""?null:Math.max(0,Math.round((+t.value||0)*100)/100);phSet(p,+t.dataset.cp,"p",v);commit(`${p.name.slice(0,40)}: ${v==null?"price on WhatsApp":money(v)}`)}
+  if(t.dataset.ccost!=null){const o=privP(p.id,true),i=+t.dataset.ccost,v=t.value===""?0:Math.max(0,+t.value||0);o.cost=o.cost||{};if(v)o.cost[i]=v;else delete o.cost[i];cleanPriv();commit(v?`Cost $${v} saved (only staff see it)`:"Cost removed");return}
+  if(t.dataset.cpnote!=null){const o=privP(p.id,true),v=t.value.trim();if(v)o.note=v;else delete o.note;cleanPriv();commit("Private note saved");return}
   if(t.dataset.cdesc!=null){const o=DB.ph[p.id]||(DB.ph[p.id]={}),v=t.value.trim();if(v===(p.desc||""))delete o.desc;else o.desc=v;if(!Object.keys(o).length)delete DB.ph[p.id];commit(`${p.name.slice(0,40)}: description saved`)}
   if(t.dataset.cq!=null){const v=Math.max(0,Math.floor(+t.value||0));phSet(p,+t.dataset.cq,"q",v);phSet(p,+t.dataset.cq,"ok",v>0);commit(`${p.name.slice(0,40)}: ${v} in stock`)}
   if(t.dataset.ccp!=null){const v=t.value===""?0:Math.max(0,+t.value);phSet(p,+t.dataset.ccp,"cp",v);commit(v?`Old price ${money(v)} shown crossed out`:"Old price removed")}});
@@ -4425,7 +4479,7 @@ let lastX=0,t0=performance.now(),holdT=-1e9,swayT=0;
 if(!window.supabase||!supabase.createClient)return;
 const sb=supabase.createClient("https://yxkzjwcmmtiljakttyfh.supabase.co","sb_publishable_xI4ClmxtlUFNqINxKFq2hA_QyMqbjSq",
   {auth:{persistSession:true,autoRefreshToken:true,storageKey:"connectify-auth"}});
-const KEYS=["ph","units","newp","content","trade","custom"];
+const KEYS=["ph","units","newp","content","trade","custom","priv"];   // priv = cost prices and private notes, readable by staff only
 const L=window.LIVE={sb,staff:false,user:null,ready:false};
 const snap={};           // what the database has, per key (JSON text)
 let pushT=null,busy=false,lastNew=-1;
@@ -4450,8 +4504,12 @@ async function push(){pushT=null;if(!L.staff||busy){if(busy)schedulePush();retur
     const ch=KEYS.filter(k=>(k in snap)&&JSON.stringify(DB[k]??null)!==snap[k]);
     ch.filter(k=>DB[k]==null).forEach(k=>snap[k]="null");   // nothing to store for this key yet (the column can't be empty)
     const rows=ch.filter(k=>DB[k]!=null).map(k=>({key:k,data:DB[k],updated_at:new Date().toISOString()}));
-    if(rows.length){const{error}=await sb.from("store_state").upsert(rows);
-      if(error)throw error;rows.forEach(r=>snap[r.key]=JSON.stringify(r.data))}
+    const pub=rows.filter(r=>r.key!="priv"),pr=rows.find(r=>r.key=="priv");
+    if(pub.length){const{error}=await sb.from("store_state").upsert(pub);
+      if(error)throw error;pub.forEach(r=>snap[r.key]=JSON.stringify(r.data))}
+    if(pr){const{error}=await sb.from("store_state").upsert(pr);   // saved on its own, so a problem here never blocks prices and stock
+      if(error){if(error.code=="23514")throw new Error("cost prices need the database update (02-private-costs.sql)");throw error}
+      snap.priv=JSON.stringify(pr.data)}
     for(const o of DB.orders){if(!o.remote)continue;const sig=o.status+"|"+(o.stockApplied?1:0);if(sig===o._sig)continue;
       const{error}=await sb.from("orders").update({status:o.status,stock_applied:!!o.stockApplied}).eq("id",o.dbid);
       if(error)throw error;o._sig=sig}
@@ -4513,6 +4571,12 @@ shrinkPhoto=async(f,max)=>{const u=await _shrink(f,max);if(!u||!L.staff)return u
     const{error}=await sb.storage.from("photos").upload(path,blob,{contentType:blob.type,cacheControl:"31536000",upsert:false});
     if(error)throw error;return sb.storage.from("photos").getPublicUrl(path).data.publicUrl}
   catch(e){console.warn(e);toast("Photo upload failed. Try again.");return null}};
+
+const _shrinkU=shrink;   // unit photos on the Phones page
+shrink=async f=>{const u=await _shrinkU(f);if(!L.staff)return u;
+  const blob=await(await fetch(u)).blob(),path=`u/${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}.${(blob.type.split("/")[1]||"jpg").replace("jpeg","jpg")}`;
+  const{error}=await sb.storage.from("photos").upload(path,blob,{contentType:blob.type,cacheControl:"31536000"});if(error)throw error;
+  return sb.storage.from("photos").getPublicUrl(path).data.publicUrl};
 
 /* ---------- admin look in live mode ---------- */
 function setSync(s,why){const d=document.querySelector(".demo-strip");if(!d)return;d.classList.add("live");d.classList.toggle("err",s=="err");
