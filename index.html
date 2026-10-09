@@ -1452,6 +1452,7 @@ img.mpic{display:block;width:auto;max-width:100%;object-fit:contain;-webkit-user
 .dragtoggle:hover{border-color:rgba(46,211,198,.5)}
 .dragtoggle[aria-pressed=true]{background:rgba(46,211,198,.16);border-color:rgba(46,211,198,.7);color:#9ff0e0;box-shadow:0 0 18px rgba(46,211,198,.35)}
 .dragtoggle[hidden]{display:none}
+#admin select option{background:#0b1634;color:#EEF3FF}
 
 </style>
 </head>
@@ -4365,6 +4366,7 @@ function renderCatalog(){
   const subs=cadm.dept?[...new Set(all.filter(p=>p.dept==cadm.dept).map(p=>p.sub).filter(Boolean))].sort():[];
   $("cSubs").innerHTML=subs.length>1?[["","All types"],...subs.map(x=>[x,x])].map(([v,l])=>`<button data-s="${esc(v)}" aria-pressed="${cadm.sub==v}">${esc(l)}${v?` <span>${all.filter(p=>p.dept==cadm.dept&&p.sub==v).length}</span>`:""}</button>`).join(""):"";
   {const T=$("cTabs"),on=T.querySelector('[aria-pressed="true"]');if(on)T.scrollLeft=on.offsetLeft-(T.clientWidth-on.offsetWidth)/2}
+  if(cadm.dept&&$("npSubSel").dataset.for!=cadm.dept+"|"+(cadm.sub||"")){$("npDept").value=cadm.dept;fillNpSub(cadm.sub||"")}
   $("cAddHere").textContent=cadm.dept?`+ Add a product in ${DEPT_LABEL[cadm.dept]}${cadm.sub?" › "+cadm.sub:""}`:"+ Add a new product";
   const st={in:all.filter(phOK).length,out:all.filter(p=>!phHidden(p)&&!phOK(p)).length,hidden:all.filter(phHidden).length,edited:all.filter(phEdited).length};
   $("cStats").innerHTML=`<div><b>${all.length}</b><span>products</span></div><div><b>${st.in}</b><span>in stock</span></div><div><b>${st.out}</b><span>sold out</span></div><div><b>${st.hidden}</b><span>hidden</span></div><div><b>${st.edited}</b><span>edited by you</span></div>`;
@@ -4463,9 +4465,9 @@ function shrinkPhoto(f,max){return new Promise(res=>{const r=new FileReader();r.
 $("npDept").innerHTML=PH.depts.map(([d,l])=>`<option value="${d}">${esc(l)}</option>`).join("");
 /* "Type" is a dropdown of the types already in the chosen department, plus "+ New type…" */
 function fillNpSub(pick){const d=$("npDept").value,subs=[...new Set(PHI.filter(p=>p.dept==d&&!isTablet(p)).map(p=>p.sub).filter(Boolean))].sort();
-  $("npSubSel").innerHTML=subs.map(x=>`<option ${x==pick?"selected":""}>${esc(x)}</option>`).join("")+`<option value="__new">+ New type…</option>`;
-  if(!subs.length||pick&&!subs.includes(pick)&&pick!="")$("npSubSel").value=subs.length&&!pick?subs[0]:"__new";
-  const nw=$("npSubSel").value=="__new";$("npSubNewL").hidden=!nw;$("npSub").value=nw?(pick||""):$("npSubSel").value}
+  $("npSubSel").innerHTML=subs.map(x=>`<option>${esc(x)}</option>`).join("")+`<option value="__new">+ New type…</option>`;
+  $("npSubSel").value=pick&&subs.includes(pick)?pick:pick?"__new":(subs[0]||"__new");
+  const nw=$("npSubSel").value=="__new";$("npSubNewL").hidden=!nw;$("npSub").value=nw?(pick||""):"";$("npSubSel").dataset.for=d+"|"+(pick||"")}
 $("npDept").addEventListener("change",()=>fillNpSub(""));
 $("npSubSel").onchange=()=>{const nw=$("npSubSel").value=="__new";$("npSubNewL").hidden=!nw;$("npSub").value=nw?"":$("npSubSel").value;if(nw)$("npSub").focus()};
 fillNpSub("");
