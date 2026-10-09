@@ -1644,7 +1644,7 @@ select option:disabled{color:#6A6A6A}
 
 <canvas id="liquid" aria-hidden="true"></canvas><div id="liquidDim" aria-hidden="true"></div>
 <header class="hero" id="top">
-  <div class="glow" id="glow" aria-hidden="true" style="background:#6B1E2E"></div>
+  <div class="glow" id="glow" aria-hidden="true" style="background:#3B3A3C"></div>
   <svg class="orbits" viewBox="0 0 1100 1100" aria-hidden="true">
     <defs>
       <linearGradient id="og1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E8E8EC" stop-opacity="0"/><stop offset=".5" stop-color="#E8E8EC" stop-opacity=".75"/><stop offset="1" stop-color="#696969" stop-opacity="0"/></linearGradient>
@@ -1674,15 +1674,15 @@ select option:disabled{color:#6A6A6A}
       </div>
     </div>
     <div class="stage">
-      <canvas id="phone3d" aria-label="3D iPhone 18 Pro you can rotate by dragging" role="img"></canvas>
+      <canvas id="phone3d" aria-label="3D iPhone 14 Pro you can rotate by dragging" role="img"></canvas>
       <div class="nogl" id="nogl">3D preview needs WebGL</div>
       <button type="button" class="dragtoggle" id="dragToggle" aria-pressed="false" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg><span>Enable iPhone drag</span></button>
       <div class="finish" role="group" aria-label="Choose a color">
-        <div><b>iPhone 18 Pro</b><small id="finishName">Burgundy</small></div>
-        <button class="sw" style="background:#6B1E2E" data-c="#6B1E2E" data-n="Burgundy" aria-pressed="true" aria-label="Burgundy"></button>
-        <button class="sw" style="background:#CFCFCF" data-c="#CFCFCF" data-n="Glacier Blue" aria-pressed="false" aria-label="Glacier Blue"></button>
-        <button class="sw" style="background:#DCDDE0" data-c="#D4D6DA" data-n="Silver" aria-pressed="false" aria-label="Silver"></button>
-        <button class="sw" style="background:#2B2C30" data-c="#2B2C30" data-n="Black" aria-pressed="false" aria-label="Black"></button>
+        <div><b>iPhone 14 Pro</b><small id="finishName">Space Black</small></div>
+        <button class="sw" style="background:#3B3A3C" data-c="#3B3A3C" data-n="Space Black" aria-pressed="true" aria-label="Space Black"></button>
+        <button class="sw" style="background:#5B4E66" data-c="#5B4E66" data-n="Deep Purple" aria-pressed="false" aria-label="Deep Purple"></button>
+        <button class="sw" style="background:#E3E4E6" data-c="#D8DADD" data-n="Silver" aria-pressed="false" aria-label="Silver"></button>
+        <button class="sw" style="background:#EBDDBF" data-c="#E3D3B0" data-n="Gold" aria-pressed="false" aria-label="Gold"></button>
       </div>
     </div>
   </div>
@@ -3177,6 +3177,92 @@ function buildHeroPro(color){
   return model;
 }
 
+/* ================= hero phone: a hand-detailed iPhone 14 Pro (Space Black) =================
+   Polished stainless-steel frame, frosted textured-glass back, the square glass camera bump with three large
+   lenses, flash, LiDAR and mic, ring/silent switch, volume, side button, Lightning port, Dynamic Island.
+   147.5 x 71.5 x 7.85 mm. Units: 1 = 35 mm. Back faces -z. */
+let _hero14Screen=null;
+function hero14ScreenTex(){
+  if(_hero14Screen)return _hero14Screen;
+  _hero14Screen=canvasTex(900,1890,(g,w,h)=>{
+    const bg=g.createLinearGradient(0,0,w*.4,h);bg.addColorStop(0,"#16161c");bg.addColorStop(.45,"#08080b");bg.addColorStop(1,"#1d1c24");g.fillStyle=bg;g.fillRect(0,0,w,h);
+    const rib=(cx,cy,r,col,lw,a0,a1)=>{g.strokeStyle=col;g.lineWidth=lw;g.beginPath();g.arc(cx,cy,r,a0,a1);g.stroke()};
+    for(let i=0;i<14;i++)rib(1050,1350,560+i*34,`rgba(${120+i*6},${118+i*5},${140+i*6},${.07+i*.016})`,22-i,Math.PI*.62,Math.PI*1.32);
+    for(let i=0;i<8;i++)rib(-160,1700,520+i*40,`rgba(${200+i*6},${200+i*6},${220+i*4},${.04+i*.018})`,14-i,Math.PI*1.55,Math.PI*1.98);
+    const glow=g.createRadialGradient(w*.7,h*.62,0,w*.7,h*.62,w*.9);glow.addColorStop(0,"rgba(190,190,215,.18)");glow.addColorStop(1,"rgba(0,0,0,0)");g.fillStyle=glow;g.fillRect(0,0,w,h);
+    g.textAlign="center";g.fillStyle="rgba(255,255,255,.88)";g.font="600 44px Manrope, sans-serif";g.fillText(CLK.long(),w/2,250);
+    g.fillStyle="#fff";g.font="700 260px Sora, sans-serif";g.fillText(CLK.t(),w/2,500);
+    const pill=(x,y,ww,hh,t)=>{g.fillStyle="rgba(255,255,255,.12)";g.beginPath();g.roundRect?g.roundRect(x,y,ww,hh,hh/2):g.rect(x,y,ww,hh);g.fill();g.fillStyle="rgba(255,255,255,.9)";g.font="600 34px Manrope, sans-serif";g.fillText(t,x+ww/2,y+hh/2+12)};
+    pill(150,560,280,74,"☀ 24°  Beirut");pill(470,560,280,74,"🔋 100%");
+    g.textAlign="left";g.font="700 92px Sora, sans-serif";g.fillStyle="#F2F2F5";g.fillText("Connec",100,1530);
+    const wc=g.measureText("Connec").width;g.fillStyle="#E8E8EC";g.fillText("tify.",100+wc,1530);
+    g.fillStyle="rgba(230,230,240,.72)";g.font="500 42px Manrope, sans-serif";g.fillText("iPhone 14 Pro. In stock.",100,1600);
+    [[150,1740],[750,1740]].forEach(([x,y])=>{g.fillStyle="rgba(255,255,255,.14)";g.beginPath();g.arc(x,y,62,0,7);g.fill()});
+    g.fillStyle="rgba(255,255,255,.8)";g.beginPath();g.arc(150,1740,16,0,7);g.fill();g.fillRect(735,1728,30,24);
+    g.fillStyle="rgba(255,255,255,.85)";g.fillRect(w/2-130,h-34,260,10);
+  });
+  _hero14Screen.anisotropy=8;return _hero14Screen}
+
+function buildHero14Pro(color){
+  const M=heroMats(),model={g:new THREE.Group(),tint:[],startY:Math.PI+.5,fixed:true},G=model.g;
+  const mm=v=>v/35;
+  const H=mm(147.5),W=mm(71.5),R=W*.215,D=.17,B=.045,BACK=-(D/2+B),FRONT=D/2+B,ty=H/2,EX=W/2+B;
+  const lite=matchMedia("(pointer:coarse)").matches,grain=lite?null:heroNoise();
+  const bandMat=tintable(model,color,{metalness:.1,roughness:.6,envMapIntensity:.35},.45);
+  // polished surgical-grade stainless steel frame (mirror finish, colour-matched)
+  const steel=tintable(model,color,{metalness:.96,roughness:.1,clearcoat:lite?0:.5,clearcoatRoughness:.08,envMapIntensity:1.5},1.05);
+  const steelPol=tintable(model,color,{metalness:1,roughness:.07,envMapIntensity:1.6},1.12);
+  // textured matte glass back (frosted) and the glossy glass camera bump
+  const backGlass=new THREE.MeshPhysicalMaterial({color:lin(color).multiplyScalar(.92),metalness:.25,roughness:.58,bumpMap:grain,bumpScale:.0018,clearcoat:.25,clearcoatRoughness:.55,envMapIntensity:.8});model.tint.push([backGlass,.92]);
+  const bumpGlass=new THREE.MeshPhysicalMaterial({color:lin(color).multiplyScalar(.9),metalness:.35,roughness:.12,clearcoat:1,clearcoatRoughness:.04,envMapIntensity:1.1});model.tint.push([bumpGlass,.9]);
+  G.add(mesh(extL(rr(W,H,R),D,B,8,24),steel));
+  const flat=(shape,mat,z,segs=48)=>{const m=mesh(new THREE.ShapeGeometry(shape,segs),mat,0,0,z);m.rotation.y=Math.PI;G.add(m);return m};
+  flat(rr(W-.03,H-.03,R-.025),bandMat,BACK-.003);
+  flat(rr(W-.07,H-.07,R-.045),backGlass,BACK-.006);
+  // square camera bump in the top corner (seen from the back it sits top-left): +x is the back's left side
+  const bs=mm(36.5),bh=mm(38),bx=W/2-mm(3.6)-bs/2,by=ty-mm(3.6)-bh/2,BD=.035,BB=.016;
+  const bump=mesh(extL(rr(bs,bh,mm(8.6),bx,by),BD,BB,6,24),bumpGlass);G.add(bump);
+  const bb=new THREE.Box3().setFromObject(bump),bshift=BACK-.004-bb.max.z;bump.position.z=bshift;
+  const OUT=bb.min.z+bshift,ZP=OUT-.002;
+  const P=(u,v)=>[W/2-mm(3.6)-mm(u),ty-mm(3.6)-mm(v)];   // mm measured from the bump's outer corner
+  const lr=mm(7.9);
+  [[...P(10.6,10.4)],[...P(10.6,27.6)],[...P(25.6,19)]].forEach(([x,y])=>heroLens(G,x,y,lr,ZP,steelPol));
+  const [fxx,fyy]=P(28.4,7.2),[lx,ly]=P(28.4,30.8),[mx,my]=P(19.8,6.4);
+  const fl=mesh(new THREE.CircleGeometry(mm(3.1),48),M.flashDiff,fxx,fyy,ZP-.006);fl.rotation.y=Math.PI;G.add(fl);
+  const fr=mesh(new THREE.RingGeometry(mm(3.1),mm(3.6),48),steelPol,fxx,fyy,ZP-.005);fr.rotation.y=Math.PI;G.add(fr);
+  const li=mesh(new THREE.CylinderGeometry(mm(3.2),mm(3.2),.02,48),M.lidar,lx,ly,ZP-.01);li.rotation.x=Math.PI/2;G.add(li);
+  const lir=mesh(new THREE.RingGeometry(mm(3.2),mm(3.7),48),steelPol,lx,ly,ZP-.021);lir.rotation.y=Math.PI;G.add(lir);
+  const mic=mesh(new THREE.CircleGeometry(.02,16),M.hole,mx,my,ZP-.004);mic.rotation.y=Math.PI;G.add(mic);
+  // front: Ceramic Shield, slim bezel, display, Dynamic Island, earpiece slit
+  G.add(mesh(new THREE.ShapeGeometry(rr(W-.02,H-.02,R-.02),48),M.frontBlack,0,0,FRONT+.003));
+  const dW=W-.15,dH=H-.15;
+  G.add(mesh(planeUV(new THREE.ShapeGeometry(rr(dW,dH,R-.09),48),dW,dH),new THREE.MeshBasicMaterial({map:hero14ScreenTex(),toneMapped:false}),0,0,FRONT+.007));
+  G.add(mesh(new THREE.ShapeGeometry(rr(mm(21),mm(6.6),mm(3.3),0,ty-.31),24),M.island,0,0,FRONT+.011));
+  const cg=mesh(new THREE.CircleGeometry(.045,24),new THREE.MeshPhysicalMaterial({color:0x06070c,metalness:.6,roughness:.05,clearcoat:1}),mm(6.4),ty-.31,FRONT+.013);G.add(cg);
+  G.add(mesh(new THREE.CircleGeometry(.012,12),new THREE.MeshBasicMaterial({color:0x2b3350}),mm(6.4)-.012,ty-.31+.012,FRONT+.014));
+  G.add(mesh(new THREE.BoxGeometry(.5,.012,.01),M.hole,0,ty+.006,FRONT-.004));
+  // antenna bands in the steel frame
+  [[-.62,H/2+B-.003],[.62,H/2+B-.003],[-.62,-H/2-B+.003],[.62,-H/2-B+.003]].forEach(([x,y])=>G.add(mesh(new THREE.BoxGeometry(.03,.014,D+B*1.5),bandMat,x,y,0)));
+  [[-1,ty-.44],[1,ty-.44],[-1,-ty+.58],[1,-ty+.58]].forEach(([s,y])=>G.add(mesh(new THREE.BoxGeometry(.014,.03,D+B*1.5),bandMat,s*(EX-.003),y,0)));
+  // buttons
+  const s=H/4.3;
+  const button=(side,y,len,mat,proud=.026,thick=.075)=>{const geo=extL(rr(len,thick,thick/2),proud,.006);const m=mesh(geo,mat);
+    m.rotation.set(0,side*Math.PI/2,Math.PI/2);m.position.set(side*(EX-.004),y,0);G.add(m);return m};
+  // ring/silent switch: a recessed slot with a small toggle
+  const slot=mesh(extL(rr(.2,.085,.042),.01,.003),M.hole);slot.rotation.set(0,-Math.PI/2,Math.PI/2);slot.position.set(-(EX+.001),ty-.8*s,0);G.add(slot);
+  const tog=mesh(extL(rr(.09,.05,.022),.03,.005),steelPol);tog.rotation.set(0,-Math.PI/2,Math.PI/2);tog.position.set(-(EX+.004),ty-.8*s+.04,0);G.add(tog);
+  button(-1,ty-1.3*s,.36,steelPol);button(-1,ty-1.8*s,.36,steelPol);   // volume
+  button(1,ty-1.45*s,.56,steelPol);                                     // side button
+  // bottom: Lightning port, speaker + mic grilles, pentalobe screws
+  const byy=-H/2-B;
+  const pf=mesh(new THREE.ShapeGeometry(rr(.24,.065,.032),24),M.hole,0,byy-.002,0);pf.rotation.x=Math.PI/2;G.add(pf);
+  const k=W/2.06;
+  for(let i=0;i<6;i++)[-1,1].forEach(q=>{const h=mesh(new THREE.CircleGeometry(.019,14),M.hole,q*(.33+i*.072)*k,byy-.002,0);h.rotation.x=Math.PI/2;G.add(h)});
+  [-1,1].forEach(q=>{const sc=mesh(new THREE.CircleGeometry(.022,5),M.screw,q*.24*k,byy-.003,0);sc.rotation.x=Math.PI/2;G.add(sc)});
+  const tm=mesh(new THREE.CircleGeometry(.018,12),M.hole,.2*k,H/2+B+.002,0);tm.rotation.x=-Math.PI/2;G.add(tm);
+  return model;
+}
+
 /* ---- hero ---- */
 (function(){
   const canvas=$("phone3d");
@@ -3192,7 +3278,7 @@ function buildHeroPro(color){
     dt.hidden=false;upd();dt.onclick=()=>{V.setLock(!V.locked);upd()}}
   V.mouseX=V.mouseY=0;
   addEventListener("pointermove",e=>{if(e.pointerType!="mouse")return;V.mouseX=e.clientX/innerWidth-.5;V.mouseY=e.clientY/innerHeight-.5}); // touch screens use tilt.js
-  V.set(typeof buildHeroPro=="function"?buildHeroPro("#6B1E2E"):buildPhone("#6B1E2E",{cam:"17pro",front:"island",size:"6.3",cc:true,action:true}));
+  V.set(typeof buildHero14Pro=="function"?buildHero14Pro("#3B3A3C"):typeof buildHeroPro=="function"?buildHeroPro("#6B1E2E"):buildPhone("#6B1E2E",{cam:"17pro",front:"island",size:"6.3",cc:true,action:true}));
   const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
   if(!reduce){V.curY=Math.PI*3.4;V.pivot.position.y=-4}
   document.querySelectorAll(".sw").forEach(b=>b.addEventListener("click",()=>{
