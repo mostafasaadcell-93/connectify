@@ -1572,9 +1572,9 @@ select option:disabled{color:#6A6A6A}
 #pvCanvas,.pvstage .qvhint,#foldBtn{display:none!important}
 
 /* official Apple colour shots: Apple's light grey studio, zoomed in on the phone */
-.pvstage.aplbg{background:#f5f5f7!important}
+.pvstage.aplbg{background:#f5f5f7!important;overflow:hidden!important;clip-path:inset(0);isolation:isolate}
 .pvstage.aplbg::before,.pvstage.aplbg::after{display:none!important}
-#pvImg.aplwide{object-fit:contain!important;transform:scale(2.35);transform-origin:50% 50%}
+#pvImg.aplwide{object-fit:contain!important;transform:scale(2.35);transform-origin:50% 50%;pointer-events:none;filter:none!important;animation:none!important}
 .pvstage.aplbg .pvnote{background:rgba(0,0,0,.06)!important;color:#1d1d1f!important}
 
 </style>
