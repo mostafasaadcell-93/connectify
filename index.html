@@ -1638,9 +1638,19 @@ select option:disabled{color:#6A6A6A}
   background:conic-gradient(#fff var(--p,0%),rgba(255,255,255,.18) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px));mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px))}
 .hpick .sw.loading:not([style*="--p"]) i::after{background:conic-gradient(#fff 22%,rgba(255,255,255,.18) 0);animation:spin .9s linear infinite}
 
+/* the still of each phone, shown instantly while its live 3D loads; the 3D canvas sits on top and takes over at the same pose */
+.hposter{position:absolute;inset:0;z-index:1;pointer-events:none}
+.hposter img{position:absolute;top:0;left:50%;height:100%;width:auto;max-width:none;transform:translateX(-50%);opacity:0;transition:opacity .5s ease,transform 1s cubic-bezier(.22,1,.36,1);will-change:transform,opacity}
+.hposter img.on{opacity:1}
+.hposter img.from-r{transform:translateX(calc(-50% + 70%));opacity:0;transition:none}
+.hposter img.from-l{transform:translateX(calc(-50% - 70%));opacity:0;transition:none}
+#phone3d{z-index:2}
+@media (prefers-reduced-motion:reduce){.hposter img{transition:opacity .3s}}
+
 </style>
 <link rel="preconnect" href="https://store.storeimages.cdn-apple.com">
 <link rel="preload" href="models/iphone18pm.glb?v=c098ca8e63" as="fetch" crossorigin fetchpriority="high">
+<link rel="preload" href="models/poster-pm18.webp?v=4f02e9de9f" as="image" fetchpriority="high">
 </head>
 <body>
 <style>
@@ -1764,6 +1774,7 @@ select option:disabled{color:#6A6A6A}
     </div>
     <div class="stage">
       <div class="hnum" id="heroNum" aria-hidden="true"><span>18</span></div>
+      <div class="hposter" id="heroPoster" aria-hidden="true"><img class="on" data-dev="pm18" src="models/poster-pm18.webp?v=4f02e9de9f" alt="" fetchpriority="high" onerror="this.remove()"></div>
       <canvas id="phone3d" aria-label="3D iPhone 18 Pro Max you can rotate by dragging" role="img"></canvas>
       <div class="nogl" id="nogl">3D preview needs WebGL</div>
       <button type="button" class="dragtoggle heroreset" id="heroReset" hidden aria-label="Reset the phone view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span></button>
@@ -7122,6 +7133,7 @@ const HERO_DEVICES={
   pm18:{
     name:"iPhone 18 Pro Max",
     file:"models/iphone18pm.glb?v=c098ca8e63",bytes:3860024,
+    poster:"models/poster-pm18.webp?v=4f02e9de9f",                 // a still of this phone rendered by the same engine at its start pose: shown instantly while the 3D loads
     flipY:false,                                   // screen canvas orientation on this model's UVs (verified in renders)
     screen:"COLOUR_Cherry_Screen",
     scale:1000/35,
@@ -7135,6 +7147,7 @@ const HERO_DEVICES={
   pm17:{
     name:"iPhone 17 Pro Max",
     file:"models/iphone17pm.glb?v=f5670952ff",bytes:5320600,
+    poster:"models/poster-pm17.webp?v=951801c7a5",                 // a still of this phone rendered by the same engine at its start pose: shown instantly while the 3D loads
     flipY:false,
     screen:"BsXHDwLKqtDOfrW",                      // the display panel (UVs 0..1, top of the phone at v=0)
     scale:1000/35,                                 // file is in metres, 162.9 mm tall
@@ -7147,6 +7160,7 @@ const HERO_DEVICES={
   pm16:{
     name:"iPhone 16 Pro Max",
     file:"models/iphone16pm.glb?v=acf80862da",bytes:7814636,
+    poster:"models/poster-pm16.webp?v=32b8437327",                 // a still of this phone rendered by the same engine at its start pose: shown instantly while the 3D loads
     flipY:false,
     screen:"screen.001",
     planarUV:true,                                 // its own screen UVs are for a different wallpaper, so the lock screen is mapped from the panel's shape
@@ -10945,6 +10959,7 @@ function ModernViewer(canvas,opts={}){
   const shadow=new T.Mesh(new T.PlaneGeometry(3.4,.75),new T.MeshBasicMaterial({map:new T.CanvasTexture(sc),transparent:true,depthWrite:false}));shadow.position.y=-2.8;shadow.rotation.x=-Math.PI/2.4;scene.add(shadow);
   const pivot=new T.Group();scene.add(pivot);
   const V={modern:true,renderer,scene,cam,pivot,model:null,tgt:null,targetY:0,curY:0,vel:0,targetX:0,curX:0,drag:false,active:true,spin:.16,env,room,anims:[],swapping:false};
+  V.rim=rim;V.shadow=shadow;
   V.size=()=>{const r=canvas.parentElement.getBoundingClientRect();if(!r.width)return;renderer.setSize(r.width,r.height,false);cam.aspect=r.width/r.height;cam.updateProjectionMatrix();
     const fitH=5.6,dist=fitH/2/Math.tan(cam.fov*Math.PI/360);cam.position.z=Math.max(dist,dist*(.62/cam.aspect))+(opts.extraZ||0)};
   const wrapOf=model=>{if(model.wrap)return model.wrap;
@@ -10976,7 +10991,7 @@ function ModernViewer(canvas,opts={}){
       if(p>=1){scene.remove(ghost);ghost.remove(ow);iw.position.set(0,0,0);V.swapping=false;done();return true}
     }))};
   /* get a phone fully ready before it is shown: shaders compiled and textures on the GPU, so the switch never stutters */
-  V.warm=model=>{if(model.warmed)return model.warmed;
+  V.warm=model=>{if(model.warmed)return model.warmed;if(model===V.model)return model.warmed=Promise.resolve();   // already on screen, so already ready
     const w=wrapOf(model),holder=new T.Group();holder.add(w);
     const texs=new Set();w.traverse(o=>{if(o.isMesh&&o.material)[].concat(o.material).forEach(m=>{for(const k in m){const v=m[k];if(v&&v.isTexture)texs.add(v)}})});
     // compile with this phone in the scene and the one on show hidden (the compile pass only reads the scene, nothing is drawn)
@@ -10986,6 +11001,18 @@ function ModernViewer(canvas,opts={}){
     // textures go to the graphics chip one per frame, so no single frame gets a big upload
     return model.warmed=p.catch(()=>{}).then(()=>new Promise(done=>{const list=[...texs];
       const step=()=>{const t=list.shift();if(!t)return done();try{renderer.initTexture(t)}catch(e){}requestAnimationFrame(step)};requestAnimationFrame(step)}))};
+  /* the phone on show leaves (same move as in a swap) while the next one is still on its way; its still stands in meanwhile */
+  V.throwOut=(dir=1)=>{
+    const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if(!V.model)return Promise.resolve();
+    const out=V.model,ow=out.wrap;V.model=null;
+    if(reduce){pivot.remove(ow);return Promise.resolve()}
+    pivot.updateMatrixWorld(true);const ghost=new T.Group();
+    pivot.matrixWorld.decompose(ghost.position,ghost.quaternion,ghost.scale);pivot.remove(ow);ghost.add(ow);scene.add(ghost);
+    const gp=ghost.position.clone(),gq=ghost.quaternion.clone(),X=8.5*dir,t0=performance.now();
+    return new Promise(done=>V.anims.push(now=>{const p=Math.min(1,(now-t0)/720),e=p*p*p;
+      ghost.position.set(gp.x-X*e,gp.y+.6*e,gp.z-1.5*e);ghost.quaternion.copy(gq).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),-2.4*dir*e));
+      if(p>=1){scene.remove(ghost);ghost.remove(ow);done();return true}}))};
   V.setColor=()=>{};   // each GLB keeps its own authored finish
   canvas.addEventListener("pointerdown",e=>{if(V.locked)return;V.drag=true;V.lastX=e.clientX;V.lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
   canvas.addEventListener("pointermove",e=>{if(!V.drag)return;const dx=e.clientX-V.lastX,dy=e.clientY-V.lastY;V.lastX=e.clientX;V.lastY=e.clientY;
@@ -10999,7 +11026,7 @@ function ModernViewer(canvas,opts={}){
   const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches,clock=new T.Clock();let t=0;
   // a steady 60 frames a second: on 120 Hz screens drawing every refresh doubles the work (and the glass over the phone re-blurs each time) for no visible gain
   let lastDraw=0;
-  (function loop(now){requestAnimationFrame(loop);if(!V.active||!V.model||document.hidden||(opts.pauseWhenCovered&&document.querySelector(".modal.on,.admin.on"))){clock.getDelta();return}
+  (function loop(now){requestAnimationFrame(loop);if(!V.active||(!V.model&&!V.anims.length)||document.hidden||(opts.pauseWhenCovered&&document.querySelector(".modal.on,.admin.on"))){clock.getDelta();return}
     if(now-lastDraw<15.5)return;lastDraw=now;
     const dt=Math.min(clock.getDelta(),.05);t+=dt;
     if(!V.drag&&!reduce){V.targetY+=V.vel;V.vel*=.92;V.targetY+=dt*V.spin}
@@ -11072,17 +11099,32 @@ function loadHeroModern(key,opt={}){
     if(key=="pm18")window.__heroBusy=performance.now();   // tells the page the first phone is still on its way
     const ctrl=window.AbortController?new AbortController():null,st=HERO_DL[key]={ctrl,got:0,total:dev.bytes||0,bg:!!opt.background,on:opt.onProgress||null};
     const pri=key=="pm18"||!opt.background?"high":"low";
-    const dl=fetch(key=="pm18"&&window.HERO_GLB||dev.file,{priority:pri,signal:ctrl&&ctrl.signal}).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);
-      // read it piece by piece so the button can show how far along it is
-      if(!r.body||!r.body.getReader)return r.arrayBuffer();
-      const rd=r.body.getReader(),parts=[];
-      const pump=()=>rd.read().then(({done,value})=>{if(done){const out=new Uint8Array(st.got);let o=0;parts.forEach(p=>{out.set(p,o);o+=p.length});return out.buffer}
-        parts.push(value);st.got+=value.length;if(st.on&&st.total)st.on(Math.min(.99,st.got/st.total));return pump()});
-      return pump()}).finally(()=>{if(HERO_DL[key]===st)delete HERO_DL[key]});
+    const dl=heroFetch(key=="pm18"&&window.HERO_GLB||dev.file,st,pri,ctrl&&ctrl.signal).finally(()=>{if(HERO_DL[key]===st)delete HERO_DL[key]});
     Promise.all([dl,needsFrost?heroFrostStart():null]).then(([b])=>L.parse(b,"",done,rej)).catch(rej)};
     const needsFrost=key=="pm18"||key=="pm16";
     if(heroBufFor(key)){(needsFrost?heroFrostStart():Promise.resolve()).then(go)}else go();
   }).catch(e=>{delete HERO_MODELS[key];throw e})}
+/* download a model and survive a bad connection: if it breaks, or no data arrives for 12 seconds, start it again on a fresh
+   request that skips the browser cache (a broken download can leave the cache entry locked for a while). Up to 4 tries. */
+function heroFetch(url,st,pri,signal){
+  let attempt=0;
+  const once=()=>new Promise((res,rej)=>{
+    const c=window.AbortController?new AbortController():null,stop=()=>c&&c.abort();
+    if(signal){if(signal.aborted)return rej(new DOMException("aborted","AbortError"));signal.addEventListener("abort",stop,{once:true})}
+    // stuck = nothing at all for 20 s before the first byte, or a 12 s gap once data is flowing
+    let timer=0,stalled=false,first=true;const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>{stalled=true;stop()},first?20000:12000);first=false};arm();first=true;
+    const parts=[];st.got=0;
+    fetch(url,{priority:pri,signal:c&&c.signal,cache:attempt?"no-store":"default"}).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);
+      if(!r.body||!r.body.getReader)return r.arrayBuffer().then(b=>{st.got=b.byteLength;return b});
+      const rd=r.body.getReader();
+      const pump=()=>rd.read().then(({done,value})=>{first=false;arm();if(done){const out=new Uint8Array(st.got);let o=0;parts.forEach(p=>{out.set(p,o);o+=p.length});return out.buffer}
+        parts.push(value);st.got+=value.length;if(st.on&&st.total)st.on(Math.min(.99,st.got/st.total));return pump()});
+      return pump()})
+      .then(b=>{clearTimeout(timer);res(b)},e=>{clearTimeout(timer);rej(stalled?new Error("stalled"):e)})
+      .finally(()=>{if(signal)signal.removeEventListener("abort",stop)})});
+  const run=()=>once().catch(e=>{if(signal&&signal.aborted)throw e;if(++attempt>=4)throw e;
+    console.warn("hero model download retry",attempt,String(e));return new Promise(r=>setTimeout(r,700*attempt)).then(run)});
+  return run()}
 /* stop a background download so a phone the visitor actually asked for gets the whole connection (it is fetched again later) */
 function heroPauseBackground(except){Object.keys(HERO_DL).forEach(k=>{const d=HERO_DL[k];if(k!=except&&d.bg&&d.ctrl){d.ctrl.abort();delete HERO_DL[k]}})}
 
@@ -11165,34 +11207,53 @@ if(window.HERO3)heroFrostStart();
     // the giant number behind the phone slides out the same way the phone leaves
     const box=$("heroNum");if(box){const old=box.querySelector("span:not(.out)"),n=document.createElement("span");n.textContent=h.num;n.className="in";box.appendChild(n);
       if(old){old.classList.add("out");setTimeout(()=>old.remove(),900)}requestAnimationFrame(()=>requestAnimationFrame(()=>n.classList.remove("in")))}}
-  let userWant=null;   // a phone the visitor tapped that is still downloading
+  let userWant=null,animating=false,pickTok=0;
+  const READY=new Map();   // phones fully downloaded and prepared
+  const getReady=(key,opt)=>getModel(key,opt).then(m=>{READY.set(key,m);return m});
   const setRing=(btn,p)=>{if(!btn)return;btn.style.setProperty("--p",(p*100).toFixed(1)+"%");const sm=btn.querySelector("small");
     if(sm){if(!sm.dataset.f)sm.dataset.f=sm.textContent;sm.textContent=p>0?`Loading ${Math.round(p*100)}%`:"Loading…"}};
   const clearRing=btn=>{if(!btn)return;btn.classList.remove("loading");btn.style.removeProperty("--p");const sm=btn.querySelector("small");if(sm&&sm.dataset.f)sm.textContent=sm.dataset.f};
+  /* the stills: one per phone, shown at once; the live 3D takes over on top at the same pose */
+  const poster=$("heroPoster");
+  function posterIn(key,dir){if(!poster)return;const src=HERO_DEVICES[key].poster;if(!src)return;
+    let img=poster.querySelector(`img[data-dev="${key}"]`);
+    if(!img){img=new Image();img.alt="";img.decoding="async";img.dataset.dev=key;img.onerror=()=>img.remove();img.src=src;poster.appendChild(img)}
+    poster.querySelectorAll("img.on").forEach(x=>{if(x!==img)x.classList.remove("on")});
+    img.classList.remove("on");img.classList.add(dir<0?"from-l":"from-r");void img.offsetWidth;img.classList.remove("from-l","from-r");img.classList.add("on")}
+  function posterOff(delay){if(!poster)return;setTimeout(()=>poster.querySelectorAll("img.on").forEach(x=>x.classList.remove("on")),delay||0)}
+  window.heroPosterOff=posterOff;
+  const preloadPosters=()=>order.forEach(k=>{if(HERO_DEVICES[k].poster){const im=new Image();im.decoding="async";im.src=HERO_DEVICES[k].poster}});
   window.heroPick=function(key){
-    if(!V||!V.modern||!HERO_DEVICES[key])return;
-    if(key==cur&&!busy)return;
-    if(busy){want=key;return}
-    const btn=document.querySelector(`.finish .sw[data-dev="${key}"]`),dir=order.indexOf(key)>order.indexOf(cur)?1:-1;
-    busy=true;
-    // the tapped phone gets the whole connection: any background download of another phone steps aside (and resumes later)
+    if(!V||!V.modern||!HERO_DEVICES[key]||key==cur)return;
+    if(animating){want=key;return}
+    const tok=++pickTok,dir=order.indexOf(key)>order.indexOf(cur)?1:-1,btn=document.querySelector(`.finish .sw[data-dev="${key}"]`);
+    // whatever the visitor was waiting for before keeps downloading quietly; the newly tapped phone gets the connection
+    document.querySelectorAll(".finish .sw.loading").forEach(b=>{if(b!==btn)clearRing(b)});
+    Object.keys(HERO_DL).forEach(k=>{if(k!=key)HERO_DL[k].bg=true});
     if(typeof heroPauseBackground=="function")heroPauseBackground(key);
     if(HERO_DL[key])HERO_DL[key].bg=false;
-    const ready=HERO_MODELS[key]&&!HERO_DL[key];
-    if(!ready&&btn){btn.classList.add("loading");setRing(btn,HERO_DL[key]&&HERO_DL[key].total?HERO_DL[key].got/HERO_DL[key].total:0)}
-    userWant=key;
-    getModel(key,{onProgress:p=>setRing(btn,p)}).then(m=>{clearRing(btn);cur=key;heroUI(key,dir);return V.swap(m,dir)})
-      .catch(e=>{console.warn("hero swap:",e);clearRing(btn);if(btn)btn.classList.add("failed")})
-      .finally(()=>{busy=false;userWant=null;if(want&&want!=cur){const w=want;want=null;heroPick(w)}else want=null;bgNext()})};
+    cur=key;userWant=key;
+    const after=()=>{animating=false;if(want&&want!=cur){const w=want;want=null;heroPick(w)}else want=null};
+    if(READY.has(key)){   // already here: the full Nike-style swap
+      animating=true;heroUI(key,dir);posterOff();
+      V.swap(READY.get(key),dir).then(()=>{if(tok===pickTok)userWant=null;after();bgNext()});return}
+    // not here yet: the colour, number and the still change now; the live 3D follows the moment it lands
+    animating=true;heroUI(key,dir);V.throwOut(dir);posterIn(key,dir);setTimeout(after,650);
+    if(btn){btn.classList.add("loading");setRing(btn,HERO_DL[key]&&HERO_DL[key].total?HERO_DL[key].got/HERO_DL[key].total:0)}
+    getReady(key,{onProgress:p=>{if(tok===pickTok)setRing(btn,p)}}).then(m=>{clearRing(btn);if(tok!==pickTok)return;
+        const show=()=>{if(tok!==pickTok)return;V.set(m);V.pivot.position.y=.15;posterOff(120)};
+        if(animating)setTimeout(show,700);else show()})
+      .catch(e=>{console.warn("hero phone:",e);clearRing(btn);if(btn)btn.classList.add("failed")})
+      .finally(()=>{if(tok===pickTok)userWant=null;bgNext()})};
   // background loading: starts shortly after the first phone is on screen, one phone at a time, and always yields to a tap
   let bgOn=false,bgBusy=false;
   function bgNext(){
     if(!bgOn||bgBusy||userWant)return;
-    const k=order.find(x=>x!=cur&&!HERO_MODELS[x]);if(!k)return;
+    const k=order.find(x=>!READY.has(x)&&!HERO_MODELS[x]);if(!k)return;
     bgBusy=true;
     const idle=f=>(window.requestIdleCallback?requestIdleCallback(f,{timeout:2500}):setTimeout(f,300));
     idle(()=>{if(userWant){bgBusy=false;return}
-      getModel(k,{background:true}).catch(()=>{}).finally(()=>{bgBusy=false;setTimeout(bgNext,400)})})}
+      getReady(k,{background:true}).catch(()=>{}).finally(()=>{bgBusy=false;setTimeout(bgNext,400)})})}
   function preload(){const c=navigator.connection;if(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))return;   // data saver / very slow: load on tap only
     setTimeout(()=>{bgOn=true;bgNext()},1500)}
   function prep(v){V=v;window.__hero=V;V.mouseX=V.mouseY=0;
@@ -11207,16 +11268,17 @@ if(window.HERO3)heroFrostStart();
     try{prep(Viewer(canvas,OPTS))}catch(e){window.__heroOff=1;$("nogl").style.display="grid";return}
     const fallback=()=>{if(V.model)return;V.set(typeof buildHeroPro=="function"?buildHeroPro("#6B1E2E"):buildPhone("#6B1E2E",{cam:"17pro",front:"island",size:"6.3",cc:true,action:true}));V.setColor("#6B1E2E");
       const f=document.querySelector(".finish");if(f)f.querySelector("b").textContent="iPhone 18 Pro";
-      canvas.setAttribute("aria-label","3D iPhone 18 Pro you can rotate by dragging");canvas.classList.add("ready")};
+      canvas.setAttribute("aria-label","3D iPhone 18 Pro you can rotate by dragging");canvas.classList.add("ready");posterOff(900)};
     if(withModel&&typeof loadHeroDevice=="function"){const ft=setTimeout(fallback,12000);
-      loadHeroDevice("pm18").then(m=>{if(V.model)return;clearTimeout(ft);V.set(m);canvas.classList.add("ready")}).catch(e=>{console.warn("hero model:",e);clearTimeout(ft);fallback()})}
+      loadHeroDevice("pm18").then(m=>{if(V.model)return;clearTimeout(ft);V.set(m);canvas.classList.add("ready");posterOff(900)}).catch(e=>{console.warn("hero model:",e);clearTimeout(ft);fallback()})}
     else fallback()}
   /* the real iPhone 18 Pro Max on modern three.js, so its authored materials render in full */
   if(window.HERO3&&typeof ModernViewer=="function"){
     let ok=false;try{prep(ModernViewer(canvas,OPTS));ok=true}catch(e){console.warn("modern hero:",e)}
     // give up on the real phone only if it has truly stalled: while it is still downloading on a slow connection, keep waiting for it
     if(ok){let ft=setTimeout(function chk(){if(V.model)return;if(window.__heroBusy&&performance.now()-window.__heroBusy<60000){ft=setTimeout(chk,4000);return}console.warn("modern hero: timeout");classic(false)},15000);
-      loadHeroModern("pm18").then(m=>{clearTimeout(ft);if(!V.modern||V.model)return;V.set(m);canvas.classList.add("ready");document.querySelector(".hero").classList.add("multi");preload()})
+      loadHeroModern("pm18").then(m=>{clearTimeout(ft);if(!V.modern||V.model)return;V.set(m);V.pivot.position.y=.15;READY.set("pm18",m);m.warmed=Promise.resolve();
+        canvas.classList.add("ready");posterOff(900);document.querySelector(".hero").classList.add("multi");preloadPosters();preload()})
         .catch(e=>{console.warn("modern hero:",e);clearTimeout(ft);if(V.modern)classic(true)});
       return}
   }
