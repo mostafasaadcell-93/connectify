@@ -1631,6 +1631,13 @@ select option:disabled{color:#6A6A6A}
 }
 @media (prefers-reduced-motion:reduce){.hnum span,.hnum span.out{transition:opacity .3s!important;transform:none!important}.hfield{transition:none}}
 
+/* switcher: no grey/blue tap flash, and a progress ring that fills while a phone downloads */
+.hpick .sw{-webkit-tap-highlight-color:transparent}
+.hpick .sw i{position:relative}
+.hpick .sw.loading i::after{content:"";position:absolute;inset:-4px;width:auto;height:auto;margin:0;left:-4px;top:-4px;border:0;border-radius:50%;box-sizing:border-box;animation:none;
+  background:conic-gradient(#fff var(--p,0%),rgba(255,255,255,.18) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px));mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px))}
+.hpick .sw.loading:not([style*="--p"]) i::after{background:conic-gradient(#fff 22%,rgba(255,255,255,.18) 0);animation:spin .9s linear infinite}
+
 </style>
 <link rel="preconnect" href="https://store.storeimages.cdn-apple.com">
 <link rel="preload" href="models/iphone18pm.glb?v=c098ca8e63" as="fetch" crossorigin fetchpriority="high">
@@ -7114,7 +7121,7 @@ else
 const HERO_DEVICES={
   pm18:{
     name:"iPhone 18 Pro Max",
-    file:"models/iphone18pm.glb?v=c098ca8e63",
+    file:"models/iphone18pm.glb?v=c098ca8e63",bytes:3860024,
     flipY:false,                                   // screen canvas orientation on this model's UVs (verified in renders)
     screen:"COLOUR_Cherry_Screen",
     scale:1000/35,
@@ -7127,7 +7134,7 @@ const HERO_DEVICES={
     rotY:0},
   pm17:{
     name:"iPhone 17 Pro Max",
-    file:"models/iphone17pm.glb?v=f5670952ff",
+    file:"models/iphone17pm.glb?v=f5670952ff",bytes:5320600,
     flipY:false,
     screen:"BsXHDwLKqtDOfrW",                      // the display panel (UVs 0..1, top of the phone at v=0)
     scale:1000/35,                                 // file is in metres, 162.9 mm tall
@@ -7139,7 +7146,7 @@ const HERO_DEVICES={
     rotY:0},
   pm16:{
     name:"iPhone 16 Pro Max",
-    file:"models/iphone16pm.glb?v=acf80862da",
+    file:"models/iphone16pm.glb?v=acf80862da",bytes:7814636,
     flipY:false,
     screen:"screen.001",
     planarUV:true,                                 // its own screen UVs are for a different wallpaper, so the lock screen is mapped from the panel's shape
@@ -11033,8 +11040,10 @@ function heroTune(T,key,m){
 const HERO_MODELS={};
 function heroB64For(key){const B=window.HERO_B64||{};return B[key]||(key=="pm18"?window.HERO_GLB_B64:null)}
 function heroBufFor(key){const s=heroB64For(key);if(!s)return null;const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a.buffer}
-function loadHeroModern(key){
-  if(HERO_MODELS[key])return HERO_MODELS[key];
+/* downloads in flight: {ctrl, got, total, bg}; progress is reported to whoever asked (the switcher draws it as a ring) */
+const HERO_DL={};
+function loadHeroModern(key,opt={}){
+  if(HERO_MODELS[key]){if(opt.onProgress&&HERO_DL[key])HERO_DL[key].on=opt.onProgress;return HERO_MODELS[key]}
   const dev=HERO_DEVICES[key],{THREE:T,GLTFLoader}=window.HERO3;
   return HERO_MODELS[key]=new Promise((res,rej)=>{
     const L=new GLTFLoader();
@@ -11061,11 +11070,21 @@ function loadHeroModern(key){
       try{L.parse(buf,"",done,rej)}finally{try{window.createImageBitmap=cib}catch(e){}}return}
     // the first phone downloads at top priority; the others politely, so they never hold up the page
     if(key=="pm18")window.__heroBusy=performance.now();   // tells the page the first phone is still on its way
-    const dl=fetch(key=="pm18"&&window.HERO_GLB||dev.file,{priority:key=="pm18"?"high":"low"}).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.arrayBuffer()});
+    const ctrl=window.AbortController?new AbortController():null,st=HERO_DL[key]={ctrl,got:0,total:dev.bytes||0,bg:!!opt.background,on:opt.onProgress||null};
+    const pri=key=="pm18"||!opt.background?"high":"low";
+    const dl=fetch(key=="pm18"&&window.HERO_GLB||dev.file,{priority:pri,signal:ctrl&&ctrl.signal}).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);
+      // read it piece by piece so the button can show how far along it is
+      if(!r.body||!r.body.getReader)return r.arrayBuffer();
+      const rd=r.body.getReader(),parts=[];
+      const pump=()=>rd.read().then(({done,value})=>{if(done){const out=new Uint8Array(st.got);let o=0;parts.forEach(p=>{out.set(p,o);o+=p.length});return out.buffer}
+        parts.push(value);st.got+=value.length;if(st.on&&st.total)st.on(Math.min(.99,st.got/st.total));return pump()});
+      return pump()}).finally(()=>{if(HERO_DL[key]===st)delete HERO_DL[key]});
     Promise.all([dl,needsFrost?heroFrostStart():null]).then(([b])=>L.parse(b,"",done,rej)).catch(rej)};
     const needsFrost=key=="pm18"||key=="pm16";
     if(heroBufFor(key)){(needsFrost?heroFrostStart():Promise.resolve()).then(go)}else go();
   }).catch(e=>{delete HERO_MODELS[key];throw e})}
+/* stop a background download so a phone the visitor actually asked for gets the whole connection (it is fetched again later) */
+function heroPauseBackground(except){Object.keys(HERO_DL).forEach(k=>{const d=HERO_DL[k];if(k!=except&&d.bg&&d.ctrl){d.ctrl.abort();delete HERO_DL[k]}})}
 
 /* high-resolution frosted-glass detail, generated once: a fine grain (normal map) and gentle gloss variation (roughness map).
    The pixels are computed on a background thread (same numbers, same seed, so the result is identical) so the page never freezes for it;
@@ -11132,7 +11151,7 @@ if(window.HERO3)heroFrostStart();
   const sideOne=f=>new Promise((res,rej)=>{const sc=document.createElement("script");sc.src=f;sc.onload=()=>res();sc.onerror=()=>rej(new Error("side file "+f));document.head.appendChild(sc)});
   const sideP={},side=key=>{const fs=[].concat((window.HERO_SIDE||{})[key]||[]);if(!fs.length||(window.HERO_B64||{})[key])return Promise.resolve();
     return sideP[key]||(sideP[key]=fs.reduce((p,f)=>p.then(()=>sideOne(f)),Promise.resolve()).catch(e=>{delete sideP[key];throw e}))};
-  const getModel=key=>side(key).then(()=>loadHeroModern(key)).then(m=>V&&V.warm?V.warm(m).then(()=>m):m);
+  const getModel=(key,opt)=>side(key).then(()=>loadHeroModern(key,opt)).then(m=>V&&V.warm?V.warm(m).then(()=>m):m);
   function heroUI(key,dir){const d=HERO_DEVICES[key],h=d.hero,hero=document.querySelector(".hero");hero.classList.toggle("back",dir<0);
     // the hidden colour layer takes the new finish, then the two cross-fade (the visible one is pinned to the old colours first)
     const fl=[...hero.querySelectorAll(".hfield")],on=fl.find(x=>x.classList.contains("on"))||fl[0],nx=fl.find(x=>x!==on);
@@ -11146,23 +11165,36 @@ if(window.HERO3)heroFrostStart();
     // the giant number behind the phone slides out the same way the phone leaves
     const box=$("heroNum");if(box){const old=box.querySelector("span:not(.out)"),n=document.createElement("span");n.textContent=h.num;n.className="in";box.appendChild(n);
       if(old){old.classList.add("out");setTimeout(()=>old.remove(),900)}requestAnimationFrame(()=>requestAnimationFrame(()=>n.classList.remove("in")))}}
+  let userWant=null;   // a phone the visitor tapped that is still downloading
+  const setRing=(btn,p)=>{if(!btn)return;btn.style.setProperty("--p",(p*100).toFixed(1)+"%");const sm=btn.querySelector("small");
+    if(sm){if(!sm.dataset.f)sm.dataset.f=sm.textContent;sm.textContent=p>0?`Loading ${Math.round(p*100)}%`:"Loading…"}};
+  const clearRing=btn=>{if(!btn)return;btn.classList.remove("loading");btn.style.removeProperty("--p");const sm=btn.querySelector("small");if(sm&&sm.dataset.f)sm.textContent=sm.dataset.f};
   window.heroPick=function(key){
     if(!V||!V.modern||!HERO_DEVICES[key])return;
     if(key==cur&&!busy)return;
     if(busy){want=key;return}
     const btn=document.querySelector(`.finish .sw[data-dev="${key}"]`),dir=order.indexOf(key)>order.indexOf(cur)?1:-1;
-    busy=true;if(btn)btn.classList.add("loading");
-    getModel(key).then(m=>{if(btn)btn.classList.remove("loading");cur=key;heroUI(key,dir);return V.swap(m,dir)})
-      .catch(e=>{console.warn("hero swap:",e);if(btn){btn.classList.remove("loading");btn.classList.add("failed")}})
-      .finally(()=>{busy=false;if(want&&want!=cur){const w=want;want=null;heroPick(w)}else want=null})};
-  // once the first phone is on screen, quietly get the other two ready so switching is instant
-  // waits until the page has fully loaded and gone quiet, one phone at a time; on data-saver / very slow connections they load on tap instead
-  function preload(){const c=navigator.connection;if(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))return;
-    const idle=f=>(window.requestIdleCallback?requestIdleCallback(f,{timeout:4000}):setTimeout(f,300));
-    const next=k=>new Promise(r=>idle(()=>getModel(k).then(r,r)));
-    const go=()=>order.filter(k=>k!=cur).reduce((p,k)=>p.then(()=>next(k)),Promise.resolve());
-    const start=()=>setTimeout(go,1800);
-    if(document.readyState=="complete")start();else addEventListener("load",start,{once:true})}
+    busy=true;
+    // the tapped phone gets the whole connection: any background download of another phone steps aside (and resumes later)
+    if(typeof heroPauseBackground=="function")heroPauseBackground(key);
+    if(HERO_DL[key])HERO_DL[key].bg=false;
+    const ready=HERO_MODELS[key]&&!HERO_DL[key];
+    if(!ready&&btn){btn.classList.add("loading");setRing(btn,HERO_DL[key]&&HERO_DL[key].total?HERO_DL[key].got/HERO_DL[key].total:0)}
+    userWant=key;
+    getModel(key,{onProgress:p=>setRing(btn,p)}).then(m=>{clearRing(btn);cur=key;heroUI(key,dir);return V.swap(m,dir)})
+      .catch(e=>{console.warn("hero swap:",e);clearRing(btn);if(btn)btn.classList.add("failed")})
+      .finally(()=>{busy=false;userWant=null;if(want&&want!=cur){const w=want;want=null;heroPick(w)}else want=null;bgNext()})};
+  // background loading: starts shortly after the first phone is on screen, one phone at a time, and always yields to a tap
+  let bgOn=false,bgBusy=false;
+  function bgNext(){
+    if(!bgOn||bgBusy||userWant)return;
+    const k=order.find(x=>x!=cur&&!HERO_MODELS[x]);if(!k)return;
+    bgBusy=true;
+    const idle=f=>(window.requestIdleCallback?requestIdleCallback(f,{timeout:2500}):setTimeout(f,300));
+    idle(()=>{if(userWant){bgBusy=false;return}
+      getModel(k,{background:true}).catch(()=>{}).finally(()=>{bgBusy=false;setTimeout(bgNext,400)})})}
+  function preload(){const c=navigator.connection;if(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))return;   // data saver / very slow: load on tap only
+    setTimeout(()=>{bgOn=true;bgNext()},1500)}
   function prep(v){V=v;window.__hero=V;V.mouseX=V.mouseY=0;
     V.renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia("(pointer:coarse)").matches?1.75:2));V.size();
     if(!matchMedia("(prefers-reduced-motion: reduce)").matches){V.curY=Math.PI*3.4;V.pivot.position.y=-4}
