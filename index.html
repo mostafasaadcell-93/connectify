@@ -1577,6 +1577,61 @@ select option:disabled{color:#6A6A6A}
 #pvImg.aplwide{object-fit:contain!important;transform:scale(2.35);transform-origin:50% 50%;pointer-events:none;filter:none!important;animation:none!important}
 .pvstage.aplbg .pvnote{background:rgba(0,0,0,.06)!important;color:#1d1d1f!important}
 
+/* ================= hero: three phones, Nike-style — the whole hero repaints to the finish of the phone on show ================= */
+@property --hc1{syntax:"<color>";inherits:true;initial-value:#8f2a40}
+@property --hc2{syntax:"<color>";inherits:true;initial-value:#3a0b17}
+@property --hc3{syntax:"<color>";inherits:true;initial-value:#0e0305}
+.hero{--hc1:#8f2a40;--hc2:#3a0b17;--hc3:#0e0305;--hsw:#6B1E2E;transition:--hc1 1.1s cubic-bezier(.4,0,.2,1),--hc2 1.1s cubic-bezier(.4,0,.2,1),--hc3 1.1s cubic-bezier(.4,0,.2,1)}
+.hfield{position:absolute;inset:0;z-index:-2;pointer-events:none;
+  background:radial-gradient(58% 72% at 73% 52%,var(--hc1) 0%,var(--hc2) 50%,var(--hc3) 100%);
+  -webkit-mask-image:linear-gradient(#000 80%,transparent);mask-image:linear-gradient(#000 80%,transparent)}
+.hfield::after{content:"";position:absolute;inset:0;background:radial-gradient(26% 36% at 73% 44%,rgba(255,255,255,.12),transparent 70%)}
+.hero .orbits{opacity:.45}
+/* the giant model number behind the phone */
+.stage .hnum{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:0}
+.hnum span{grid-area:1/1;font-family:"Outfit","Sora",sans-serif;font-weight:600;font-size:clamp(15rem,31vw,32rem);line-height:.8;letter-spacing:-.07em;padding-right:.07em;
+  background:linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,.05) 78%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  transition:transform 1.1s cubic-bezier(.22,1,.36,1),opacity .9s ease;will-change:transform,opacity}
+.hnum span.in{transform:translateX(45%);opacity:0;transition:none}
+.hnum span.out{transform:translateX(-45%);opacity:0;transition:transform .7s cubic-bezier(.55,0,.8,.2),opacity .45s ease}
+.hero.back .hnum span.in{transform:translateX(-45%)}
+.hero.back .hnum span.out{transform:translateX(45%)}
+#phone3d{position:relative;z-index:1}
+/* the switcher: a "choose your iPhone" card beside the phone, one row per model in its finish */
+.finish.hpick{left:auto;right:0;top:50%;bottom:auto;transform:translateY(-50%);flex-direction:column;align-items:stretch;gap:4px;padding:12px 10px 10px;border-radius:22px;white-space:nowrap;
+  background:color-mix(in srgb,var(--hc3) 55%,rgba(0,0,0,.18))!important;transition:background 1.1s;z-index:3}
+.hpick .hpick-h{display:block;font:500 11px/1 "Geist","Manrope",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55);padding:2px 10px 8px}
+.hpick .sw{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:11px;padding:8px 14px 8px 8px;border-radius:14px;cursor:pointer;position:relative;transition:background .3s}
+.hpick .sw:hover{background:rgba(255,255,255,.07)}
+.hpick .sw:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.hpick .sw[aria-pressed=true]{background:rgba(255,255,255,.13)}
+.hpick .sw i{flex:none;width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.18);transition:box-shadow .3s}
+.hpick .sw[aria-pressed=true] i{box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.25),0 0 0 2px var(--hc3),0 0 0 3.5px #fff}
+.hpick .sw span{display:flex;flex-direction:column;line-height:1.2}
+.hpick .sw b{font:600 14px/1.2 "Sora",sans-serif;color:#fff;display:block}
+.hpick .sw small{font-size:12px;color:rgba(255,255,255,.62)}
+.hpick .sw.loading i::after{content:"";position:absolute;left:3px;top:50%;width:30px;height:30px;margin-top:-15px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;animation:spin .8s linear infinite;box-sizing:border-box}
+.hpick .sw.failed{opacity:.4}
+.hero:not(.multi) .hpick .sw:not([data-dev=pm18]),.hero:not(.multi) .hpick-h{display:none}
+/* the colour carries on up behind the glass navigation bar */
+.hfield{inset:-140px 0 0;-webkit-mask-image:linear-gradient(transparent 0,#000 130px,#000 80%,transparent);mask-image:linear-gradient(transparent 0,#000 130px,#000 80%,transparent)}
+@media (max-width:760px){
+  .finish.hpick{top:auto;bottom:8px;right:50%;transform:translateX(50%);flex-direction:row;padding:6px;gap:2px;border-radius:999px}
+  .hpick .hpick-h,.hpick .sw small{display:none}
+  .hpick .sw{padding:6px 12px 6px 6px;gap:8px;border-radius:999px}
+  .hpick .sw i{width:24px;height:24px}
+  .hpick .sw b{font-size:12.5px}
+  .hfield{inset:-74px 0 0;-webkit-mask-image:linear-gradient(transparent 0,#000 70px,#000 85%,transparent);mask-image:linear-gradient(transparent 0,#000 70px,#000 85%,transparent)}
+}
+.concept .credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+@media (max-width:760px){
+  .hfield{background:radial-gradient(90% 46% at 50% 30%,var(--hc1) 0%,var(--hc2) 55%,var(--hc3) 100%)}
+  .hfield::after{background:radial-gradient(50% 24% at 50% 28%,rgba(255,255,255,.12),transparent 70%)}
+  .hnum span{font-size:min(19rem,72vw)}
+  .finish div{min-width:0}
+}
+@media (prefers-reduced-motion:reduce){.hnum span,.hnum span.out{transition:opacity .3s!important;transform:none!important}.hero{transition:none}}
+
 </style>
 </head>
 <body>
@@ -1669,7 +1724,8 @@ select option:disabled{color:#6A6A6A}
 </div>
 
 <canvas id="liquid" aria-hidden="true"></canvas><div id="liquidDim" aria-hidden="true"></div>
-<header class="hero" id="top">
+<header class="hero" id="top" data-dev="pm18">
+  <div class="hfield" aria-hidden="true"></div>
   <div class="glow" id="glow" aria-hidden="true" style="background:#6B1E2E"></div>
   <svg class="orbits" viewBox="0 0 1100 1100" aria-hidden="true">
     <defs>
@@ -1700,13 +1756,16 @@ select option:disabled{color:#6A6A6A}
       </div>
     </div>
     <div class="stage">
+      <div class="hnum" id="heroNum" aria-hidden="true"><span>18</span></div>
       <canvas id="phone3d" aria-label="3D iPhone 18 Pro Max you can rotate by dragging" role="img"></canvas>
       <div class="nogl" id="nogl">3D preview needs WebGL</div>
       <button type="button" class="dragtoggle heroreset" id="heroReset" hidden aria-label="Reset the phone view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span></button>
       <button type="button" class="dragtoggle" id="dragToggle" aria-pressed="false" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg><span>Enable iPhone drag</span></button>
-      <div class="finish" role="group" aria-label="Choose a color">
-        <div><b>iPhone 18 Pro Max</b><small id="finishName">Burgundy</small></div>
-        <button class="sw" style="background:#6B1E2E" data-c="#6B1E2E" data-n="Burgundy" aria-pressed="true" aria-label="Burgundy"></button>
+      <div class="finish hpick" role="group" aria-label="Choose an iPhone">
+        <small class="hpick-h">Choose your iPhone</small>
+        <button class="sw" data-dev="pm18" aria-pressed="true" aria-label="iPhone 18 Pro Max, Burgundy"><i style="background:#6B1E2E"></i><span><b>18 Pro Max</b><small>Burgundy</small></span></button>
+        <button class="sw" data-dev="pm17" aria-pressed="false" aria-label="iPhone 17 Pro Max, Cosmic Orange"><i style="background:#E0692C"></i><span><b>17 Pro Max</b><small>Cosmic Orange</small></span></button>
+        <button class="sw" data-dev="pm16" aria-pressed="false" aria-label="iPhone 16 Pro Max, Desert Titanium"><i style="background:#C4A88F"></i><span><b>16 Pro Max</b><small>Desert Titanium</small></span></button>
       </div>
     </div>
   </div>
@@ -1907,7 +1966,7 @@ select option:disabled{color:#6A6A6A}
       <ul><li><a href="#shop">Shop</a></li><li><a href="#trade">Trade-in</a></li><li><a href="#grades">Conditions</a></li><li><button class="adminlink" data-open-info>Warranty and exchange</button></li><li><button class="adminlink" data-open-admin>Store admin</button></li></ul>
       <ul><li><a href="https://www.instagram.com/connectify.lb/" target="_blank" rel="noopener">Instagram @connectify.lb</a></li><li><a href="https://wa.me/96171062768" target="_blank" rel="noopener">WhatsApp +961 71 062 768</a></li><li>Delivery all over Lebanon</li><li>Cash on delivery</li></ul>
     </div>
-    <div class="concept"><span>Design concept prepared for Connectify by Haidar</span><span>Not a live store</span></div>
+    <div class="concept"><span>Design concept prepared for Connectify by Haidar</span><span>Not a live store</span><span class="credit">iPhone 16 Pro Max 3D model by <a href="https://sketchfab.com/MG990" target="_blank" rel="noopener">MajdyModels</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></span></div>
   </div>
 </footer>
 
@@ -7052,12 +7111,43 @@ const HERO_DEVICES={
     file:"models/iphone18pm.glb",
     flipY:false,                                   // screen canvas orientation on this model's UVs (verified in renders)
     screen:"COLOUR_Cherry_Screen",
+    scale:1000/35,
     // only the finish the supplied file was made in; other colours need their own files
     colors:[["Burgundy",null]],
     caption:"iPhone 18 Pro Max. In stock.",
     palette:{bg:["#2a0710","#120309","#3b0d1a"],rib:(i)=>`rgba(${200-i*6},${60+i*3},${90+i*4},${.08+i*.018})`,rib2:(i)=>`rgba(255,${120+i*10},${150+i*6},${.05+i*.02})`,glow:"rgba(255,90,120,.28)",word:"#FFE9EE",tify:"#F4D3DB",cap:"rgba(255,220,230,.75)"},
-    rotY:0}
+    // hero scene: the giant number behind the phone, the finish dot, and the colour the whole hero repaints to
+    hero:{num:"18",finish:"Burgundy",sw:"#6B1E2E",c1:"#8f2a40",c2:"#3a0b17",c3:"#0e0305",rim:0xffd9e2},
+    rotY:0},
+  pm17:{
+    name:"iPhone 17 Pro Max",
+    file:"models/iphone17pm.glb",
+    flipY:false,
+    screen:"BsXHDwLKqtDOfrW",                      // the display panel (UVs 0..1, top of the phone at v=0)
+    scale:1000/35,                                 // file is in metres, 162.9 mm tall
+    colors:[["Cosmic Orange",null]],
+    caption:"iPhone 17 Pro Max. Cosmic Orange.",
+    palette:{bg:["#3a1404","#160602","#4a1c06"],rib:(i)=>`rgba(255,${110+i*6},${40+i*3},${.08+i*.018})`,rib2:(i)=>`rgba(255,${170+i*6},${110+i*6},${.05+i*.02})`,glow:"rgba(255,130,50,.30)",word:"#FFF1E6",tify:"#FFCBA0",cap:"rgba(255,228,206,.8)"},
+    hero:{num:"17",finish:"Cosmic Orange",sw:"#E0692C",c1:"#d4662a",c2:"#5c2108",c3:"#170802",rim:0xffd0ad,exp:1.15},
+    envMul:.85,                                    // vivid anodised orange: lighter reflections so the colour stays saturated
+    rotY:0},
+  pm16:{
+    name:"iPhone 16 Pro Max",
+    file:"models/iphone16pm.glb",
+    flipY:false,
+    screen:"screen.001",
+    planarUV:true,                                 // its own screen UVs are for a different wallpaper, so the lock screen is mapped from the panel's shape
+    hide:["Cube014_glass002_0"],                   // a second see-through sheet over the display; the new screen material carries the glass itself
+    scale:.163/35*1000/1.6838,                     // file is in its own units, 1.6838 tall = 163 mm
+    colors:[["Desert Titanium",null]],
+    caption:"iPhone 16 Pro Max. Desert Titanium.",
+    palette:{bg:["#2f251b","#120e0a","#3e3124"],rib:(i)=>`rgba(${232-i*3},${192+i*3},${150+i*4},${.07+i*.016})`,rib2:(i)=>`rgba(255,${226+i*2},${192+i*5},${.05+i*.018})`,glow:"rgba(232,196,156,.26)",word:"#FCF4EB",tify:"#EAD3B8",cap:"rgba(246,234,218,.8)"},
+    hero:{num:"16",finish:"Desert Titanium",sw:"#C4A88F",c1:"#a88d74",c2:"#4a3a2b",c3:"#14100b",rim:0xfff0dc},
+    rotY:Math.PI/2}                                // front of this file faces -x
 };
+const HERO_ORDER=["pm18","pm17","pm16"];
+/* author credit required by the CC BY 4.0 licence of a hero model */
+const HERO_CREDITS={pm16:'"iPhone 16 Pro Max" 3D model by MajdyModels (sketchfab.com/MG990), CC BY 4.0'};
 
 function heroLockDraw(dev){const P=dev.palette;return (g,w,h)=>{
     // the Connectify lock screen: burgundy ribbons, live clock and date, widgets, "Connectify." centred, controls and home bar
@@ -7109,7 +7199,7 @@ function loadHeroDevice(key){
 function heroFromGLB(scene,dev){
   const model={g:new THREE.Group(),tint:[],startY:Math.PI+.5,fixed:true,real:true,dev};
   const inner=new THREE.Group();inner.add(scene);
-  inner.scale.setScalar(1000/35);inner.rotation.y=dev.rotY||0;
+  inner.scale.setScalar(dev.scale||1000/35);inner.rotation.y=dev.rotY||0;
   model.g.add(inner);
   scene.traverse(o=>{
     if(!o.isMesh)return;
@@ -10818,7 +10908,7 @@ void main() {
 function ModernViewer(canvas,opts={}){
   const {THREE:T,RoomEnvironment}=window.HERO3;
   const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:"high-performance"});
-  renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.AgXToneMapping;renderer.toneMappingExposure=1.6;   // AgX keeps deep burgundy rich instead of crushing it
+  renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.AgXToneMapping;renderer.toneMappingExposure=1.6;   // AgX keeps deep colours rich instead of crushing them
   const scene=new T.Scene(),cam=new T.PerspectiveCamera(28,1,4,40);cam.position.set(0,0,14);
   // studio reflections: a soft room plus large softboxes, the way product shots are lit
   const pm=new T.PMREMGenerator(renderer);
@@ -10835,20 +10925,53 @@ function ModernViewer(canvas,opts={}){
   const room=pm.fromScene(new RoomEnvironment(renderer),.04).texture;
   scene.environment=env;scene.environmentIntensity=1;
   const key=new T.DirectionalLight(0xffffff,2.2);key.position.set(4.5,6,7);scene.add(key);
-  const rim=new T.DirectionalLight(0xffd9e2,1.6);rim.position.set(-5,4,-6);scene.add(rim);   // warm rim along the frame
+  const rim=new T.DirectionalLight(0xffd9e2,1.6);rim.position.set(-5,4,-6);scene.add(rim);   // warm rim along the frame, tinted to the phone on show
   scene.add(new T.HemisphereLight(0xe8ecff,0x14090c,.25));
   // soft contact shadow
   const sc=document.createElement("canvas");sc.width=sc.height=128;const sg=sc.getContext("2d"),rg=sg.createRadialGradient(64,64,0,64,64,64);rg.addColorStop(0,"rgba(0,0,0,.55)");rg.addColorStop(1,"rgba(0,0,0,0)");sg.fillStyle=rg;sg.fillRect(0,0,128,128);
   const shadow=new T.Mesh(new T.PlaneGeometry(3.4,.75),new T.MeshBasicMaterial({map:new T.CanvasTexture(sc),transparent:true,depthWrite:false}));shadow.position.y=-2.8;shadow.rotation.x=-Math.PI/2.4;scene.add(shadow);
   const pivot=new T.Group();scene.add(pivot);
-  const V={modern:true,renderer,scene,cam,pivot,model:null,tgt:null,targetY:0,curY:0,vel:0,targetX:0,curX:0,drag:false,active:true,spin:.16,env,room};
+  const V={modern:true,renderer,scene,cam,pivot,model:null,tgt:null,targetY:0,curY:0,vel:0,targetX:0,curX:0,drag:false,active:true,spin:.16,env,room,anims:[],swapping:false};
   V.size=()=>{const r=canvas.parentElement.getBoundingClientRect();if(!r.width)return;renderer.setSize(r.width,r.height,false);cam.aspect=r.width/r.height;cam.updateProjectionMatrix();
     const fitH=5.6,dist=fitH/2/Math.tan(cam.fov*Math.PI/360);cam.position.z=Math.max(dist,dist*(.62/cam.aspect))+(opts.extraZ||0)};
+  const wrapOf=model=>{if(model.wrap)return model.wrap;
+    const b=new T.Box3().setFromObject(model.g),ctr=b.getCenter(new T.Vector3());
+    model.g.position.sub(ctr);const wrap=new T.Group();wrap.add(model.g);wrap.scale.setScalar(4.4/4.7);model.wrap=wrap;return wrap};
   V.set=model=>{
-    if(V.model){pivot.remove(V.model.g)}
-    V.model=model;const b=new T.Box3().setFromObject(model.g),ctr=b.getCenter(new T.Vector3());
-    model.g.position.sub(ctr);const wrap=new T.Group();wrap.add(model.g);wrap.scale.setScalar(4.4/4.7);model.g=wrap;pivot.add(wrap);V.targetY=V.curY=model.startY};
-  V.setColor=()=>{};   // the GLB keeps its own authored finish
+    if(V.model)pivot.remove(V.model.wrap);
+    V.model=model;pivot.add(wrapOf(model));V.targetY=V.curY=model.startY;V.setMood(model.dev)};
+  V.setMood=dev=>{if(dev&&dev.hero&&dev.hero.rim!=null)V.rimTo=new T.Color(dev.hero.rim);V.expTo=dev&&dev.hero&&dev.hero.exp||1.6};
+  /* Nike-style change: the phone on show is thrown out to one side while the next one flies in from the other, spinning into place */
+  V.swap=(model,dir=1)=>{
+    const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if(!V.model||reduce){V.set(model);return Promise.resolve()}
+    const out=V.model,ow=out.wrap,X=8.5*dir;
+    // the outgoing phone keeps the pose it had, in its own group, and leaves from there
+    pivot.updateMatrixWorld(true);const ghost=new T.Group();ghost.matrixAutoUpdate=true;
+    pivot.matrixWorld.decompose(ghost.position,ghost.quaternion,ghost.scale);pivot.remove(ow);ghost.add(ow);scene.add(ghost);
+    const gp=ghost.position.clone(),gq=ghost.quaternion.clone();
+    // the incoming phone joins the pivot, so it ends in the usual three-quarter pose and keeps spinning normally
+    V.model=model;const iw=wrapOf(model);iw.position.set(0,0,0);pivot.add(iw);V.setMood(model.dev);
+    const turns=Math.ceil((V.curY-model.startY)/(Math.PI*2))+1;V.targetY=model.startY+turns*Math.PI*2;V.vel=0;
+    V.swapping=true;const t0=performance.now();
+    return new Promise(done=>V.anims.push(now=>{
+      const p=Math.min(1,(now-t0)/1150),po=Math.min(1,p/.62),pi=Math.max(0,(p-.14)/.86);
+      const eo=po*po*po,ei=1-Math.pow(1-pi,4);
+      ghost.position.set(gp.x-X*eo,gp.y+.6*eo,gp.z-1.5*eo);ghost.quaternion.copy(gq).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),-2.4*dir*eo));
+      // slide in along the screen's x axis whatever the pivot's own rotation is
+      const off=new T.Vector3(X*(1-ei),-.4*(1-ei),-1.5*(1-ei)).applyQuaternion(pivot.quaternion.clone().invert());iw.position.copy(off);
+      if(p>=1){scene.remove(ghost);ghost.remove(ow);iw.position.set(0,0,0);V.swapping=false;done();return true}
+    }))};
+  /* get a phone fully ready before it is shown: shaders compiled and textures on the GPU, so the switch never stutters */
+  V.warm=model=>{if(model.warmed)return model.warmed;
+    const w=wrapOf(model),holder=new T.Group();holder.add(w);
+    const texs=new Set();w.traverse(o=>{if(o.isMesh&&o.material)[].concat(o.material).forEach(m=>{for(const k in m){const v=m[k];if(v&&v.isTexture)texs.add(v)}})});
+    // compile with this phone in the scene and the one on show hidden (the compile pass only reads the scene, nothing is drawn)
+    const on=V.model&&V.model.wrap;if(on)on.visible=false;scene.add(holder);
+    let p;try{p=renderer.compileAsync?renderer.compileAsync(scene,cam):Promise.resolve(renderer.compile(scene,cam))}catch(e){p=Promise.resolve()}
+    finally{scene.remove(holder);holder.remove(w);if(on)on.visible=true}
+    return model.warmed=p.catch(()=>{}).then(()=>{texs.forEach(t=>{try{renderer.initTexture(t)}catch(e){}})})};
+  V.setColor=()=>{};   // each GLB keeps its own authored finish
   canvas.addEventListener("pointerdown",e=>{if(V.locked)return;V.drag=true;V.lastX=e.clientX;V.lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
   canvas.addEventListener("pointermove",e=>{if(!V.drag)return;const dx=e.clientX-V.lastX,dy=e.clientY-V.lastY;V.lastX=e.clientX;V.lastY=e.clientY;
     V.targetY+=dx*.012;V.vel=dx*.012;V.targetX=Math.max(-1.45,Math.min(1.45,V.targetX+dy*.01));V.hold=performance.now()});
@@ -10861,38 +10984,71 @@ function ModernViewer(canvas,opts={}){
   const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches,clock=new T.Clock();let t=0;
   (function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05);if(!V.active||!V.model||document.hidden||(opts.pauseWhenCovered&&document.querySelector(".modal.on,.admin.on")))return;t+=dt;
     if(!V.drag&&!reduce){V.targetY+=V.vel;V.vel*=.92;V.targetY+=dt*V.spin}
-    V.curY+=(V.targetY-V.curY)*(reduce?1:1-Math.pow(.945,dt*60));
+    V.curY+=(V.targetY-V.curY)*(reduce?1:1-Math.pow(V.swapping?.93:.945,dt*60));
     if(!V.drag&&V.targetX&&performance.now()-(V.hold||0)>4000)V.targetX*=Math.pow(.97,dt*60);
     V.curX+=(V.targetX-V.curX)*(reduce?1:1-Math.pow(.9,dt*60));
+    if(V.rimTo)rim.color.lerp(V.rimTo,1-Math.pow(.9,dt*60));
+    if(V.expTo)renderer.toneMappingExposure+=(V.expTo-renderer.toneMappingExposure)*(1-Math.pow(.92,dt*60));   // each finish photographed at its own exposure
     pivot.rotation.y=V.curY;if(!opts.onFrame)pivot.rotation.x=V.curX;
     if(opts.onFrame)opts.onFrame(V,t,dt,reduce);
+    if(V.anims.length){const now=performance.now();V.anims=V.anims.filter(f=>!f(now))}
     renderer.render(scene,cam)})();
   addEventListener("resize",V.size);V.size();
   return V}
 
-/* load a device on the modern engine; the model's own materials are kept exactly as authored */
+/* the screen of a model whose own UVs don't fit the lock screen: map the canvas straight onto the panel's shape, seen from the front */
+function heroPlanarUV(T,mesh,root){
+  root.updateMatrixWorld(true);
+  const rb=new T.Box3().setFromObject(root),rc=rb.getCenter(new T.Vector3()),mb=new T.Box3().setFromObject(mesh),mc=mb.getCenter(new T.Vector3()),ms=mb.getSize(new T.Vector3());
+  const thin=ms.x<ms.z?"x":"z",n=new T.Vector3();n[thin]=Math.sign(mc[thin]-rc[thin])||1;      // which way the display faces
+  const up=new T.Vector3(0,1,0),right=new T.Vector3().crossVectors(n.clone().negate(),up);       // seen from the front: forward x up
+  const p=mesh.geometry.attributes.position,v=new T.Vector3(),pts=[];
+  for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i).applyMatrix4(mesh.matrixWorld);pts.push([v.dot(right),v.y])}
+  const r0=Math.min(...pts.map(q=>q[0])),r1=Math.max(...pts.map(q=>q[0])),y0=Math.min(...pts.map(q=>q[1])),y1=Math.max(...pts.map(q=>q[1]));
+  const uv=new Float32Array(p.count*2);pts.forEach((q,i)=>{uv[i*2]=(q[0]-r0)/(r1-r0);uv[i*2+1]=(y1-q[1])/(y1-y0)});
+  mesh.geometry=mesh.geometry.clone();mesh.geometry.setAttribute("uv",new T.BufferAttribute(uv,2))}
+
+/* per-phone finishing touches on top of the authored materials */
+function heroTune(T,key,m){
+  if(key=="pm18"&&m.name=="COLOUR_Cherry_Backpanel"){m.transparent=false;m.opacity=1;m.depthWrite=true;m.roughness=1;m.clearcoat=.7;m.clearcoatRoughness=.06;m.envMapIntensity=1.15;const d=heroFrost(T);m.roughnessMap=d.rough;m.normalMap=d.normal;m.normalScale=new T.Vector2(.12,.12)}   // glass back: same colour, glossy so it catches the softboxes, with textured-glass micro detail
+  if(key=="pm17"&&!m.userData.tuned&&m.color){m.userData.tuned=1;const h={};m.color.getHSL(h);   // deepen the anodised orange toward Apple's own Cosmic Orange
+    if(h.s>.4&&h.h<.1){m.color.setHSL(h.h,Math.min(1,h.s*1.12),h.l*.82)}
+    if(m.name=="SMUhrjUPCjJkPUK")m.color.setRGB(1,.74,.62)}   // the glass panel's texture is pale: tint it toward the same orange
+  if(key=="pm16"&&m.name=="basecolor.001"&&!m.userData.tuned){m.userData.tuned=1;m.roughness=1;const d=heroFrost(T);m.roughnessMap=d.rough;m.normalMap=d.normal;m.normalScale=new T.Vector2(.1,.1);m.clearcoat=.45;m.clearcoatRoughness=.08;m.envMapIntensity=1.1}   // titanium-era back is textured matte glass
+}
+
+/* load a device on the modern engine; the model's own materials are kept as authored, plus the Connectify lock screen */
+const HERO_MODELS={};
+function heroB64For(key){const B=window.HERO_B64||{};return B[key]||(key=="pm18"?window.HERO_GLB_B64:null)}
+function heroBufFor(key){const s=heroB64For(key);if(!s)return null;const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a.buffer}
 function loadHeroModern(key){
+  if(HERO_MODELS[key])return HERO_MODELS[key];
   const dev=HERO_DEVICES[key],{THREE:T,GLTFLoader}=window.HERO3;
-  return new Promise((res,rej)=>{
+  return HERO_MODELS[key]=new Promise((res,rej)=>{
     const L=new GLTFLoader();
     const done=g=>{try{
-      const model={g:new T.Group(),startY:Math.PI+.5,real:true,modern:true,dev},inner=new T.Group();
-      inner.add(g.scene);inner.scale.setScalar(1000/35);inner.rotation.y=dev.rotY||0;model.g.add(inner);
+      const model={g:new T.Group(),startY:Math.PI+.5,real:true,modern:true,dev,key},inner=new T.Group();
+      g.scene.updateMatrixWorld(true);
       // the Connectify lock screen, drawn on a canvas and redrawn every minute with the site's clock
       const c=document.createElement("canvas");c.width=1000;c.height=2172;const g2=c.getContext("2d"),draw=heroLockDraw(dev);draw(g2,c.width,c.height);
       const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;tex.flipY=!!dev.flipY;tex.anisotropy=16;
       CLOCK_TEX.push({g:g2,w:c.width,h:c.height,draw,t:tex});
+      const hide=[];
       g.scene.traverse(o=>{if(!o.isMesh)return;o.frustumCulled=false;const m=o.material;if(!m)return;
-        if(m.name==dev.screen){o.material=new T.MeshPhysicalMaterial({color:0x000000,emissive:0xffffff,emissiveMap:tex,emissiveIntensity:1,roughness:.08,metalness:0,clearcoat:.35,clearcoatRoughness:.05,envMapIntensity:.12});return}
+        if((dev.hide||[]).includes(o.name)){hide.push(o);return}
+        if(m.name==dev.screen){if(dev.planarUV)heroPlanarUV(T,o,g.scene);
+          o.material=new T.MeshPhysicalMaterial({color:0x000000,emissive:0xffffff,emissiveMap:tex,emissiveIntensity:1,roughness:.08,metalness:0,clearcoat:.35,clearcoatRoughness:.05,envMapIntensity:.12,side:T.DoubleSide});return}
         ["map","normalMap","emissiveMap","roughnessMap","metalnessMap","aoMap"].forEach(k=>{if(m[k])m[k].anisotropy=8});
-        if(m.envMapIntensity!=null)m.envMapIntensity*=1.6;                       // stronger studio reflections, same as a lit product shot
-        if(m.name=="COLOUR_Cherry_Backpanel"){m.transparent=false;m.opacity=1;m.depthWrite=true;m.roughness=1;m.clearcoat=.7;m.clearcoatRoughness=.06;m.envMapIntensity=1.15;const d=heroFrost(T);m.roughnessMap=d.rough;m.normalMap=d.normal;m.normalScale=new T.Vector2(.12,.12)}   /* + textured-glass micro detail */   // glass back: same colour, glossy so it catches the softboxes
-        m.needsUpdate=true});
+        if(m.envMapIntensity!=null&&!m.userData.env){m.userData.env=1;m.envMapIntensity*=dev.envMul||1.6}   // stronger studio reflections, same as a lit product shot
+        heroTune(T,key,m);m.needsUpdate=true});
+      hide.forEach(o=>o.visible=false);
+      inner.add(g.scene);inner.scale.setScalar(dev.scale||1000/35);inner.rotation.y=dev.rotY||0;model.g.add(inner);
       res(model)}catch(e){rej(e)}};
-    if(window.HERO_GLB_B64){const cib=window.createImageBitmap;try{window.createImageBitmap=undefined}catch(e){}   // textures load as plain images in locked-down viewers
-      try{L.parse(heroB64(),"",done,rej)}finally{try{window.createImageBitmap=cib}catch(e){}}return}
-    fetch(window.HERO_GLB||dev.file).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.arrayBuffer()}).then(buf=>L.parse(buf,"",done,rej)).catch(rej);
-  })}
+    const buf=heroBufFor(key);
+    if(buf){const cib=window.createImageBitmap;try{window.createImageBitmap=undefined}catch(e){}   // textures load as plain images in locked-down viewers
+      try{L.parse(buf,"",done,rej)}finally{try{window.createImageBitmap=cib}catch(e){}}return}
+    fetch(key=="pm18"&&window.HERO_GLB||dev.file).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.arrayBuffer()}).then(b=>L.parse(b,"",done,rej)).catch(rej);
+  }).catch(e=>{delete HERO_MODELS[key];throw e})}
 
 /* high-resolution frosted-glass detail, generated once: a fine grain (normal map) and gentle gloss variation (roughness map) */
 let _frost=null;
@@ -10933,12 +11089,38 @@ function heroFrost(T){
       dt.hidden=false;upd();dt.onclick=()=>{V.setLock(!V.locked);upd()}}
     addEventListener("pointermove",e=>{if(e.pointerType!="mouse"||!V)return;V.mouseX=e.clientX/innerWidth-.5;V.mouseY=e.clientY/innerHeight-.5});
     const rs=$("heroReset");if(rs){rs.hidden=false;rs.onclick=()=>{V.vel=0;V.targetX=0;const turns=Math.round((V.targetY-Math.PI)/(Math.PI*2));V.targetY=Math.PI+(turns)*Math.PI*2}}
-    document.querySelectorAll(".sw").forEach(b=>b.addEventListener("click",()=>{
-      document.querySelectorAll(".sw").forEach(x=>x.setAttribute("aria-pressed",x===b));
-      V.setColor(b.dataset.c);$("finishName").textContent=b.dataset.n;$("glow").style.background=b.dataset.c;
-      const turns=Math.round((V.targetY-Math.PI)/(Math.PI*2));V.targetY=Math.PI+.5+(turns+1)*Math.PI*2}));
+    document.querySelectorAll(".finish .sw").forEach(b=>b.addEventListener("click",()=>heroPick(b.dataset.dev)));
     new IntersectionObserver(e=>{if(V)V.active=e[0].isIntersecting}).observe(canvas.parentElement);
   }
+  /* ---- the three-phone scene: picking a phone throws the current one out, flies the next one in, and repaints the whole hero to its finish ---- */
+  let cur="pm18",busy=false,want=null;
+  const order=typeof HERO_ORDER!="undefined"?HERO_ORDER:["pm18"];
+  // demo page: each extra model ships as its own file beside the page, fetched only when needed
+  const sideOne=f=>new Promise((res,rej)=>{const sc=document.createElement("script");sc.src=f;sc.onload=()=>res();sc.onerror=()=>rej(new Error("side file "+f));document.head.appendChild(sc)});
+  const sideP={},side=key=>{const fs=[].concat((window.HERO_SIDE||{})[key]||[]);if(!fs.length||(window.HERO_B64||{})[key])return Promise.resolve();
+    return sideP[key]||(sideP[key]=fs.reduce((p,f)=>p.then(()=>sideOne(f)),Promise.resolve()).catch(e=>{delete sideP[key];throw e}))};
+  const getModel=key=>side(key).then(()=>loadHeroModern(key)).then(m=>V&&V.warm?V.warm(m).then(()=>m):m);
+  function heroUI(key,dir){const d=HERO_DEVICES[key],h=d.hero,hero=document.querySelector(".hero");hero.classList.toggle("back",dir<0);
+    hero.dataset.dev=key;hero.style.setProperty("--hc1",h.c1);hero.style.setProperty("--hc2",h.c2);hero.style.setProperty("--hc3",h.c3);hero.style.setProperty("--hsw",h.sw);
+    document.querySelectorAll(".finish .sw").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.dev==key)));
+    if($("finishModel"))$("finishModel").textContent=d.name;if($("finishName"))$("finishName").textContent=h.finish;$("glow").style.background=h.sw;
+    canvas.setAttribute("aria-label",`3D ${d.name} in ${h.finish} you can rotate by dragging`);
+    if(window.setLiquidTint)setLiquidTint(h.sw);
+    // the giant number behind the phone slides out the same way the phone leaves
+    const box=$("heroNum");if(box){const old=box.querySelector("span:not(.out)"),n=document.createElement("span");n.textContent=h.num;n.className="in";box.appendChild(n);
+      if(old){old.classList.add("out");setTimeout(()=>old.remove(),900)}requestAnimationFrame(()=>requestAnimationFrame(()=>n.classList.remove("in")))}}
+  window.heroPick=function(key){
+    if(!V||!V.modern||!HERO_DEVICES[key])return;
+    if(key==cur&&!busy)return;
+    if(busy){want=key;return}
+    const btn=document.querySelector(`.finish .sw[data-dev="${key}"]`),dir=order.indexOf(key)>order.indexOf(cur)?1:-1;
+    busy=true;if(btn)btn.classList.add("loading");
+    getModel(key).then(m=>{if(btn)btn.classList.remove("loading");cur=key;heroUI(key,dir);return V.swap(m,dir)})
+      .catch(e=>{console.warn("hero swap:",e);if(btn){btn.classList.remove("loading");btn.classList.add("failed")}})
+      .finally(()=>{busy=false;if(want&&want!=cur){const w=want;want=null;heroPick(w)}else want=null})};
+  // once the first phone is on screen, quietly get the other two ready so switching is instant
+  function preload(){const go=()=>order.filter(k=>k!=cur).reduce((p,k)=>p.then(()=>getModel(k)).catch(()=>{}),Promise.resolve());
+    (window.requestIdleCallback||(f=>setTimeout(f,1200)))(()=>setTimeout(go,600))}
   function prep(v){V=v;window.__hero=V;V.mouseX=V.mouseY=0;
     V.renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia("(pointer:coarse)").matches?1.75:2));V.size();
     if(!matchMedia("(prefers-reduced-motion: reduce)").matches){V.curY=Math.PI*3.4;V.pivot.position.y=-4}
@@ -10958,7 +11140,7 @@ function heroFrost(T){
   if(window.HERO3&&typeof ModernViewer=="function"){
     let ok=false;try{prep(ModernViewer(canvas,OPTS));ok=true}catch(e){console.warn("modern hero:",e)}
     if(ok){const ft=setTimeout(()=>{if(!V.model){console.warn("modern hero: timeout");classic(false)}},15000);
-      loadHeroModern("pm18").then(m=>{clearTimeout(ft);if(!V.modern||V.model)return;V.set(m);canvas.classList.add("ready")})
+      loadHeroModern("pm18").then(m=>{clearTimeout(ft);if(!V.modern||V.model)return;V.set(m);canvas.classList.add("ready");document.querySelector(".hero").classList.add("multi");preload()})
         .catch(e=>{console.warn("modern hero:",e);clearTimeout(ft);if(V.modern)classic(true)});
       return}
   }
