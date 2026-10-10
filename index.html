@@ -559,7 +559,7 @@ footer{border-top:1px solid var(--line);padding:64px 0 40px;background:var(--dee
 .glow{display:none}
 @keyframes glowbreathe{50%{transform:scale(1.25) translate(-30px,20px);opacity:.32}}
 .orbits{position:absolute;z-index:-1;right:-14%;top:50%;width:1100px;height:1100px;transform:translateY(-50%);pointer-events:none}
-.orbits g{transform-origin:550px 550px;transform-box:view-box;will-change:transform}
+.orbits svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;will-change:transform;backface-visibility:hidden}   /* each ring is its own layer, turned by the graphics chip without repainting */
 .orbits .o1{animation:spin 38s linear infinite}
 .orbits .o2{animation:spin 26s linear infinite reverse}
 .orbits .o3{animation:spin 54s linear infinite}
@@ -662,7 +662,7 @@ footer{border-top:1px solid var(--line);padding:64px 0 40px;background:var(--dee
   .track button{font-size:15px}
 }
 @media (prefers-reduced-motion:reduce){
-  .orbits g,.track,.blob,.glow,.promise svg,.hint,.fbox::before,.card::before,.model::before,.spill.ok::after,.pvstage,.stage::before{animation:none!important}
+  .orbits g,.orbits svg,.track,.blob,.glow,.promise svg,.hint,.fbox::before,.card::before,.model::before,.spill.ok::after,.pvstage,.stage::before{animation:none!important}
   .head h2 .ln i,.head p{transform:none;opacity:1;transition:none}
   .card,.model{rotate:none}
 }
@@ -1578,13 +1578,12 @@ select option:disabled{color:#6A6A6A}
 .pvstage.aplbg .pvnote{background:rgba(0,0,0,.06)!important;color:#1d1d1f!important}
 
 /* ================= hero: three phones, Nike-style — the whole hero repaints to the finish of the phone on show ================= */
-@property --hc1{syntax:"<color>";inherits:true;initial-value:#8f2a40}
-@property --hc2{syntax:"<color>";inherits:true;initial-value:#3a0b17}
-@property --hc3{syntax:"<color>";inherits:true;initial-value:#0e0305}
-.hero{--hc1:#8f2a40;--hc2:#3a0b17;--hc3:#0e0305;--hsw:#6B1E2E;transition:--hc1 1.1s cubic-bezier(.4,0,.2,1),--hc2 1.1s cubic-bezier(.4,0,.2,1),--hc3 1.1s cubic-bezier(.4,0,.2,1)}
-.hfield{position:absolute;inset:0;z-index:-2;pointer-events:none;
+.hero{--hc1:#8f2a40;--hc2:#3a0b17;--hc3:#0e0305;--hsw:#6B1E2E}
+/* two pre-painted colour layers that cross-fade (opacity only, so the change costs almost nothing to animate) */
+.hfield{position:absolute;inset:0;z-index:-2;pointer-events:none;opacity:0;transition:opacity 1.1s cubic-bezier(.4,0,.2,1);will-change:opacity;
   background:radial-gradient(58% 72% at 73% 52%,var(--hc1) 0%,var(--hc2) 50%,var(--hc3) 100%);
   -webkit-mask-image:linear-gradient(#000 80%,transparent);mask-image:linear-gradient(#000 80%,transparent)}
+.hfield.on{opacity:1}
 .hfield::after{content:"";position:absolute;inset:0;background:radial-gradient(26% 36% at 73% 44%,rgba(255,255,255,.12),transparent 70%)}
 .hero .orbits{opacity:.45}
 /* the giant model number behind the phone */
@@ -1630,9 +1629,11 @@ select option:disabled{color:#6A6A6A}
   .hnum span{font-size:min(19rem,72vw)}
   .finish div{min-width:0}
 }
-@media (prefers-reduced-motion:reduce){.hnum span,.hnum span.out{transition:opacity .3s!important;transform:none!important}.hero{transition:none}}
+@media (prefers-reduced-motion:reduce){.hnum span,.hnum span.out{transition:opacity .3s!important;transform:none!important}.hfield{transition:none}}
 
 </style>
+<link rel="preconnect" href="https://store.storeimages.cdn-apple.com">
+<link rel="preload" href="models/iphone18pm.glb?v=c098ca8e63" as="fetch" crossorigin fetchpriority="high">
 </head>
 <body>
 <style>
@@ -1725,19 +1726,18 @@ select option:disabled{color:#6A6A6A}
 
 <canvas id="liquid" aria-hidden="true"></canvas><div id="liquidDim" aria-hidden="true"></div>
 <header class="hero" id="top" data-dev="pm18">
-  <div class="hfield" aria-hidden="true"></div>
+  <div class="hfield on" aria-hidden="true"></div><div class="hfield" aria-hidden="true"></div>
   <div class="glow" id="glow" aria-hidden="true" style="background:#6B1E2E"></div>
-  <svg class="orbits" viewBox="0 0 1100 1100" aria-hidden="true">
-    <defs>
+  <div class="orbits" aria-hidden="true">
+    <svg class="o1" viewBox="0 0 1100 1100"><defs>
       <linearGradient id="og1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E8E8EC" stop-opacity="0"/><stop offset=".5" stop-color="#E8E8EC" stop-opacity=".75"/><stop offset="1" stop-color="#696969" stop-opacity="0"/></linearGradient>
       <linearGradient id="og2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8E8EC" stop-opacity="0"/><stop offset=".55" stop-color="#E8E8EC" stop-opacity=".6"/><stop offset="1" stop-color="#E8E8EC" stop-opacity="0"/></linearGradient>
       <radialGradient id="sg"><stop offset="0" stop-color="#E8E8EC" stop-opacity=".9"/><stop offset="1" stop-color="#E8E8EC" stop-opacity="0"/></radialGradient>
       <radialGradient id="sg2"><stop offset="0" stop-color="#E8E8EC" stop-opacity=".9"/><stop offset="1" stop-color="#696969" stop-opacity="0"/></radialGradient>
-    </defs>
-    <g class="o1"><circle cx="550" cy="550" r="470" fill="none" stroke="url(#og1)" stroke-width="2"/><circle cx="550" cy="80" r="16" fill="url(#sg)"/><circle cx="550" cy="80" r="4" fill="#FAFAFA"/></g>
-    <g class="o2"><circle cx="550" cy="550" r="380" fill="none" stroke="url(#og2)" stroke-width="1.5" stroke-dasharray="2 10"/><circle cx="930" cy="550" r="13" fill="url(#sg2)"/><circle cx="930" cy="550" r="3" fill="#F3F3F3"/></g>
-    <g class="o3"><circle cx="550" cy="550" r="535" fill="none" stroke="url(#og2)" stroke-width="1" opacity=".55"/><circle cx="85" cy="550" r="11" fill="url(#sg)"/><circle cx="85" cy="550" r="2.5" fill="#FAFAFA"/><circle cx="1015" cy="550" r="10" fill="url(#sg2)"/><circle cx="1015" cy="550" r="2.2" fill="#F3F3F3"/></g>
-  </svg>
+    </defs><circle cx="550" cy="550" r="470" fill="none" stroke="url(#og1)" stroke-width="2"/><circle cx="550" cy="80" r="16" fill="url(#sg)"/><circle cx="550" cy="80" r="4" fill="#FAFAFA"/></svg>
+    <svg class="o2" viewBox="0 0 1100 1100"><circle cx="550" cy="550" r="380" fill="none" stroke="url(#og2)" stroke-width="1.5" stroke-dasharray="2 10"/><circle cx="930" cy="550" r="13" fill="url(#sg2)"/><circle cx="930" cy="550" r="3" fill="#F3F3F3"/></svg>
+    <svg class="o3" viewBox="0 0 1100 1100"><circle cx="550" cy="550" r="535" fill="none" stroke="url(#og2)" stroke-width="1" opacity=".55"/><circle cx="85" cy="550" r="11" fill="url(#sg)"/><circle cx="85" cy="550" r="2.5" fill="#FAFAFA"/><circle cx="1015" cy="550" r="10" fill="url(#sg2)"/><circle cx="1015" cy="550" r="2.2" fill="#F3F3F3"/></svg>
+  </div>
   <div class="hero-fade" aria-hidden="true"></div>
   <div class="wrap">
     <div>
@@ -2274,7 +2274,6 @@ select option:disabled{color:#6A6A6A}
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 function shade(hex,amt){let n=parseInt(hex.replace("#",""),16);let r=n>>16,g=n>>8&255,b=n&255;
@@ -2582,7 +2581,7 @@ window.CX_UNITS=[{"m":"14pro","c":"Space Black","st":256,"cond":"used","sim":"du
 window.MPICS={"11":"img/phones/11.webp","11pro":"img/phones/11pro.webp","11promax":"img/phones/11promax.webp","12":"img/phones/12.webp","12mini":"img/phones/12mini.webp","12pro":"img/phones/12pro.webp","12promax":"img/phones/12promax.webp","13":"img/phones/13.webp","13mini":"img/phones/13mini.webp","13pro":"img/phones/13pro.webp","13promax":"img/phones/13promax.webp","14":"img/phones/14.webp","14plus":"img/phones/14plus.webp","14pro":"img/phones/14pro.webp","14promax":"img/phones/14promax.webp","15":"img/phones/15.webp","15plus":"img/phones/15plus.webp","15pro":"img/phones/15pro.webp","15promax":"img/phones/15promax.webp","16":"img/phones/16.webp","16e":"img/phones/16e.webp","16plus":"img/phones/16plus.webp","16pro":"img/phones/16pro.webp","16promax":"img/phones/16promax.webp","17":"img/phones/17.webp","17e":"img/phones/17e.webp","17pro":"img/phones/17pro.webp","17promax":"img/phones/17promax.webp","18pro":"img/phones/18pro.webp","18promax":"img/phones/18promax.webp","a36":"img/phones/a36.webp","a37":"img/phones/a37.webp","a56":"img/phones/a56.webp","a57":"img/phones/a57.webp","air":"img/phones/air.webp","duo":"img/phones/duo.webp","flip7":"img/phones/flip7.webp","flip8":"img/phones/flip8.webp","fold7":"img/phones/fold7.webp","fold8":"img/phones/fold8.webp","fold8ultra":"img/phones/fold8ultra.webp","s25":"img/phones/s25.webp","s25fe":"img/phones/s25fe.webp","s25ultra":"img/phones/s25ultra.webp","s26":"img/phones/s26.webp","s26plus":"img/phones/s26plus.webp","s26ultra":"img/phones/s26ultra.webp","se2":"img/phones/se2.webp","se3":"img/phones/se3.webp"};
 
 /* ---------- 3D engine: viewer + model builders ---------- */
-const HAS3D=!!window.THREE;
+let HAS3D=!!window.THREE;   // the older engine now loads only if the modern hero can't run (see loadClassic3D)
 const lin=h=>new THREE.Color(h).convertSRGBToLinear();
 function rr(w,h,r,cx=0,cy=0){const s=new THREE.Shape(),x=cx-w/2,y=cy-h/2;
   s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
@@ -2603,7 +2602,7 @@ function canvasTex(w,h,draw){const c=document.createElement("canvas");c.width=w;
 function planeUV(geo,w,h){const uv=geo.attributes.uv,pos=geo.attributes.position;for(let i=0;i<uv.count;i++)uv.setXY(i,pos.getX(i)/w+.5,pos.getY(i)/h+.5);return geo}
 
 /* shared materials */
-const MAT=HAS3D?{
+function makeMAT(){return {
   black:new THREE.MeshPhysicalMaterial({color:0x050608,metalness:.3,roughness:.08,clearcoat:1,clearcoatRoughness:.02}),
   sapphire:new THREE.MeshPhysicalMaterial({color:0x05060a,metalness:.5,roughness:.04,clearcoat:1,envMapIntensity:.55}),
   lens:new THREE.MeshPhysicalMaterial({color:0x04050a,metalness:.7,roughness:.06,clearcoat:1,clearcoatRoughness:.02}),
@@ -2618,7 +2617,8 @@ const MAT=HAS3D?{
   steel:new THREE.MeshStandardMaterial({color:0xc9ccd2,metalness:1,roughness:.25}),
   white:new THREE.MeshPhysicalMaterial({color:lin("#F4F5F7"),roughness:.32,clearcoat:.6,clearcoatRoughness:.2}),
   flash:new THREE.MeshStandardMaterial({color:0xfaf3dc,emissive:0x3a3420,roughness:.4})
-}:{};
+}}
+let MAT=HAS3D?makeMAT():{};
 /* a tintable material family; returns [material,k] pairs registered on the model */
 function tintable(model,color,opts,k=1){const m=new THREE.MeshPhysicalMaterial(Object.assign({color:lin(color).multiplyScalar(k)},opts));model.tint.push([m,k]);return m}
 
@@ -3117,6 +3117,12 @@ function Viewer(canvas,opts={}){
   return V;
 }
 
+/* the older three.js engine is only needed when the modern hero can't run (very old phones), so it is fetched on demand
+   instead of making every visitor wait for it before the page starts */
+function loadClassic3D(){
+  if(window.THREE)return Promise.resolve();
+  return new Promise((res,rej)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+    sc.onload=()=>{try{HAS3D=!!window.THREE;if(HAS3D){MAT=makeMAT();if(window.__classicGLTF)__classicGLTF()}res()}catch(e){rej(e)}};sc.onerror=rej;document.head.appendChild(sc)})}
 /* ================= hero phone: a hand-detailed iPhone 18 Pro (one model, built for close-ups) =================
    Everything a camera would catch: anodized unibody with a bead-blasted finish, the full-width camera plateau,
    layered sapphire lenses with coating reflections, flash diffuser, LiDAR, mics, the glass back window,
@@ -3346,7 +3352,7 @@ function buildHero14Pro(color){
   return model;
 }
 
-if(window.THREE){
+window.__classicGLTF=function(){if(!window.THREE||THREE.GLTFLoader)return;
 ( function () {
 
 	class GLTFLoader extends THREE.Loader {
@@ -6977,7 +6983,7 @@ if(window.THREE){
 
 } )();
 
-}
+};__classicGLTF();
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
 // Copyright (C) 2016-2020, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 var MeshoptDecoder = (function() {
@@ -7108,7 +7114,7 @@ else
 const HERO_DEVICES={
   pm18:{
     name:"iPhone 18 Pro Max",
-    file:"models/iphone18pm.glb",
+    file:"models/iphone18pm.glb?v=c098ca8e63",
     flipY:false,                                   // screen canvas orientation on this model's UVs (verified in renders)
     screen:"COLOUR_Cherry_Screen",
     scale:1000/35,
@@ -7121,7 +7127,7 @@ const HERO_DEVICES={
     rotY:0},
   pm17:{
     name:"iPhone 17 Pro Max",
-    file:"models/iphone17pm.glb",
+    file:"models/iphone17pm.glb?v=f5670952ff",
     flipY:false,
     screen:"BsXHDwLKqtDOfrW",                      // the display panel (UVs 0..1, top of the phone at v=0)
     scale:1000/35,                                 // file is in metres, 162.9 mm tall
@@ -7133,7 +7139,7 @@ const HERO_DEVICES={
     rotY:0},
   pm16:{
     name:"iPhone 16 Pro Max",
-    file:"models/iphone16pm.glb",
+    file:"models/iphone16pm.glb?v=acf80862da",
     flipY:false,
     screen:"screen.001",
     planarUV:true,                                 // its own screen UVs are for a different wallpaper, so the lock screen is mapped from the panel's shape
@@ -10970,7 +10976,9 @@ function ModernViewer(canvas,opts={}){
     const on=V.model&&V.model.wrap;if(on)on.visible=false;scene.add(holder);
     let p;try{p=renderer.compileAsync?renderer.compileAsync(scene,cam):Promise.resolve(renderer.compile(scene,cam))}catch(e){p=Promise.resolve()}
     finally{scene.remove(holder);holder.remove(w);if(on)on.visible=true}
-    return model.warmed=p.catch(()=>{}).then(()=>{texs.forEach(t=>{try{renderer.initTexture(t)}catch(e){}})})};
+    // textures go to the graphics chip one per frame, so no single frame gets a big upload
+    return model.warmed=p.catch(()=>{}).then(()=>new Promise(done=>{const list=[...texs];
+      const step=()=>{const t=list.shift();if(!t)return done();try{renderer.initTexture(t)}catch(e){}requestAnimationFrame(step)};requestAnimationFrame(step)}))};
   V.setColor=()=>{};   // each GLB keeps its own authored finish
   canvas.addEventListener("pointerdown",e=>{if(V.locked)return;V.drag=true;V.lastX=e.clientX;V.lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
   canvas.addEventListener("pointermove",e=>{if(!V.drag)return;const dx=e.clientX-V.lastX,dy=e.clientY-V.lastY;V.lastX=e.clientX;V.lastY=e.clientY;
@@ -10982,7 +10990,11 @@ function ModernViewer(canvas,opts={}){
   canvas.addEventListener("touchmove",ev=>{if(!V.locked&&ev.touches.length==1)ev.preventDefault()},{passive:false});
   canvas.addEventListener("pointerup",()=>V.drag=false);canvas.addEventListener("pointercancel",()=>V.drag=false);
   const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches,clock=new T.Clock();let t=0;
-  (function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05);if(!V.active||!V.model||document.hidden||(opts.pauseWhenCovered&&document.querySelector(".modal.on,.admin.on")))return;t+=dt;
+  // a steady 60 frames a second: on 120 Hz screens drawing every refresh doubles the work (and the glass over the phone re-blurs each time) for no visible gain
+  let lastDraw=0;
+  (function loop(now){requestAnimationFrame(loop);if(!V.active||!V.model||document.hidden||(opts.pauseWhenCovered&&document.querySelector(".modal.on,.admin.on"))){clock.getDelta();return}
+    if(now-lastDraw<15.5)return;lastDraw=now;
+    const dt=Math.min(clock.getDelta(),.05);t+=dt;
     if(!V.drag&&!reduce){V.targetY+=V.vel;V.vel*=.92;V.targetY+=dt*V.spin}
     V.curY+=(V.targetY-V.curY)*(reduce?1:1-Math.pow(V.swapping?.93:.945,dt*60));
     if(!V.drag&&V.targetX&&performance.now()-(V.hold||0)>4000)V.targetX*=Math.pow(.97,dt*60);
@@ -10992,7 +11004,7 @@ function ModernViewer(canvas,opts={}){
     pivot.rotation.y=V.curY;if(!opts.onFrame)pivot.rotation.x=V.curX;
     if(opts.onFrame)opts.onFrame(V,t,dt,reduce);
     if(V.anims.length){const now=performance.now();V.anims=V.anims.filter(f=>!f(now))}
-    renderer.render(scene,cam)})();
+    renderer.render(scene,cam)})(0);
   addEventListener("resize",V.size);V.size();
   return V}
 
@@ -11044,17 +11056,22 @@ function loadHeroModern(key){
       hide.forEach(o=>o.visible=false);
       inner.add(g.scene);inner.scale.setScalar(dev.scale||1000/35);inner.rotation.y=dev.rotY||0;model.g.add(inner);
       res(model)}catch(e){rej(e)}};
-    const buf=heroBufFor(key);
+    const go=()=>{const buf=heroBufFor(key);
     if(buf){const cib=window.createImageBitmap;try{window.createImageBitmap=undefined}catch(e){}   // textures load as plain images in locked-down viewers
       try{L.parse(buf,"",done,rej)}finally{try{window.createImageBitmap=cib}catch(e){}}return}
-    fetch(key=="pm18"&&window.HERO_GLB||dev.file).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.arrayBuffer()}).then(b=>L.parse(b,"",done,rej)).catch(rej);
+    // the first phone downloads at top priority; the others politely, so they never hold up the page
+    if(key=="pm18")window.__heroBusy=performance.now();   // tells the page the first phone is still on its way
+    const dl=fetch(key=="pm18"&&window.HERO_GLB||dev.file,{priority:key=="pm18"?"high":"low"}).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.arrayBuffer()});
+    Promise.all([dl,needsFrost?heroFrostStart():null]).then(([b])=>L.parse(b,"",done,rej)).catch(rej)};
+    const needsFrost=key=="pm18"||key=="pm16";
+    if(heroBufFor(key)){(needsFrost?heroFrostStart():Promise.resolve()).then(go)}else go();
   }).catch(e=>{delete HERO_MODELS[key];throw e})}
 
-/* high-resolution frosted-glass detail, generated once: a fine grain (normal map) and gentle gloss variation (roughness map) */
-let _frost=null;
-function heroFrost(T){
-  if(_frost)return _frost;
-  const N=1024,rep=5;
+/* high-resolution frosted-glass detail, generated once: a fine grain (normal map) and gentle gloss variation (roughness map).
+   The pixels are computed on a background thread (same numbers, same seed, so the result is identical) so the page never freezes for it;
+   if a background thread isn't allowed, it falls back to computing here. */
+function heroFrostPixels(){
+  const N=1024;
   let s=1337;const r=()=>(s=(s*16807)%2147483647)/2147483647;
   // smooth value noise at two scales plus per-pixel grain, tiled so it never shows a seam
   const grid=g=>{const a=new Float32Array(g*g);for(let i=0;i<a.length;i++)a[i]=r();
@@ -11063,15 +11080,31 @@ function heroFrost(T){
   const g1=grid(64),g2=grid(256),h=new Float32Array(N*N);
   for(let y=0;y<N;y++)for(let x=0;x<N;x++)h[y*N+x]=.5*g1(x,y)+.3*g2(x,y)+.2*r();
   const H=(x,y)=>h[((y+N)%N)*N+((x+N)%N)];
-  const rc=document.createElement("canvas");rc.width=rc.height=N;const rg=rc.getContext("2d"),ri=rg.createImageData(N,N);
-  const nc=document.createElement("canvas");nc.width=nc.height=N;const ng=nc.getContext("2d"),ni=ng.createImageData(N,N);
+  const rd=new Uint8ClampedArray(N*N*4),nd=new Uint8ClampedArray(N*N*4);
   for(let y=0;y<N;y++)for(let x=0;x<N;x++){const i=(y*N+x)*4,v=H(x,y);
-    const rv=Math.round(255*(.24+.12*v));ri.data[i]=ri.data[i+1]=ri.data[i+2]=rv;ri.data[i+3]=255;      // roughness .24 to .36
+    const rv=Math.round(255*(.24+.12*v));rd[i]=rd[i+1]=rd[i+2]=rv;rd[i+3]=255;      // roughness .24 to .36
     const dx=(H(x+1,y)-H(x-1,y))*2.2,dy=(H(x,y+1)-H(x,y-1))*2.2,l=Math.hypot(dx,dy,1);
-    ni.data[i]=Math.round(127.5*(-dx/l+1));ni.data[i+1]=Math.round(127.5*(-dy/l+1));ni.data[i+2]=Math.round(127.5*(1/l+1));ni.data[i+3]=255}
-  rg.putImageData(ri,0,0);ng.putImageData(ni,0,0);
-  const mk=c=>{const t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(rep,rep*2);t.anisotropy=8;t.colorSpace=T.NoColorSpace;return t};
-  _frost={rough:mk(rc),normal:mk(nc)};return _frost}
+    nd[i]=Math.round(127.5*(-dx/l+1));nd[i+1]=Math.round(127.5*(-dy/l+1));nd[i+2]=Math.round(127.5*(1/l+1));nd[i+3]=255}
+  return {N,rd,nd}}
+let _frost=null,_frostPx=null,_frostP=null;
+function heroFrostStart(){
+  if(_frostP)return _frostP;
+  return _frostP=new Promise(res=>{
+    let w=null;try{
+      const src="const heroFrostPixels="+heroFrostPixels.toString()+";onmessage=()=>{const p=heroFrostPixels();postMessage(p,[p.rd.buffer,p.nd.buffer])}";
+      const url=URL.createObjectURL(new Blob([src],{type:"text/javascript"}));w=new Worker(url);
+      const t=setTimeout(()=>{try{w.terminate()}catch(e){}res(null)},8000);
+      w.onmessage=e=>{clearTimeout(t);_frostPx=e.data;w.terminate();URL.revokeObjectURL(url);res(_frostPx)};
+      w.onerror=()=>{clearTimeout(t);res(null)};w.postMessage(0)}catch(e){res(null)}});
+}
+function heroFrost(T){
+  if(_frost)return _frost;
+  const p=_frostPx||heroFrostPixels(),N=p.N;   // already computed in the background, or computed now
+  const mkc=d=>{const c=document.createElement("canvas");c.width=c.height=N;const g=c.getContext("2d"),im=g.createImageData(N,N);im.data.set(d);g.putImageData(im,0,0);return c};
+  const mk=c=>{const t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(5,10);t.anisotropy=8;t.colorSpace=T.NoColorSpace;return t};
+  _frost={rough:mk(mkc(p.rd)),normal:mk(mkc(p.nd))};_frostPx=null;return _frost}
+// start right away, so it is ready by the time the first phone has downloaded
+if(window.HERO3)heroFrostStart();
 
 /* ---- hero ---- */
 (function(){
@@ -11101,7 +11134,11 @@ function heroFrost(T){
     return sideP[key]||(sideP[key]=fs.reduce((p,f)=>p.then(()=>sideOne(f)),Promise.resolve()).catch(e=>{delete sideP[key];throw e}))};
   const getModel=key=>side(key).then(()=>loadHeroModern(key)).then(m=>V&&V.warm?V.warm(m).then(()=>m):m);
   function heroUI(key,dir){const d=HERO_DEVICES[key],h=d.hero,hero=document.querySelector(".hero");hero.classList.toggle("back",dir<0);
+    // the hidden colour layer takes the new finish, then the two cross-fade (the visible one is pinned to the old colours first)
+    const fl=[...hero.querySelectorAll(".hfield")],on=fl.find(x=>x.classList.contains("on"))||fl[0],nx=fl.find(x=>x!==on);
+    if(on&&nx){const cs=getComputedStyle(on);["--hc1","--hc2","--hc3"].forEach(v=>on.style.setProperty(v,cs.getPropertyValue(v).trim()))}
     hero.dataset.dev=key;hero.style.setProperty("--hc1",h.c1);hero.style.setProperty("--hc2",h.c2);hero.style.setProperty("--hc3",h.c3);hero.style.setProperty("--hsw",h.sw);
+    if(on&&nx){nx.style.setProperty("--hc1",h.c1);nx.style.setProperty("--hc2",h.c2);nx.style.setProperty("--hc3",h.c3);void nx.offsetWidth;nx.classList.add("on");on.classList.remove("on")}
     document.querySelectorAll(".finish .sw").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.dev==key)));
     if($("finishModel"))$("finishModel").textContent=d.name;if($("finishName"))$("finishName").textContent=h.finish;$("glow").style.background=h.sw;
     canvas.setAttribute("aria-label",`3D ${d.name} in ${h.finish} you can rotate by dragging`);
@@ -11119,14 +11156,20 @@ function heroFrost(T){
       .catch(e=>{console.warn("hero swap:",e);if(btn){btn.classList.remove("loading");btn.classList.add("failed")}})
       .finally(()=>{busy=false;if(want&&want!=cur){const w=want;want=null;heroPick(w)}else want=null})};
   // once the first phone is on screen, quietly get the other two ready so switching is instant
-  function preload(){const go=()=>order.filter(k=>k!=cur).reduce((p,k)=>p.then(()=>getModel(k)).catch(()=>{}),Promise.resolve());
-    (window.requestIdleCallback||(f=>setTimeout(f,1200)))(()=>setTimeout(go,600))}
+  // waits until the page has fully loaded and gone quiet, one phone at a time; on data-saver / very slow connections they load on tap instead
+  function preload(){const c=navigator.connection;if(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))return;
+    const idle=f=>(window.requestIdleCallback?requestIdleCallback(f,{timeout:4000}):setTimeout(f,300));
+    const next=k=>new Promise(r=>idle(()=>getModel(k).then(r,r)));
+    const go=()=>order.filter(k=>k!=cur).reduce((p,k)=>p.then(()=>next(k)),Promise.resolve());
+    const start=()=>setTimeout(go,1800);
+    if(document.readyState=="complete")start();else addEventListener("load",start,{once:true})}
   function prep(v){V=v;window.__hero=V;V.mouseX=V.mouseY=0;
     V.renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia("(pointer:coarse)").matches?1.75:2));V.size();
     if(!matchMedia("(prefers-reduced-motion: reduce)").matches){V.curY=Math.PI*3.4;V.pivot.position.y=-4}
     wire()}
   /* the hand-built 18 Pro on the site's own engine: used only if the real model can't be shown */
   function classic(withModel){
+    if(!HAS3D&&!classic.tried){classic.tried=1;const go=()=>{if(V&&V.modern&&V.model)return;classic(withModel)};loadClassic3D().then(go,go);return}   // never replace the real phone if it arrived meanwhile
     if(!HAS3D){window.__heroOff=1;$("nogl").style.display="grid";return}
     if(V&&V.modern){const c2=canvas.cloneNode(false);canvas.replaceWith(c2);canvas=c2}
     try{prep(Viewer(canvas,OPTS))}catch(e){window.__heroOff=1;$("nogl").style.display="grid";return}
@@ -11139,7 +11182,8 @@ function heroFrost(T){
   /* the real iPhone 18 Pro Max on modern three.js, so its authored materials render in full */
   if(window.HERO3&&typeof ModernViewer=="function"){
     let ok=false;try{prep(ModernViewer(canvas,OPTS));ok=true}catch(e){console.warn("modern hero:",e)}
-    if(ok){const ft=setTimeout(()=>{if(!V.model){console.warn("modern hero: timeout");classic(false)}},15000);
+    // give up on the real phone only if it has truly stalled: while it is still downloading on a slow connection, keep waiting for it
+    if(ok){let ft=setTimeout(function chk(){if(V.model)return;if(window.__heroBusy&&performance.now()-window.__heroBusy<60000){ft=setTimeout(chk,4000);return}console.warn("modern hero: timeout");classic(false)},15000);
       loadHeroModern("pm18").then(m=>{clearTimeout(ft);if(!V.modern||V.model)return;V.set(m);canvas.classList.add("ready");document.querySelector(".hero").classList.add("multi");preload()})
         .catch(e=>{console.warn("modern hero:",e);clearTimeout(ft);if(V.modern)classic(true)});
       return}
@@ -11442,8 +11486,31 @@ let MEDIA={photos:[],art:"",fold:false},MEDIA_WIDE=false;
 const APL_IMG="https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/";
 function colourPic(m,c){const n=(window.COLOR_PICS||{})[m.id]&&COLOR_PICS[m.id][c];if(!n)return null;
   return /finish-select/.test(n)?{u:APL_IMG+n+"?wid=2400&hei=1350&fmt=jpeg&qlt=90",wide:true}:{u:APL_IMG+n+"?wid=900&hei=1063&fmt=png-alpha",wide:false}}
+/* colour photos are fetched and decoded ahead of time and kept in memory, so tapping a colour swaps the photo instantly */
+const PIC_CACHE=new Map();   // address -> decoded image (kept referenced so the browser keeps it ready)
+function warmPic(u,hi){if(!u)return Promise.resolve(null);let p=PIC_CACHE.get(u);if(p)return p;
+  const im=new Image();im.decoding="async";try{im.fetchPriority=hi?"high":"low"}catch(e){}im.src=u;
+  p=(im.decode?im.decode():new Promise((r,j)=>{im.onload=r;im.onerror=j})).then(()=>{im._kept=1;PIC_READY.set(u,im);return im},()=>{PIC_CACHE.delete(u);return null});PIC_CACHE.set(u,p);return p}
+const PIC_READY=new Map();   // address -> image already downloaded and decoded
+/* put a photo on the product stage: if it is already in memory, that very image goes on screen (no second download, no wait) */
+function setStagePhoto(u){let cur=$("pvImg");const ready=u&&PIC_READY.get(u);
+  const swapIn=el=>{el.id="pvImg";el.className=cur.className;el.alt=cur.alt;cur.removeAttribute("id");cur.replaceWith(el);cur=el};
+  if(ready){if(ready!==cur)swapIn(ready);return}
+  if(cur._kept)swapIn(new Image());   // never overwrite a kept image: it stays ready for its own colour
+  if(!u){cur.removeAttribute("src");return}
+  if(cur.getAttribute("src")!==u)cur.src=u}
+function warmColours(m,first){const go=()=>(m.colors||[]).forEach(([c])=>{const cp=colourPic(m,c);if(cp)warmPic(cp.u)});
+  // the photo on screen goes first; the other colours follow right after it
+  if(first)warmPic(first).then(go);else go()}
+// a finger or cursor on a colour dot is a strong hint: fetch that one now
+document.addEventListener("pointerover",e=>{const b=e.target.closest&&e.target.closest(".sw2[data-k=color]");if(b&&pvs.m){const cp=colourPic(pvs.m,b.dataset.v);if(cp)warmPic(cp.u,true)}},{passive:true});
+document.addEventListener("touchstart",e=>{const b=e.target.closest&&e.target.closest(".sw2[data-k=color]");if(b&&pvs.m){const cp=colourPic(pvs.m,b.dataset.v);if(cp)warmPic(cp.u,true)}},{passive:true});
+// hovering a phone card starts its photo before the window even opens
+document.addEventListener("pointerover",e=>{const c=e.target.closest&&e.target.closest(".card[data-id],.model[data-id],#sres button[data-id]");if(!c||c._warm)return;c._warm=1;
+  const m=modelById(c.dataset.id);if(m){const cp=colourPic(m,showColor(m)[0]);if(cp)warmPic(cp.u,true)}},{passive:true});
 function renderMedia(){
   const m=pvs.m,u=bestUnit(m,pvs),cp=colourPic(m,pvs.color);
+  if(cp)warmColours(m,cp.u);
   const up=u?u.photos:[],mp=cp?cp.u:mPic(m);MEDIA_WIDE=!!(cp&&cp.wide);
   MEDIA={photos:up.concat(mp?[mp]:[]),unitN:up.length,art:mSVG0(m,hexOf(m,pvs.color)),fold:!!m.fold,noArt:true,label:`${m.name}, ${pvs.color}`};
   showMedia();
@@ -11457,18 +11524,20 @@ function showMedia(){
   st.classList.toggle("photo",v=="photo");
   const shownIdx=Math.min(pvs.photo,photos.length-1),isColourPic=v=="photo"&&MEDIA.unitN!=null&&shownIdx>=MEDIA.unitN&&MEDIA_WIDE!=null;
   st.classList.toggle("aplbg",isColourPic&&MEDIA_WIDE);$("pvImg").classList.toggle("aplwide",isColourPic&&MEDIA_WIDE);st.classList.toggle("artview",v=="art");st.classList.toggle("view3d",v=="3d");
-  $("pvImg").src=v=="photo"?photos[Math.min(pvs.photo,photos.length-1)]:"";
   $("pvImg").alt=v=="photo"?`Real photo of this ${label}`:"";
+  setStagePhoto(v=="photo"?photos[Math.min(pvs.photo,photos.length-1)]:"");
   $("pvArt").innerHTML=artHTML;$("pvArt").setAttribute("aria-label",`Product image of the ${label}`);
   const cut=v=="photo"&&MEDIA.unitN!=null&&Math.min(pvs.photo,photos.length-1)>=MEDIA.unitN;$("pvImg").classList.toggle("cut",cut);st.classList.toggle("cutbg",cut);
   const cxReal=v=="photo"&&MEDIA.cxN&&Math.min(pvs.photo,photos.length-1)<MEDIA.cxN;
   $("pvNote").textContent=v=="photo"?(cut?"Product photo":cxReal?"Real photo · Connectify":MEDIA.photoLabel||"Real photo of this unit"):v=="art"?"Product image":"3D preview";
   $("foldBtn").hidden=v!="3d"||!fold;
   $("pvThumbs").hidden=false;
-  $("pvThumbs").innerHTML=photos.map((p,i)=>`<button data-ph="${i}" aria-pressed="${v=="photo"&&pvs.photo==i}" aria-label="Real photo ${i+1}"><img src="${p}" alt="" ${MEDIA.unitN!=null&&i>=MEDIA.unitN?'class="cutthumb"':""}></button>`).join("")
+  const thumbCount=photos.length+(noArt?0:1)+(V?1:0);
+  if(thumbCount<2){$("pvThumbs").innerHTML="";$("pvThumbs").hidden=true}   // a single photo needs no thumbnail strip (and no second download for it)
+  else $("pvThumbs").innerHTML=photos.map((p,i)=>`<button data-ph="${i}" aria-pressed="${v=="photo"&&pvs.photo==i}" aria-label="Real photo ${i+1}"><img src="${p}" alt="" ${MEDIA.unitN!=null&&i>=MEDIA.unitN?'class="cutthumb"':""}></button>`).join("")
     +(noArt?"":`<button data-ph="art" class="tart" aria-pressed="${v=="art"}" aria-label="Product image">${artHTML}</button>`)
     +(V?`<button data-ph="3d" aria-pressed="${v=="3d"}" aria-label="3D view"><span>3D</span></button>`:"");
-  $("pvThumbs").hidden=$("pvThumbs").children.length<2;
+  if(thumbCount>=2)$("pvThumbs").hidden=$("pvThumbs").children.length<2;
   if(V){V.active=v=="3d";if(v=="3d")requestAnimationFrame(()=>V.size())}
 }
 $("pvThumbs").addEventListener("click",e=>{const b=e.target.closest("[data-ph]");if(!b)return;const p=b.dataset.ph;
@@ -11526,8 +11595,12 @@ $("pvBody").addEventListener("click",e=>{
   pvs[k]=v;pvs.photo=0;
   if(k=="color"){fitSelection();const hex=hexOf(pvs.m,v);if(PV&&PV.model)PV.setColor(hex);logView(pvs.m,v)}
   const u=bestUnit(pvs.m,pvs);if(pvs.view!="3d")pvs.view=u&&u.photos.length||mPic(pvs.m)?"photo":"3d";
+  // the photo and the chosen dot change on the very next frame; the rest of the panel (stock, price, specs) refreshes right after
+  if(k=="color"){renderMedia();b.parentElement.querySelectorAll("[data-k=color]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+    const tok=pvBodyTok=(pvBodyTok||0)+1;requestAnimationFrame(()=>setTimeout(()=>{if(tok!==pvBodyTok||!pvs.m)return;const y=$("pvBody").scrollTop;renderPV();$("pvBody").scrollTop=y},0));return}
   const y=$("pvBody").scrollTop;renderPV();$("pvBody").scrollTop=y;
 });
+let pvBodyTok=0;
 function openAcc(id){PV_KIND="acc";
   const a=accById(id),ok=accOK(a),V=pv3();
   $("pvSize").style.display="none";
@@ -12871,26 +12944,37 @@ window.setLiquidTint=hex=>{const n=parseInt(hex.slice(1),16);tintTarget[0]=(n>>1
   window.__liqMouse=(x,y)=>{mt[0]=x;mt[1]=y}; // phones steer the glow with the motion sensor (see tilt.js)
   addEventListener("pointermove",e=>{if(e.pointerType!="mouse")return;mt[0]=e.clientX/innerWidth;mt[1]=1-e.clientY/innerHeight},{passive:true});
   // dim the liquid a little once you're past the hero
-  const dim=()=>document.documentElement.style.setProperty("--dim",Math.min(1,Math.max(0,(scrollY-innerHeight*.35)/(innerHeight*.6))).toFixed(3));
-  addEventListener("scroll",dim,{passive:true});dim();
+  // (set on the dim layer itself, once per frame: a value on the page root made every element restyle on every scroll tick)
+  const dimEl=$("liquidDim");let dimQ=false;
+  const dim=()=>{dimQ=false;if(dimEl)dimEl.style.opacity=Math.min(1,Math.max(0,(scrollY-innerHeight*.35)/(innerHeight*.6))).toFixed(3)};
+  addEventListener("scroll",()=>{if(!dimQ){dimQ=true;requestAnimationFrame(dim)}},{passive:true});dim();
   let vis=true;new IntersectionObserver(e=>vis=e[0].isIntersecting).observe(cv);
-  const t0=performance.now();
-  function frame(){
-    for(let i=0;i<3;i++)tint[i]+=(tintTarget[i]-tint[i])*.04;
-    mouse[0]+=(mt[0]-mouse[0])*.05;mouse[1]+=(mt[1]-mouse[1])*.05;
-    gl.uniform2f(ur,cv.width,cv.height);gl.uniform1f(ut,reduce?20:(performance.now()-t0)/1000);gl.uniform2f(um,mouse[0],mouse[1]);gl.uniform3f(utint,tint[0],tint[1],tint[2]);
+  // the flow has its own clock that only runs while it is drawn, so pausing never makes it jump
+  let clockT=20,prevT=0;
+  function frame(ms){
+    const k=Math.min(4,ms/33.3);   // same easing speed as before, whatever the frame rate
+    for(let i=0;i<3;i++)tint[i]+=(tintTarget[i]-tint[i])*(1-Math.pow(.96,k));
+    mouse[0]+=(mt[0]-mouse[0])*(1-Math.pow(.95,k));mouse[1]+=(mt[1]-mouse[1])*(1-Math.pow(.95,k));
+    clockT+=Math.min(ms,200)/1000;
+    gl.uniform2f(ur,cv.width,cv.height);gl.uniform1f(ut,reduce?20:clockT);gl.uniform2f(um,mouse[0],mouse[1]);gl.uniform3f(utint,tint[0],tint[1],tint[2]);
     gl.drawArrays(gl.TRIANGLES,0,3)}
   // ~30fps, paused when off-screen, tab hidden or a popup covers the page; drops resolution if the device struggles
   let last=0,slow=0,acc=0,n=0;
   const covered=()=>document.hidden||document.querySelector(".modal.on,.admin.on,.drawer.on");
-  (function loop(now){requestAnimationFrame(loop);if(reduce||!vis||covered())return;if(now-last<(scrollY>innerHeight*.8?66:33))return; // ~15fps once it's a dimmed backdrop
-    const t1=performance.now();frame();const cost=performance.now()-t1;
+  // The flow moves slowly, so ~12 frames a second looks the same as 30, and every frame it skips is a frame the glass
+  // panels on top don't have to re-blur. Once you scroll past the hero it rests on its last frame (it sits under a dark dim layer there).
+  const heroEl=document.querySelector(".hero");
+  let heroEnd=1e9;const measure=()=>{if(heroEl)heroEnd=heroEl.offsetTop+heroEl.offsetHeight-innerHeight*.15};   // measured on resize, not every frame
+  addEventListener("resize",measure);addEventListener("load",measure);measure();setTimeout(measure,1500);
+  const inHero=()=>scrollY<heroEnd;
+  (function loop(now){requestAnimationFrame(loop);if(reduce||!vis||covered()||!inHero()){last=now;return}if(now-last<80)return;
+    const t1=performance.now();frame(last?now-last:33);const cost=performance.now()-t1;
     acc+=now-last;n++;last=now;
-    if(n==40){if(acc/n>45&&scale>.2){scale=Math.max(.2,scale*.75);size()}acc=0;n=0}
+    if(n==40){if(acc/n>120&&scale>.2){scale=Math.max(.2,scale*.75);size()}acc=0;n=0}
   })(0);
-  if(reduce)frame();
+  if(reduce)frame(33);
 })();
-document.querySelectorAll(".sw").forEach(b=>b.addEventListener("click",()=>setLiquidTint(b.dataset.c)));
+document.querySelectorAll(".sw").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.c)setLiquidTint(b.dataset.c)}));   // hero phone picks set their own tint
 
 /* ---- pause off-screen animation ---- */
 (function(){const io=new IntersectionObserver(es=>es.forEach(e=>e.target.classList.toggle("offscreen",!e.isIntersecting)),{rootMargin:"100px"});
