@@ -13239,15 +13239,8 @@ const ask=typeof DeviceOrientationEvent!="undefined"&&typeof DeviceOrientationEv
 // iPhone only grants motion to a page opened directly over https (not a local file, not inside another app's frame)
 let framed=false;try{framed=window.self!==window.top}catch(e){framed=true}
 const canAsk=ask&&window.isSecureContext&&location.protocol=="https:"&&!framed;
-if(canAsk){ // iPhone: motion access needs a tap first
-  chip=document.createElement("button");chip.className="tiltchip lg-lite";chip.type="button";
-  chip.innerHTML=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M3 9c-1 2-1 4 0 6M21 9c1 2 1 4 0 6"/></svg>Tilt your phone`;
-  document.querySelector(".hero .stage").appendChild(chip);
-  const bye=(msg,ms)=>{chip.textContent=msg;chip.disabled=true;setTimeout(()=>{if(chip){chip.classList.add("out");setTimeout(()=>{chip&&chip.remove();chip=null},400)}},ms)};
-  chip.onclick=()=>DeviceOrientationEvent.requestPermission()
-    .then(r=>{if(r=="granted"){start();bye("Now tilt it ✨",2200)}else bye("Motion is off. Allow it in Safari settings",3500)})
-    .catch(()=>bye("Motion isn't available here",3000));
-}else if(!ask)start(); // Android and others: no permission needed
+/* no "Tilt your phone" button: phones that need permission for motion just get the gentle sway; the rest follow the tilt on their own */
+if(!ask)start(); // Android and others: no permission needed
 let lastX=0,t0=performance.now(),holdT=-1e9,swayT=0;
 (function loop(now){requestAnimationFrame(loop);if(!H.active)return;
   const t=(now-t0)/1000;let x,y;
