@@ -12170,8 +12170,11 @@ document.addEventListener("error",e=>{const t=e.target;if(t&&t.tagName=="IMG"&&/
 (function(){
 const lc=s=>String(s||"").toLowerCase();
 const ICO=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M10 18h4"/></svg>`;
-const SYN={ps:"playstation",ps5:"playstation 5",ps4:"playstation 4",airpod:"airpods",cover:"case",covers:"case",cases:"case",chargers:"charger",cables:"cable",headphone:"headphones",earphone:"earphones",earbud:"earbuds",phones:"phone",watches:"watch",speakers:"speaker"};
-const norm=q=>lc(q).replace(/[()",.]/g," ").trim().split(/\s+/).filter(Boolean).map(t=>SYN[t]||t).join(" ");
+const SYN={playstation:"ps",ps:"playstation",ps5:"playstation 5",ps4:"playstation 4",airpod:"airpods",cover:"case",covers:"case",cases:"case",chargers:"charger",cables:"cable",headphone:"headphones",earphone:"earphones",earbud:"earbuds",phones:"phone",watches:"watch",speakers:"speaker"};
+const raw=q=>lc(q).replace(/[()",.]/g," ").trim();
+const norm=q=>raw(q).split(/\s+/).filter(Boolean).join(" ");
+/* each word typed can match as written or as its long form ("ps5" finds "PS5" and "PlayStation 5") */
+const words=q=>raw(q).split(/\s+/).filter(Boolean).map(t=>SYN[t]?[t,SYN[t]]:[t]);
 
 /* everything one product can be found by: name, brand, department, category, every variant and the phones it fits */
 const hayOf=x=>{const p=x.p,vs=p?phVars(p).map(v=>v.t).join(" "):"";
@@ -12180,7 +12183,8 @@ const hayOf=x=>{const p=x.p,vs=p?phVars(p).map(v=>v.t).join(" "):"";
 const squash=s=>s.replace(/[\s\-\/]/g,"");
 /* a word matches if it is in the text, or the text written without spaces contains it ("airpodspro", "s26ultra") */
 const hit=(hay,sq,t)=>hay.includes(t)||(t.length>=3&&sq.includes(t));
-window.siteMatch=(x,q)=>{q=norm(q);if(!q)return true;const h=x._hay||(x._hay=hayOf(x)),sq=x._sq||(x._sq=squash(h));return q.split(" ").every(t=>hit(h,sq,t))};
+const wHit=(hay,sq,alts)=>alts.some(a=>a.split(" ").every(t=>hit(hay,sq,t)));
+window.siteMatch=(x,q)=>{const W=words(q);if(!W.length)return true;const h=x._hay||(x._hay=hayOf(x)),sq=x._sq||(x._sq=squash(h));return W.every(a=>wHit(h,sq,a))};
 
 let IDX=null,idxT=0;
 function build(){
@@ -12189,16 +12193,16 @@ function build(){
     sec.items.forEach(it=>cats.push({label:it.label,cat:sec.cat,sub:it.sub,where:sec.title}))}));
   IDX={items,cats};idxT=Date.now()}
 const fresh=()=>{if(!IDX||Date.now()-idxT>8000)build()};
-function find(q0){fresh();const q=norm(q0);if(!q)return null;const toks=q.split(" ");
+function find(q0){fresh();const q=norm(q0);if(!q)return null;const toks=q.split(" "),W=words(q0);
   const phones=searchModels(q0).sort((a,b)=>(status(b.m).k=="ok")-(status(a.m).k=="ok")||b.score-a.score).slice(0,5);
   const items=[];IDX.items.forEach(it=>{
-    if(!toks.every(t=>hit(it.hay,it.sq,t)))return;
+    if(!W.every(a=>wHit(it.hay,it.sq,a)))return;
     let s=0;if(it.name.includes(q))s+=6;if(it.name.startsWith(toks[0]))s+=2;
     toks.forEach(t=>{if(it.name.includes(t))s+=2;else if(it.hay.includes(t))s+=1});
     if(it.x.ok)s+=1.5;   // in stock first among equals
     items.push({it,s})});
   items.sort((a,b)=>b.s-a.s||(a.it.x.off>b.it.x.off?-1:1));
-  const cats=IDX.cats.filter(c=>toks.every(t=>lc(c.label+" "+c.where).includes(t))).slice(0,4);
+  const cats=IDX.cats.filter(c=>{const l=lc(c.label+" "+c.where);return W.every(a=>a.some(x=>x.split(" ").every(t=>l.includes(t))))}).slice(0,4);
   return{phones,items,cats}}
 const pic=x=>x.p&&hasImg(x.p.imgs[0])?`<img src="${phImg(x.p.imgs[0],200)}" alt="" loading="lazy">`:ICO;
 const soldTag=`<span class="hsso">Sold out</span>`;
