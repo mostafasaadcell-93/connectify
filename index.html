@@ -417,6 +417,7 @@ footer{border-top:1px solid var(--line);padding:64px 0 40px;background:var(--dee
 .verdict b{font-size:15px}
 .verdict span{font-size:14px;color:var(--mist)}
 .pvacts{display:grid;gap:10px}
+.pvacts .btn{width:100%}
 .specs{display:grid;border-top:1px solid var(--line)}
 .specs div{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
 .specs span{color:var(--mist);flex:none}
@@ -11406,7 +11407,7 @@ const stockColors=m=>m.colors.filter(([c])=>colorOK(m,c));
 const qtyOf=m=>unitsFor(m).reduce((s,u)=>s+u.qty,0);
 function status(m){const n=stockColors(m).length;return n?{k:"ok",t:"In stock",n}:m.soon?{k:"soon",t:"Coming soon",n:0}:{k:"na",t:"Unavailable",n:0}}
 const pill=s=>`<span class="spill ${s.k}">${s.t}</span>`;
-const cardPill=s=>s.k=="ok"?"":pill(s);   // outside the product window: no "In stock" badges
+const cardPill=s=>s.k=="soon"?pill(s):"";   // no customer stock badges; "Coming soon" is a launch note, not a quantity
 const matchUnits=(m,s)=>DB.units.filter(u=>u.m==m.id&&u.c==s.color&&u.st==s.st&&u.cond==s.cond&&u.sim==s.sim&&u.qty>0);
 const comboOK=(m,s)=>matchUnits(m,s).length>0;
 const bestUnit=(m,s)=>matchUnits(m,s).sort((a,b)=>b.photos.length-a.photos.length||b.bat-a.bat)[0];
@@ -11533,16 +11534,16 @@ $("fitSel").innerHTML=fitOptions("");
 $("fitSel").onchange=e=>{shop.fit=e.target.value;shop.limit=24;renderGrid()};
 $("more").onclick=()=>{shop.limit+=24;renderGrid()};
 function phoneCard(m,i){const s=status(m),q=qtyOf(m);
-  return `<article class="card pcard ${s.k=="ok"?"":"na"}" data-id="${m.id}" tabindex="0" style="animation-delay:${(i%8)*50}ms" aria-label="${esc(m.name)}, ${s.t}">
+  return `<article class="card pcard ${s.k=="ok"?"":"na"}" data-id="${m.id}" tabindex="0" style="animation-delay:${(i%8)*50}ms" aria-label="${esc(m.name)}">
   <div class="art">${cardPill(s)}${badgeHTML(m.id)}${mSVG(m)}</div>
   <div class="info"><h3>${esc(m.name)}</h3><div class="meta">${m.year}, ${esc(m.chip)}, ${m.size}"</div>
   <div class="cdots">${m.colors.map(([c,h])=>`<span class="cdot" style="background:${h}" title="${esc(c)}"></span>`).join("")}</div>
   <div class="buy"><span class="from">${(p=>p?`From <b>$${p}</b> · `:"")(unitPrice(DB.units.filter(u=>u.m==m.id))||refFrom(m))}${stRange(m)}</span><button class="add view">View options</button></div></div></article>`}
-function accCard(a,i){const ok=accOK(a),s=ok?{k:"ok",t:"In stock"}:{k:"na",t:"Unavailable"};
-  return `<article class="card pcard ${ok?"":"na"}" data-acc="${a.id}" tabindex="0" style="animation-delay:${(i%8)*50}ms" aria-label="${esc(a.name)}, ${s.t}">
-  <div class="art">${cardPill(s)}${badgeHTML(a.id)}${a.photos.length?`<img class="cardphoto" src="${a.photos[0]}" alt="">`:art(a)}</div>
+function accCard(a,i){const ok=accOK(a);
+  return `<article class="card pcard ${ok?"":"na"}" data-acc="${a.id}" tabindex="0" style="animation-delay:${(i%8)*50}ms" aria-label="${esc(a.name)}">
+  <div class="art">${badgeHTML(a.id)}${a.photos.length?`<img class="cardphoto" src="${a.photos[0]}" alt="">`:art(a)}</div>
   <div class="info"><h3>${esc(a.name)}</h3><div class="spec">${esc(a.spec)}</div>${fitsLabel(a)?`<div class="fits ${a.cat=="cover"&&!a.fits.length?"fitask":""}">${esc(fitsLabel(a))}</div>`:""}${a.note?`<div class="note">${esc(a.note)}</div>`:""}
-  <div class="buy"><span class="price q">Ask for price</span><button class="add" data-add="${a.id}" ${ok&&!cartHas("acc:"+a.id)?"":"disabled"}>${!ok?"Unavailable":cartHas("acc:"+a.id)?"In your cart":"Add to cart"}</button></div></div></article>`}
+  <div class="buy"><span class="price q">Ask for price</span>${ok?`<button class="add" data-add="${a.id}" ${cartHas("acc:"+a.id)?"disabled":""}>${cartHas("acc:"+a.id)?"In your cart":"Add to cart"}</button>`:`<button class="add view" type="button">View</button>`}</div></div></article>`}
 function renderGrid(reanimate){
   const q=shop.q.toLowerCase();let html="",n=0;
   if(isPhoneCat(shop.cat)){
@@ -11656,33 +11657,59 @@ function showMedia(){
 $("pvThumbs").addEventListener("click",e=>{const b=e.target.closest("[data-ph]");if(!b)return;const p=b.dataset.ph;
   if(p=="3d"||p=="art")pvs.view=p;else{pvs.view="photo";pvs.photo=+p}showMedia()});
 function chipsHTML(key,list,label,ok){return list.map(v=>{const on=pvs[key]==v,good=ok(v);
-  return `<button data-k="${key}" data-v="${v}" aria-pressed="${on}" class="${good?"":"na"}" title="${good?"":"Not in stock in this combination"}"><span>${label(v)}</span></button>`}).join("")}
+  return `<button data-k="${key}" data-v="${v}" aria-pressed="${on}" class="${good?"":"na"}"><span>${label(v)}</span></button>`}).join("")}
+/* open box, used, and refurbished can be photographed; a sealed new phone cannot */
+const PHOTO_CONDS={open:1,likenew:1,used:1,refurb:1};
+const condScan=s=>{s=String(s||"");
+  if(/\blike[\s-]*new\b/i.test(s))return"likenew";
+  if(/\bopen\s*box\b/i.test(s))return"open";
+  if(/\brefurbished\b|\brefurb\b/i.test(s))return"refurb";
+  if(/\bused\b/i.test(s))return"used";
+  if(/\bnew\b/i.test(s))return"new";
+  return""};
+/* variant text wins, then an explicit "Condition:" line, then the product name. Blank means unspecified. */
+function statedCondition(variant,desc,name){const v=condScan(variant);if(v)return v;
+  const field=(String(desc||"").match(/condition:\s*([^\n.]+)/i)||[])[1]||"",f=condScan(field);if(f)return f;return condScan(name)||""}
+const knownBits=list=>(list||[]).map(s=>String(s||"").trim()).filter(Boolean);
+const joinAsk=parts=>parts.filter(Boolean).join(", ");
+const availText=parts=>`Hello Connectify! I'd like to ask about availability for: ${joinAsk(parts)}. Could you please confirm availability and price?`;
+const photoText=parts=>`Hello Connectify! I'd like real photos of: ${joinAsk(parts)}. Could you please send photos of this exact one?`;
+function withCond(parts,cond){const lab=cond&&CONDS[cond]&&CONDS[cond].label;if(!lab)return parts;
+  if(parts.join(" ").toLowerCase().includes(lab.toLowerCase()))return parts;return parts.concat(lab)}
+function phoneAskParts(m,s){const parts=[];if(m&&m.name)parts.push(m.name);if(s.color)parts.push(s.color);if(s.st)parts.push(fmtGB(s.st));
+  if(s.cond&&CONDS[s.cond])parts.push(CONDS[s.cond].label);if(s.sim&&SIMS[s.sim])parts.push(SIMS[s.sim].label);return parts}
+/* exact checked-in unit still in the shop (quantity above zero). A sold or never-stocked combo is not photographable. */
+function showPhoneRealPhotos(m,s){if(!m||!PHOTO_CONDS[s.cond])return false;
+  return (DB.units||[]).some(u=>u.m==m.id&&u.c==s.color&&u.st==s.st&&u.cond==s.cond&&u.sim==s.sim&&u.qty>0)}
+function phoneActsHTML(){const m=pvs.m;if(!m)return"";
+  const ok=comboOK(m,pvs),parts=phoneAskParts(m,pvs),inCart=cartHas(variantKey()),photos=showPhoneRealPhotos(m,pvs);
+  return `${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${inCart?"disabled":""}>${inCart?"In your cart":"Add to cart"}</button>`:""}${ok?"":`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availText(parts))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}`}
+function bindPhoneAdd(){const a=$("pvAdd");if(!a)return;a.onclick=()=>{
+  const m=pvs.m;if(!m||!comboOK(m,pvs)){renderPV();return}
+  const unit=bestUnit(m,pvs);if(!unit||!(unit.qty>0)){renderPV();return}
+  const key=variantKey();if(cartHas(key))return;
+  cart.push({key,kind:"phone",id:m.id,unit:unit.id,price:unit.p>0?unit.p:null,title:m.name,hex:hexOf(m,pvs.color),detail:`${fmtGB(pvs.st)}, ${pvs.color}, ${CONDS[pvs.cond].label}, ${SIMS[pvs.sim].label}`});
+  renderCart();closeModals();openCart(true)}}
+function refreshPhoneCTA(){const box=document.querySelector("#pvBody .pvacts");if(!box||!pvs.m||PV_KIND!="phone")return;box.innerHTML=phoneActsHTML();bindPhoneAdd()}
 function renderPV(){
   const m=pvs.m,ok=comboOK(m,pvs),s=status(m),u=ok?bestUnit(m,pvs):null;
-  const left=ok?matchUnits(m,pvs).reduce((a,x)=>a+x.qty,0):0;
   const test=(k,v)=>comboOK(m,Object.assign({},pvs,{[k]:v}));
   const desc=`${m.name}, ${fmtGB(pvs.st)}, ${pvs.color}, ${CONDS[pvs.cond].label}, ${SIMS[pvs.sim].label}`;
   $("pvBody").innerHTML=`
   <button class="x" id="pvClose" aria-label="Close">✕</button>
-  <div class="pvhead"><small>${m.year}, ${esc(m.chip)}${m.tag?`, ${esc(m.tag)}`:""}</small><h3 id="pvTitle">${esc(m.name)}</h3>${pill(s)} ${badgeHTML(m.id)}${m.soon&&!s.n?` <span class="tip" style="display:inline">${esc(m.soon)}</span>`:""}</div>
-  <div class="opt"><h4>Color <span>${esc(pvs.color)}${colorOK(m,pvs.color)?"":" (unavailable)"}</span></h4>
-    <div class="sws">${m.colors.map(([c,h])=>`<button class="sw2 ${colorOK(m,c)?"":"na"}" data-k="color" data-v="${esc(c)}" style="background:${h}" aria-pressed="${c==pvs.color}" aria-label="${esc(c)}${colorOK(m,c)?"":", unavailable"}" title="${esc(c)}${colorOK(m,c)?"":", unavailable"}"></button>`).join("")}</div></div>
+  <div class="pvhead"><small>${m.year}, ${esc(m.chip)}${m.tag?`, ${esc(m.tag)}`:""}</small><h3 id="pvTitle">${esc(m.name)}</h3>${badgeHTML(m.id)}${m.soon&&!s.n?` <span class="tip" style="display:inline">${esc(m.soon)}</span>`:""}</div>
+  <div class="opt"><h4>Color <span>${esc(pvs.color)}</span></h4>
+    <div class="sws">${m.colors.map(([c,h])=>`<button class="sw2 ${colorOK(m,c)?"":"na"}" data-k="color" data-v="${esc(c)}" style="background:${h}" aria-pressed="${c==pvs.color}" aria-label="${esc(c)}" title="${esc(c)}"></button>`).join("")}</div></div>
   <div class="opt"><h4>Storage</h4><div class="chips2">${chipsHTML("st",m.st,fmtGB,v=>test("st",v))}</div></div>
   <div class="opt"><h4>Condition</h4><div class="chips2">${chipsHTML("cond",CK,v=>CONDS[v].label,v=>test("cond",v))}</div><div class="tip">${CONDS[pvs.cond].tip}</div></div>
   <div class="opt"><h4>SIM</h4><div class="chips2">${chipsHTML("sim",m.sims,v=>SIMS[v].label,v=>test("sim",v))}</div><div class="tip">${SIMS[pvs.sim].tip}</div></div>
-  <div class="verdict ${ok?"ok":"na"}" aria-live="polite">
-    <b>${ok?`✓ In stock${left==1?", only 1 left":left>1?`, ${left} available`:""}`:"✕ Unavailable right now"}</b>
+  <div class="verdict" aria-live="polite">
     ${u&&u.p>0?`<div class="pvprice"><b>$${u.p}</b>${u.cp>u.p?`<s>$${u.cp}</s><span class="offb">-${Math.round((1-u.p/u.cp)*100)}%</span>`:""}</div>`:""}
     ${!(u&&u.p>0)&&refPrice(m,pvs.st,pvs.cond,pvs.color)?`<div class="pvprice"><b>$${refPrice(m,pvs.st,pvs.cond,pvs.color)}</b></div><span>Reference price for this one. We confirm the final price on WhatsApp.</span>`:""}
     <span>${esc(desc)}</span>
     ${u&&u.cond!="new"?`<span>${u.bat?`Battery health ${u.bat}%`:"Battery health: ask us"}${u.note?`. ${esc(u.note)}`:""}</span>`:u&&u.note?`<span>${esc(u.note)}</span>`:""}
-    ${ok?"":`<span>${m.soon&&!s.n?esc(m.soon)+". Reserve yours on WhatsApp.":"We can try to source this one for you. Ask us on WhatsApp."}</span>`}
   </div>
-  <div class="pvacts">
-    ${ok?`<button class="btn btn-main" id="pvAdd" ${cartHas(variantKey())?"disabled":""}>${cartHas(variantKey())?"In your cart":"Add to cart"}</button>`:""}
-    <a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(ok?`Hi Connectify! What's the price of the ${desc}?\nCould you also send me real photos of the one you have?`:`Hi Connectify! I'm looking for the ${desc}. Can you get it for me?`)}">${WA_SVG}${ok?(u&&u.p>0?"Ask for real photos":"Ask for price and real photos"):"Ask us to find it"}</a>
-  </div>
-  ${realPics(ok,u&&u.photos.length,`Hi Connectify! Can you send me real photos and a short video of the ${desc}? And the price please.`)}
+  <div class="pvacts">${phoneActsHTML()}</div>
   ${infoBlocks(pvs.cond,true)}
   ${fitsStrip(m)}
   <div class="specs-title">Specs</div>
@@ -11698,7 +11725,7 @@ function renderPV(){
     <div><span>Released</span><b>${m.year}</b></div>
   </div>`;
   $("pvClose").onclick=closeModals;
-  const a=$("pvAdd");if(a)a.onclick=()=>{cart.push({key:variantKey(),kind:"phone",id:m.id,unit:u&&u.id,price:u&&u.p>0?u.p:null,title:m.name,hex:hexOf(m,pvs.color),detail:`${fmtGB(pvs.st)}, ${pvs.color}, ${CONDS[pvs.cond].label}, ${SIMS[pvs.sim].label}`});renderCart();closeModals();openCart(true)};
+  bindPhoneAdd();
   renderMedia();
 }
 const variantKey=()=>`${pvs.m.id}|${pvs.color}|${pvs.st}|${pvs.cond}|${pvs.sim}`;
@@ -11709,7 +11736,8 @@ $("pvBody").addEventListener("click",e=>{
   pvs[k]=v;pvs.photo=0;
   if(k=="color"){fitSelection();const hex=hexOf(pvs.m,v);if(PV&&PV.model)PV.setColor(hex);logView(pvs.m,v)}
   const u=bestUnit(pvs.m,pvs);if(pvs.view!="3d")pvs.view=u&&u.photos.length||mPic(pvs.m)?"photo":"3d";
-  // the photo and the chosen dot change on the very next frame; the rest of the panel (stock, price, specs) refreshes right after
+  refreshPhoneCTA();
+  // the photo and the chosen dot change on the very next frame; the rest of the panel (price, specs) refreshes right after
   if(k=="color"){renderMedia();b.parentElement.querySelectorAll("[data-k=color]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
     const tok=pvBodyTok=(pvBodyTok||0)+1;requestAnimationFrame(()=>setTimeout(()=>{if(tok!==pvBodyTok||!pvs.m)return;const y=$("pvBody").scrollTop;renderPV();$("pvBody").scrollTop=y},0));return}
   const y=$("pvBody").scrollTop;renderPV();$("pvBody").scrollTop=y;
@@ -11720,14 +11748,15 @@ function openAcc(id){PV_KIND="acc";
   $("pvSize").style.display="none";
   if(V)V.set(buildModel(a));
   const noArt=true;pvs.view=a.photos.length?"photo":noArt?"3d":"art";pvs.photo=0;MEDIA={photos:a.photos,art:art(a),noArt,fold:false,label:a.name};
+  const parts=withCond([a.name].concat(a.spec?[a.spec]:[]),a.cond),photos=!!(PHOTO_CONDS[a.cond]&&ok);
   $("pvBody").innerHTML=`<button class="x" id="pvClose" aria-label="Close">✕</button>
-  <div class="pvhead"><small>${esc(CONDS[a.cond].label)}</small><h3 id="pvTitle">${esc(a.name)}</h3>${pill(ok?{k:"ok",t:a.qty==1?"Only 1 left":"In stock"}:{k:"na",t:"Unavailable"})}</div>
+  <div class="pvhead"><small>${esc(CONDS[a.cond].label)}</small><h3 id="pvTitle">${esc(a.name)}</h3></div>
   <div class="spec">${esc(a.spec)}</div>
   ${badgeOf(a.id)?`<div class="pvbdg">${badgeHTML(a.id)}</div>`:""}
   <div class="specs"><div><span>Condition</span><b>${CONDS[a.cond].label}</b></div>${fitsLabel(a)?`<div><span>Compatibility</span><b>${esc(fitsLabel(a).replace(/^Fits /,""))}${a.fits&&a.fits.length>2?"":""}</b></div>`:""}${a.note?`<div><span>Note</span><b>${esc(a.note)}</b></div>`:""}<div><span>Delivery</span><b>Beirut: ${esc(DB.content.info.beirut)}. Other areas: ${esc(DB.content.info.other)}</b></div><div><span>Payment</span><b>${esc(payList().join(", "))}</b></div><div><span>Price</span><b>Ask on WhatsApp</b></div></div>
-  <div class="pvacts">${ok?`<button class="btn btn-main" id="pvAdd" ${cartHas("acc:"+id)?"disabled":""}>${cartHas("acc:"+id)?"In your cart":"Add to cart"}</button>`:""}<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(ok?`Hi Connectify! What's the price of the ${a.name} (${a.spec})?\nCould you send me real photos too?`:`Hi Connectify! When will the ${a.name} (${a.spec}) be back in stock?`)}">${WA_SVG}${ok?"Ask for price and real photos":"Ask when it's back"}</a></div>${realPics(ok,a.photos.length,`Hi Connectify! Can you send me real photos and the price of the ${a.name} (${a.spec})?`)}`;
+  <div class="pvacts">${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${cartHas("acc:"+id)?"disabled":""}>${cartHas("acc:"+id)?"In your cart":"Add to cart"}</button>`:`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availText(parts))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}</div>`;
   $("pvClose").onclick=closeModals;
-  const b=$("pvAdd");if(b)b.onclick=()=>{addAcc(id);closeModals()};
+  const b=$("pvAdd");if(b)b.onclick=()=>{if(!accOK(accById(id))){openAcc(id);return}addAcc(id);closeModals()};
   showMedia();openModal("pvModal");
 }
 $("foldBtn").onclick=()=>{if(!PV||!PV.model||!PV.model.setClosed)return;const closed=PV.model.target<.5;PV.model.setClosed(closed);$("foldBtn").textContent=closed?"Unfold it":"Fold it"};
@@ -11754,7 +11783,7 @@ $("waGo").addEventListener("click",()=>setTimeout(()=>closeWA(),300));
 $("waClose").onclick=()=>closeWA();
 const cart=[];
 const cartHas=k=>cart.some(i=>i.key==k);
-function addAcc(id){const a=accById(id);if(cartHas("acc:"+id))return;cart.push({key:"acc:"+id,kind:"acc",id,title:a.name,detail:a.spec});renderCart();renderGrid();openCart(true)}
+function addAcc(id){const a=accById(id);if(!a||!accOK(a)||cartHas("acc:"+id))return;cart.push({key:"acc:"+id,kind:"acc",id,title:a.name,detail:a.spec});renderCart();renderGrid();openCart(true)}
 function renderCart(){
   const c=$("count");c.textContent=cart.length;c.classList.remove("bump");void c.offsetWidth;c.classList.add("bump");
   $("items").innerHTML=cart.length?cart.map((it,i)=>{const pic=it.kind=="phone"?mSVG(modelById(it.id),it.hex):(accById(it.id)?art(accById(it.id)):"");
@@ -12029,10 +12058,10 @@ function priceHTML(p){const r=phPrice(p);if(r.p==null)return `<span class="pp as
 function phFitsLine(p){if(p.fits.length){const n=p.fits.map(id=>(modelById(id)||{}).name).filter(Boolean);return `<div class="fits">Fits ${esc(n.length>2?n.slice(0,2).join(", ")+` +${n.length-2}`:n.join(" and "))}</div>`}return""}
 function phCard(p,i){const ok=phOK(p),off=phOff(p),nv=p.vars.length,inCart=cartHas("ph:"+p.id+":0");
   return `<article class="card pcard phc ${ok?"":"na"}" data-ph="${p.id}" tabindex="0" style="animation-delay:${(i%8)*40}ms" aria-label="${esc(p.name)}">
-  <div class="art phart">${ok?"":`<span class="spill na">Sold out</span>`}${off?`<span class="offb">-${off}%</span>`:""}${badgeHTML(p.id)}
+  <div class="art phart">${off?`<span class="offb">-${off}%</span>`:""}${badgeHTML(p.id)}
     ${hasImg(p.imgs[0])?`<img class="phimg" loading="lazy" decoding="async" src="${phImg(p.imgs[0],600)}" ${phSrcset(p.imgs[0])} alt="">`:`<span class="noimg">${DEPT_ICON[p.dept]||"✨"}</span>`}</div>
   <div class="info"><small class="pbrand">${esc(p.brand)}${p.brand?" · ":""}${esc(p.sub)}</small><h3 class="pname">${esc(p.name)}</h3>${phFitsLine(p)}
-  <div class="buy">${priceHTML(p)}<button class="add" data-phadd="${p.id}" ${ok&&!inCart?"":"disabled"}>${!ok?"Sold out":nv>1?"Options":inCart?"In cart":"Add"}</button></div></div></article>`}
+  <div class="buy">${priceHTML(p)}${ok?`<button class="add" data-phadd="${p.id}" ${inCart?"disabled":""}>${nv>1?"Options":inCart?"In cart":"Add"}</button>`:`<button class="add view" type="button">View</button>`}</div></div></article>`}
 function anyCard(x,i){return x.leg?accCard(x.leg,i):phCard(x.p,i)}
 
 function renderGrid(reanimate){
@@ -12092,9 +12121,9 @@ function renderPH(resetPhoto){const p=pvp.p,vi=Math.max(0,phVarIdx(p,pvp.sel)),v
     const known=PC.some(has),state=c=>!okT.length?"na":known?(has(c)?"ok":"na"):"ask";
     if(!pvp.pc||!PC.find(c=>c[0]==pvp.pc)){const vt=" "+(v.t||"").toLowerCase()+" ";
       pvp.pc=(PC.find(c=>c[3].some(w=>new RegExp("[^a-z]"+w+"[^a-z]").test(vt)))||PC.find(c=>state(c)=="ok")||PC.find(c=>c[2]&&c[2]==p.imgs[0])||PC[0])[0]}
-    const cur=PC.find(c=>c[0]==pvp.pc),cs=state(cur);
-    colHTML=`<div class="opt"><h4>Color <span>${esc(cur[0])}${cs=="na"?" (unavailable)":cs=="ask"?" (ask us which colors we have)":""}</span></h4><div class="sws">${PC.map(c=>{const s=state(c);
-      return `<button type="button" class="sw2 ${s=="na"?"na":""}" data-pc="${esc(c[0])}" style="background:${c[1]}" aria-pressed="${c[0]==pvp.pc}" aria-label="${esc(c[0])}${s=="na"?", unavailable":""}" title="${esc(c[0])}${s=="na"?", unavailable":""}"></button>`}).join("")}</div></div>`;
+    const cur=PC.find(c=>c[0]==pvp.pc);
+    colHTML=`<div class="opt"><h4>Color <span>${esc(cur[0])}</span></h4><div class="sws">${PC.map(c=>{const s=state(c);
+      return `<button type="button" class="sw2 ${s=="na"?"na":""}" data-pc="${esc(c[0])}" style="background:${c[1]}" aria-pressed="${c[0]==pvp.pc}" aria-label="${esc(c[0])}" title="${esc(c[0])}"></button>`}).join("")}</div></div>`;
     if(cur[2]){const u=phImg(cur[2],1200),k=imgs.indexOf(u);if(k>=0)imgs.splice(k,1);imgs.unshift(u);if(resetPhoto!==false)pvp.photo=0;pcLabel="Official photo · "+cur[0]}
     else{const sh=PC.find(c=>c[2]&&phImg(c[2],1200)==imgs[0]);if(sh)pcLabel="Photo shows "+sh[0]}
     // warm every colour's photo so switching is instant
@@ -12103,23 +12132,25 @@ function renderPH(resetPhoto){const p=pvp.p,vi=Math.max(0,phVarIdx(p,pvp.sel)),v
   if(TV){const c=tabColor(v.t),k=p.id+"|"+c;if(pvp.tabKey!==k){pvp.tabKey=k;TV.set(buildModel({art:/keyboard|magic|folio/i.test(p.name+" "+(v.t||""))?"tabletkb":"tablet",c}),true)}}
   else pvp.tabKey=null;
   MEDIA={photos:imgs,art:"",noArt:true,no3d:!TV,fold:false,label:p.name,photoLabel:pcLabel||(p.fl.includes("S")?"Similar style photo":p.fl.includes("O")?"Official product photo":"Product photo"),cxN};pvp.first=false;pvs.view="photo";pvs.photo=Math.min(pvp.photo,imgs.length-1);
-  const off=v.p!=null&&v.cp>v.p?Math.round((1-v.p/v.cp)*100):0,pr=v.p==null?"":` (${money(v.p)})`;
+  const off=v.p!=null&&v.cp>v.p?Math.round((1-v.p/v.cp)*100):0;
   const chips=names.map((nm,k)=>{const vals=optVals(p,k);if(!vals.length||(vals.length==1&&nopt==1&&p.vars.length==1))return"";
     return `<div class="opt"><h4>${esc(nm)} <span>${esc(pvp.sel[k]||"")}</span></h4><div class="chips2">${vals.map(val=>{const s=pvp.sel.slice();s[k]=val;const j=phVarIdx(p,s),good=j>=0&&phV(p,j).ok;
       return `<button data-po="${k}" data-v="${esc(val)}" aria-pressed="${pvp.sel[k]==val}" class="${good?"":"na"}"><span>${esc(val)}</span></button>`}).join("")}</div></div>`}).join("");
-  const desc=`${p.name}${v.t?` (${v.t})`:""}`;
+  const cond=statedCondition(v.t,((phO(p.id)||{}).desc??p.desc)||"",p.name);
+  const bits=knownBits(pvp.sel.length?pvp.sel:(v.t?[v.t]:[]));
+  const parts=withCond([p.name].concat(bits),cond);
+  const photos=!!(PHOTO_CONDS[cond]&&(ok||v.q>0));
   $("pvBody").innerHTML=`<button class="x" id="pvClose" aria-label="Close">✕</button>
-  <div class="pvhead"><small>${esc(p.brand)}${p.brand?" · ":""}${esc(p.sub)}</small><h3 id="pvTitle">${esc(p.name)}</h3>${pill(ok?{k:"ok",t:p.fl.includes("L")?"Low stock":"In stock"}:{k:"na",t:"Sold out"})} ${badgeHTML(p.id)}</div>
+  <div class="pvhead"><small>${esc(p.brand)}${p.brand?" · ":""}${esc(p.sub)}</small><h3 id="pvTitle">${esc(p.name)}</h3>${badgeHTML(p.id)}</div>
   <div class="pvprice">${v.p==null?`<b class="askp">Price on WhatsApp</b>`:`<b>${money(v.p)}</b>`}${off?`<s>${money(v.cp)}</s><span class="offb">-${off}%</span>`:""}</div>
   ${colHTML}${chips}
-  <div class="verdict ${ok?"ok":"na"}" aria-live="polite"><b>${ok?(v.q!=null&&v.q<=3?`✓ Only ${v.q} left`:"✓ In stock"):"✕ Sold out right now"}</b><span>${esc(desc)}</span>${ok?((window.PH_COLORASK||[]).includes(p.id.slice(2))?`<span>Colors change fast: confirm yours on WhatsApp.</span>`:""):`<span>Ask us on WhatsApp, we can get it for you.</span>`}</div>
-  <div class="pvacts">${ok?`<button class="btn btn-main" id="pvAdd" ${cartHas(key)?"disabled":""}>${cartHas(key)?"In your cart":(v.p==null?"Add to cart":`Add to cart · ${money(v.p)}`)}</button>`:""}
-    <a class="btn btn-wa" target="_blank" rel="noopener" href="${waURL(ok?`Hi Connectify! I'm interested in the ${desc}${pr}. ${v.p==null?"What's the price, and ":""}Is it available for delivery?`:`Hi Connectify! When will the ${desc} be back in stock?`)}">${WA_SVG}${ok?"Ask on WhatsApp":"Ask when it's back"}</a></div>
+  ${ok&&(window.PH_COLORASK||[]).includes(p.id.slice(2))?`<p class="tip">Colors change fast: confirm yours on WhatsApp.</p>`:""}
+  <div class="pvacts">${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${cartHas(key)?"disabled":""}>${cartHas(key)?"In your cart":(v.p==null?"Add to cart":`Add to cart · ${money(v.p)}`)}</button>`:`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availText(parts))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}</div>
   ${p.fits.length?`<div class="specs"><div><span>Fits</span><b>${esc(p.fits.map(id=>(modelById(id)||{}).name).filter(Boolean).join(", "))}</b></div></div>`:""}
   ${(()=>{const d=(phO(p.id)||{}).desc??p.desc;return d?`<div class="specs-title">About this product</div><p class="pdesc">${esc(d)}${d===p.desc&&d.length>=318?"…":""}</p>`:""})()}
   ${infoBlocks("new",false)}`;
   $("pvClose").onclick=closeModals;
-  const a=$("pvAdd");if(a)a.onclick=()=>{addPH(p,vi);closeModals()};
+  const a=$("pvAdd");if(a)a.onclick=()=>{const now=phV(p,vi);if(!now.ok||phHidden(p)){renderPH(false);return}addPH(p,vi);closeModals()};
   showMedia();
 }
 $("pvBody").addEventListener("click",e=>{const c=e.target.closest("[data-pc]");if(c&&pvp.p&&PV_KIND=="ph"){e.stopPropagation();
@@ -12128,7 +12159,7 @@ $("pvBody").addEventListener("click",e=>{const c=e.target.closest("[data-pc]");i
   const k=+b.dataset.po;pvp.sel[k]=b.dataset.v;pvp.pc=null;
   if(phVarIdx(pvp.p,pvp.sel)<0){const j=pvp.p.vars.findIndex(v=>(v.t||"").split(" / ")[k]==b.dataset.v);if(j>=0)pvp.sel=(pvp.p.vars[j].t||"").split(" / ")}
   const y=$("pvBody").scrollTop;renderPH(true);$("pvBody").scrollTop=y},true);
-function addPH(p,vi){const v=phV(p,vi),key="ph:"+p.id+":"+vi;if(cartHas(key)||!v.ok)return;
+function addPH(p,vi){const v=phV(p,vi),key="ph:"+p.id+":"+vi;if(!p||cartHas(key)||!v.ok||phHidden(p))return;
   cart.push({key,kind:"ph",id:p.id,vi,title:p.name,detail:v.t||p.brand,price:v.p,img:phImg(hasImg(v.img)?v.img:p.imgs[0],160),dept:p.dept});renderCart();renderGrid();openCart(true)}
 
 /* ---------- cart with prices ---------- */
@@ -12297,7 +12328,6 @@ function find(q0){fresh();const q=norm(q0);if(!q)return null;const toks=q.split(
   const cats=IDX.cats.filter(c=>{const l=lc(c.label+" "+c.where);return W.every(a=>a.some(x=>x.split(" ").every(t=>l.includes(t))))}).slice(0,4);
   return{phones,items,cats}}
 const pic=x=>x.p&&hasImg(x.p.imgs[0])?`<img src="${phImg(x.p.imgs[0],200)}" alt="" loading="lazy">`:ICO;
-const soldTag=`<span class="hsso">Sold out</span>`;
 
 /* one search box wired to its own results panel */
 function attach({inp,res,anchor,onClose,onOpenEmpty}){
@@ -12307,9 +12337,9 @@ function attach({inp,res,anchor,onClose,onOpenEmpty}){
     let h="";
     if(r.cats.length){h+=`<div class="hsh">Categories</div><div class="hscats">`+r.cats.map(c=>{rows.push({k:"cat",c});return`<button type="button" class="hsc" data-i="${rows.length-1}">${esc(c.label)}<small>${esc(c.where)}</small></button>`}).join("")+`</div>`}
     if(r.phones.length){h+=`<div class="hsh">Phones</div>`+r.phones.map(p=>{rows.push({k:"phone",p});const st=status(p.m),pr=unitPrice(DB.units.filter(u=>u.m==p.m.id));
-      return`<button type="button" class="hsi" data-i="${rows.length-1}"><span class="hsp">${mSVG(p.m,p.colorHit&&p.colorHit[1])}</span><span class="hsg"><b>${esc(p.m.name)}</b><small>${esc(brandName(brandOf(p.m)))}${p.colorHit?" · "+esc(p.colorHit[0]):""}${st.k=="ok"?"":" · "+esc(st.t)}</small></span>${pr?`<span class="hspr">from ${money(pr)}</span>`:""}</button>`}).join("")}
+      return`<button type="button" class="hsi" data-i="${rows.length-1}"><span class="hsp">${mSVG(p.m,p.colorHit&&p.colorHit[1])}</span><span class="hsg"><b>${esc(p.m.name)}</b><small>${esc(brandName(brandOf(p.m)))}${p.colorHit?" · "+esc(p.colorHit[0]):""}${st.k=="soon"?" · "+esc(st.t):""}</small></span>${pr?`<span class="hspr">from ${money(pr)}</span>`:""}</button>`}).join("")}
     if(r.items.length){h+=`<div class="hsh">${r.items.length} product${r.items.length>1?"s":""}</div>`+r.items.slice(0,8).map(({it})=>{const x=it.x;rows.push({k:"ph",x});
-      return`<button type="button" class="hsi" data-i="${rows.length-1}"><span class="hsp">${pic(x)}</span><span class="hsg"><b>${esc(x.name)}</b><small>${esc(DEPT_LABEL[x.dept]||"iPads")} · ${esc(x.sub)}</small></span>${x.ok?(x.price>0?`<span class="hspr">${money(x.price)}</span>`:""):soldTag}</button>`}).join("")}
+      return`<button type="button" class="hsi" data-i="${rows.length-1}"><span class="hsp">${pic(x)}</span><span class="hsg"><b>${esc(x.name)}</b><small>${esc(DEPT_LABEL[x.dept]||"iPads")} · ${esc(x.sub)}</small></span>${x.price>0?`<span class="hspr">${money(x.price)}</span>`:""}</button>`}).join("")}
     const total=r.phones.length+r.items.length;
     if(r.items.length){rows.push({k:"all",q:q.trim()});h+=`<button type="button" class="hsall" data-i="${rows.length-1}">See all ${r.items.length} result${r.items.length>1?"s":""} for “${esc(q.trim())}”</button>`}
     if(!total&&!r.cats.length){h=`<div class="hsnone">Nothing in the store matches “${esc(q.trim())}”.<a href="https://wa.me/${WA_NUM}?text=${encodeURIComponent("Hi Connectify, do you have "+q.trim()+"?")}" target="_blank" rel="noopener">Ask us on WhatsApp</a></div>`;
