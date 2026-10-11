@@ -964,6 +964,10 @@ html.locked,html.locked body{overflow:hidden}
 .rvtag.approved{background:rgba(232,232,236,.15);color:var(--teal)}
 .rvtag.hidden{background:rgba(162,162,162,.15);color:var(--mist)}
 
+.acatsearch{position:sticky;top:0;z-index:5;padding:10px 0;margin:0 0 12px;background:linear-gradient(#0b0b0c 75%,transparent)}
+.acatsearch .search{flex:1;min-width:240px;max-width:none}
+.acatsearch .search input{width:100%}
+
 /* ===== store details: badges, fits, shop by phone, delivery band, brands, warranty page ===== */
 .bdg{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:800;letter-spacing:.02em;white-space:nowrap;vertical-align:middle}
 .art .bdg,.model .pic .bdg{position:absolute;left:14px;bottom:14px;z-index:2}
@@ -2065,7 +2069,6 @@ select option:disabled{color:#6A6A6A}
       <div class="frow"><label for="lPass">Password</label><input id="lPass" type="password" autocomplete="current-password"></div>
       <small class="ferr" id="lErr" role="alert"></small>
       <button class="btn btn-main" type="submit">Sign in</button>
-      <div class="ldemo">Demo login: <b>owner@connectify.lb</b> / <b>connectify</b> <button type="button" class="linkbtn" id="lFill">Fill it in</button></div>
       <button type="button" class="linkbtn" id="lBack">Back to the store</button>
     </form>
   </div>
@@ -2086,13 +2089,12 @@ select option:disabled{color:#6A6A6A}
       </nav>
       <div class="afoot">
         <button class="abtn" id="aExit">View store</button>
-        <button class="linkbtn" id="aReset">Reset demo data</button>
         <button class="linkbtn" id="aLogout">Sign out</button>
       </div>
     </aside>
     <main class="amain" id="amain">
       <header class="atop"><div><h2 id="aTitle">Dashboard</h2><p id="aSub"></p></div></header>
-      <div class="demo-strip">Demo admin: everything saves in this browser. The live version saves to the store's database and works from any phone.</div>
+      <div class="demo-strip">Connecting to the store's database…</div>
 
       <section class="apage" id="ap-dash">
         <div class="astats" id="aStats"></div>
@@ -2170,6 +2172,10 @@ select option:disabled{color:#6A6A6A}
       </section>
 
       <section class="apage" id="ap-cat" hidden>
+        <div class="atools acatsearch">
+          <label class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A2A2A2" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="cQ" type="search" placeholder="Search the whole catalog: name, brand or type" aria-label="Find a product"></label>
+          <select id="cDept" aria-label="Department" hidden></select>
+        </div>
         <div class="catstats" id="cStats"></div>
         <details class="ctool" id="npBox"><summary>➕ Add a new product</summary>
           <p>For anything new that comes into the shop. It goes live on the store right away, and you can edit it below like any other product.</p>
@@ -2195,10 +2201,6 @@ select option:disabled{color:#6A6A6A}
           <div class="bulkrow"><button type="button" class="abtn" id="bIn">All in stock</button><button type="button" class="abtn" id="bOut">All sold out</button><button type="button" class="abtn" id="bHide">Hide all</button><button type="button" class="abtn" id="bShow">Show all</button><button type="button" class="abtn danger" id="bReset">Reset to original</button></div></details>
         <div class="tabs ctabs" id="cTabs" role="group" aria-label="Department"></div>
         <div class="csubrow"><div class="series" id="cSubs" role="group" aria-label="Type"></div><button type="button" class="abtn" id="cAddHere">+ Add a product here</button></div>
-        <div class="atools catbar">
-          <label class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A2A2A2" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="cQ" type="search" placeholder="Find a product or brand" aria-label="Find a product"></label>
-          <select id="cDept" aria-label="Department" hidden></select>
-        </div>
         <div class="series" id="cFilter" role="group" aria-label="Show"><button data-v="all">All</button><button data-v="in">In stock</button><button data-v="out">Sold out</button><button data-v="hidden">Hidden</button><button data-v="sale">On sale</button><button data-v="nopic">No photo</button><button data-v="edited">Edited by you</button></div>
         <p class="count-line" id="cCount"></p>
         <div class="crows" id="cRows"></div>
@@ -12360,7 +12362,6 @@ window.searchRefresh=()=>{IDX=null};
 
 /* ================= ADMIN ================= */
 const AUTH_KEY=KEY+"-auth";
-const DEMO_USER="owner@connectify.lb",DEMO_PASS="connectify";
 const isAuthed=()=>{if(window.LIVE)return LIVE.staff;try{return sessionStorage.getItem(AUTH_KEY)=="1"}catch(e){return !!window.__auth}};
 const setAuthed=v=>{try{v?sessionStorage.setItem(AUTH_KEY,"1"):sessionStorage.removeItem(AUTH_KEY)}catch(e){}window.__auth=v};
 const adm={page:"dash",q:"",f:"all",b:"all",open:new Set(),ostat:"all"};
@@ -12371,10 +12372,8 @@ const STATUS={new:"New",confirmed:"Confirmed",delivered:"Delivered",cancelled:"C
 onSubmit("loginForm",e=>{e.preventDefault();
   const u=$("lUser").value.trim().toLowerCase(),p=$("lPass").value;
   if(window.LIVE){LIVE.login(u,p);return}
-  if(u==DEMO_USER&&p==DEMO_PASS){setAuthed(true);$("lErr").textContent="";$("loginForm").reset();showAdmin()}
-  else{$("lErr").textContent="That email and password don't match. Use the demo login below.";$("lPass").select()}
+  $("lErr").textContent="Can't reach the store's database right now. Check your connection and try again."
 });
-$("lFill").onclick=()=>{$("lUser").value=DEMO_USER;$("lPass").value=DEMO_PASS;$("lPass").focus()};
 $("aLogout").onclick=()=>{if(window.LIVE){LIVE.logout();return}setAuthed(false);showAdmin();toast("Signed out")};
 function showAdmin(){const a=isAuthed();$("aLogin").hidden=a;$("aShell").hidden=!a;if(a)go(adm.page);else setTimeout(()=>$("lUser").focus(),50)}
 
@@ -12809,7 +12808,6 @@ $("expBtn").onclick=()=>{const rows=[IMP_COLS];
   download(`connectify-stock-${new Date().toISOString().slice(0,10)}.csv`,rows.map(csvRow).join("\n"));toast(`Exported ${rows.length-1} rows`)};
 
 /* ---------- reset + routing ---------- */
-$("aReset").onclick=()=>{if(confirm("Reset everything (stock, orders, prices, storefront) to the demo data?")){DB=seedDB();DB.trade=seedTrade();adm.open.clear();save();renderStore();tradeUI();renderPage();toast("Demo data restored")}};
 /* open/close without relying on the address bar (the iPhone preview has none) */
 let ADMIN_ON=false;
 function setAdmin(on){ADMIN_ON=on;$("admin").classList.toggle("on",on);document.body.style.overflow=on?"hidden":"";
@@ -13497,7 +13495,6 @@ shrink=async f=>{const u=await _shrinkU(f);if(!L.staff)return u;
 function setSync(s,why){const d=document.querySelector(".demo-strip");if(!d)return;d.classList.add("live");d.classList.toggle("err",s=="err");
   d.textContent=s=="err"?"Not saved yet: "+(why?why+". ":"no connection to the database. ")+"Your changes are kept on this device and will retry.":"Live: changes save to the store's database and show to customers right away."}
 document.querySelectorAll(".ldemo").forEach(e=>e.hidden=true);
-if($("aReset"))$("aReset").hidden=true;
 setSync("ok");
 
 /* ---------- start ---------- */
