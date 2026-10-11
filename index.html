@@ -967,6 +967,7 @@ html.locked,html.locked body{overflow:hidden}
 .acatsearch{position:sticky;top:0;z-index:5;padding:10px 0;margin:0 0 12px;background:linear-gradient(#0b0b0c 75%,transparent)}
 .acatsearch .search{flex:1;min-width:240px;max-width:none}
 .acatsearch .search input{width:100%}
+.agone{margin-top:22px}.agone h3{font-size:14px;margin:0 0 8px;opacity:.7}
 
 /* ===== store details: badges, fits, shop by phone, delivery band, brands, warranty page ===== */
 .bdg{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:800;letter-spacing:.02em;white-space:nowrap;vertical-align:middle}
@@ -2146,6 +2147,7 @@ select option:disabled{color:#6A6A6A}
           <div class="series" id="aFilter" role="group" aria-label="Availability"><button data-v="all" aria-pressed="true">All</button><button data-v="in" aria-pressed="false">In stock</button><button data-v="out" aria-pressed="false">Unavailable</button></div>
         </div>
         <div class="arows" id="aRows"></div>
+        <div class="agone" id="aGone"></div>
       </section>
 
       <section class="apage" id="ap-acc" hidden>
@@ -2201,7 +2203,7 @@ select option:disabled{color:#6A6A6A}
           <div class="bulkrow"><button type="button" class="abtn" id="bIn">All in stock</button><button type="button" class="abtn" id="bOut">All sold out</button><button type="button" class="abtn" id="bHide">Hide all</button><button type="button" class="abtn" id="bShow">Show all</button><button type="button" class="abtn danger" id="bReset">Reset to original</button></div></details>
         <div class="tabs ctabs" id="cTabs" role="group" aria-label="Department"></div>
         <div class="csubrow"><div class="series" id="cSubs" role="group" aria-label="Type"></div><button type="button" class="abtn" id="cAddHere">+ Add a product here</button></div>
-        <div class="series" id="cFilter" role="group" aria-label="Show"><button data-v="all">All</button><button data-v="in">In stock</button><button data-v="out">Sold out</button><button data-v="hidden">Hidden</button><button data-v="sale">On sale</button><button data-v="nopic">No photo</button><button data-v="edited">Edited by you</button></div>
+        <div class="series" id="cFilter" role="group" aria-label="Show"><button data-v="all">All</button><button data-v="in">In stock</button><button data-v="out">Sold out</button><button data-v="hidden">Hidden</button><button data-v="sale">On sale</button><button data-v="nopic">No photo</button><button data-v="edited">Edited by you</button><button data-v="deleted">Deleted</button></div>
         <p class="count-line" id="cCount"></p>
         <div class="crows" id="cRows"></div>
         <button type="button" class="btn btn-ghost more" id="cMore" hidden>Show more</button>
@@ -2229,7 +2231,7 @@ select option:disabled{color:#6A6A6A}
         <div class="atools">
           <label class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A2A2A2" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="tQ" type="search" placeholder="Find a tablet, e.g. Air M4" aria-label="Find a tablet"></label>
           <div class="series" id="tBrand" role="group" aria-label="Brand"></div>
-          <div class="series" id="tFilter" role="group" aria-label="Show"><button data-v="all">All</button><button data-v="in">In stock</button><button data-v="out">Sold out</button><button data-v="hidden">Hidden</button></div>
+          <div class="series" id="tFilter" role="group" aria-label="Show"><button data-v="all">All</button><button data-v="in">In stock</button><button data-v="out">Sold out</button><button data-v="hidden">Hidden</button><button data-v="deleted">Deleted</button></div>
         </div>
         <div class="crows" id="tRows"></div>
       </section>
@@ -11392,9 +11394,10 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(DB));return true}cat
 const accById=id=>(DB.accs||[]).find(a=>a.id==id);
 const accOK=a=>a&&a.qty>0;
 const ACC_CATS={ipad:"iPads",wear:"Watches & AirPods",cover:"Covers",power:"Chargers & power",holder:"Holders"};
-const allModels=()=>[...(DB?DB.custom:[]),...PHONES];
+const allModelsRaw=()=>[...(DB?DB.custom:[]),...PHONES];
+const allModels=()=>{const g=(DB&&DB.gone)||[];return allModelsRaw().filter(m=>!g.includes(m.id))};
 const brandOf=m=>m.brand||"apple";
-const modelById=id=>allModels().find(m=>m.id==id);
+const modelById=id=>allModelsRaw().find(m=>m.id==id);
 const unitsFor=(m,c)=>DB.units.filter(u=>u.m==m.id&&(!c||u.c==c)&&u.qty>0);
 const colorOK=(m,c)=>unitsFor(m,c).length>0;
 const stockColors=m=>m.colors.filter(([c])=>colorOK(m,c));
@@ -11947,7 +11950,7 @@ const phO=id=>(DB.ph||(DB.ph={}))[id];
 function phV(p,i){const o=phO(p.id),v=p.vars[i],ov=(o&&o.v&&o.v[i])||{},q=ov.q??v.q;
   return{t:v.t,p:ov.p??v.p,cp:ov.cp??v.cp,q,ok:ov.ok??(q!=null?q>0:v.ok),img:v.img}}
 const phVars=p=>p.vars.map((_,i)=>phV(p,i));
-const phHidden=p=>{const o=phO(p.id)||{};return o.hide!=null?!!o.hide:(window.PH_DEFAULT_HIDE||[]).includes(p.id.slice(2))};
+const phHidden=p=>{const o=phO(p.id)||{};if(o.del)return true;return o.hide!=null?!!o.hide:(window.PH_DEFAULT_HIDE||[]).includes(p.id.slice(2))};
 const phOK=p=>!phHidden(p)&&phVars(p).some(v=>v.ok);
 function phPrice(p){const all=phVars(p).filter(v=>v.p!=null);if(!all.length)return{p:null,cp:0,from:false};
   const vs=all,ok=vs.filter(v=>v.ok),use=ok.length?ok:vs,min=Math.min(...use.map(v=>v.p)),v=use.find(v=>v.p==min);
@@ -12475,6 +12478,7 @@ function renderStock(){renderBrandChips();
   if(adm.b!="all")list=list.filter(m=>brandOf(m)==adm.b);
   if(adm.f=="in")list=list.filter(m=>status(m).k=="ok");if(adm.f=="out")list=list.filter(m=>status(m).k!="ok");
   $("aRows").innerHTML=list.map(aRowHTML).join("")||`<div class="dempty">No model matches.</div>`;
+  {const g=(DB.gone||[]).map(modelById).filter(Boolean);$("aGone").innerHTML=g.length?`<h3>Removed models (${g.length})</h3>`+g.map(m=>`<div class="drow"><span class="grow"><b>${esc(m.name)}</b></span><button type="button" class="abtn" data-unGone="${m.id}">Restore</button></div>`).join(""):""}
   if(adm.focus){const r=document.querySelector(`.arow[data-m="${adm.focus}"]`);if(r)r.scrollIntoView({block:"start"});adm.focus=null}
 }
 function aRowHTML(m){
@@ -12486,7 +12490,7 @@ function aRowHTML(m){
      ${pill(s)}
      <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
    </div>
-   <div class="abody">${open?m.colors.map(([c,h])=>colorBlock(m,c,h)).join("")+(m.custom?`<button class="del" data-del="${m.id}">Remove this model from the catalog</button>`:""):""}</div>
+   <div class="abody">${open?m.colors.map(([c,h])=>colorBlock(m,c,h)).join("")+(m.custom?`<button class="del" data-del="${m.id}">Remove this model from the catalog</button>`:`<button class="del" data-gone="${m.id}">Remove this model from the store</button>`):""}</div>
   </div>`}
 const opt=(list,lab,sel)=>list.map(v=>`<option value="${v}" ${v==sel?"selected":""}>${lab(v)}</option>`).join("");
 function colorBlock(m,c,h){
@@ -12515,6 +12519,7 @@ function colorBlock(m,c,h){
   </div>`}
 /* photos: shrink before saving so the demo fits in browser storage */
 function shrink(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{const k=Math.min(1,900/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=img.width*k|0;c.height=img.height*k|0;c.getContext("2d").drawImage(img,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",.72))};img.onerror=rej;img.src=r.result};r.onerror=rej;r.readAsDataURL(file)})}
+$("aGone").addEventListener("click",e=>{const b=e.target.closest("[data-unGone]");if(!b)return;DB.gone=(DB.gone||[]).filter(x=>x!=b.dataset.ungone);commit("Model restored")});
 $("aRows").addEventListener("click",e=>{
   const row=e.target.closest(".arow");if(!row)return;const m=modelById(row.dataset.m);
   const ue=e.target.closest(".unit"),u=ue&&DB.units.find(x=>x.id==ue.dataset.u);
@@ -12523,6 +12528,7 @@ $("aRows").addEventListener("click",e=>{
   const dp=e.target.closest("[data-delph]");if(dp&&u){u.photos.splice(+dp.dataset.delph,1);commit("Photo removed");return}
   const add=e.target.closest("[data-addu]");if(add){const c=add.closest(".cblock").dataset.c;
     DB.units.push({id:newId("u"),m:m.id,c,st:m.st[0],cond:m.year>=2025?"new":"used",sim:m.sims[0],qty:1,bat:m.year>=2025?100:90,note:"",photos:[],added:now()});commit(`${m.name} ${c} added to stock`);return}
+  const gn=e.target.closest("[data-gone]");if(gn){if(confirm(`Remove ${m.name} from the store? You can bring it back from the list at the bottom of this page.`)){(DB.gone=DB.gone||[]).push(m.id);adm.open.delete(m.id);commit(`${m.name} removed`)}return}
   const del=e.target.closest("[data-del]");if(del){if(confirm(`Remove ${m.name} from the catalog?`)){DB.custom=DB.custom.filter(c=>c.id!=m.id);DB.units=DB.units.filter(u=>u.m!=m.id);commit(`${m.name} removed`)}return}
   if(e.target.closest("[data-toggle]")){adm.open.has(m.id)?adm.open.delete(m.id):adm.open.add(m.id);renderStock()}
 });
@@ -12828,12 +12834,13 @@ const _renderPage=renderPage;
 renderPage=function(){if(adm.page!="cat"&&adm.page!="tabs")return _renderPage();
   if(adm.page=="tabs"){const n=DB.orders.filter(o=>o.status=="new").length;$("navOrders").textContent=n;$("navOrders").hidden=!n;renderTablets();return}
   const n=DB.orders.filter(o=>o.status=="new").length;$("navOrders").textContent=n;$("navOrders").hidden=!n;renderCatalog()};
+const phDel=p=>!!(phO(p.id)||{}).del;
 const phEdited=p=>{const o=phO(p.id);return!!(o&&((o.v&&Object.keys(o.v).length)||o.hide!=null||o.desc!=null||(o.pics&&o.pics.length)))};
 const phSet=(p,i,k,val)=>{const o=DB.ph[p.id]||(DB.ph[p.id]={});o.v=o.v||{};const ov=o.v[i]||(o.v[i]={});
   if(val===p.vars[i][k])delete ov[k];else ov[k]=val;if(!Object.keys(ov).length)delete o.v[i];if(!Object.keys(o.v).length)delete o.v;if(!Object.keys(o).length)delete DB.ph[p.id]};
 function catList(){const q=lc2(cadm.q).trim();
-  return PHI.filter(p=>!isTablet(p)&&(!cadm.dept||p.dept==cadm.dept)&&(!cadm.sub||p.sub==cadm.sub)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+p.sub).includes(t)))&&
-    ({all:1,in:phOK(p),out:!phHidden(p)&&!phOK(p),hidden:phHidden(p),sale:phOff(p)>0,nopic:!hasImg(p.imgs[0]),edited:phEdited(p)})[cadm.f]).sort((a,b)=>(phOK(b)-phOK(a))||((b.cx?1:0)-(a.cx?1:0)))}
+  return PHI.filter(p=>!isTablet(p)&&(cadm.f=='deleted'?phDel(p):!phDel(p))&&(!cadm.dept||p.dept==cadm.dept)&&(!cadm.sub||p.sub==cadm.sub)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+p.sub).includes(t)))&&
+    ({all:1,in:phOK(p),out:!phHidden(p)&&!phOK(p),hidden:phHidden(p),deleted:1,sale:phOff(p)>0,nopic:!hasImg(p.imgs[0]),edited:phEdited(p)})[cadm.f]).sort((a,b)=>(phOK(b)-phOK(a))||((b.cx?1:0)-(a.cx?1:0)))}
 function rowHTML(p){const vs=phVars(p),hid=phHidden(p),open=cadm.open.has(p.id),show=open?vs:vs.slice(0,4);
     return `<div class="crow ${hid?"hid":""}" data-c="${p.id}">
       <span class="cimg">${hasImg(p.imgs[0])?`<img src="${phImg(p.imgs[0],140)}" alt="" loading="lazy">`:`<span class="noimg">${DEPT_ICON[p.dept]||"✨"}</span>`}</span>
@@ -12848,10 +12855,11 @@ function rowHTML(p){const vs=phVars(p),hid=phHidden(p),open=cadm.open.has(p.id),
           ${vs.length>4?`<button type="button" class="linkbtn" data-copen>${open?"Show less":`Show all ${vs.length} options`}</button>`:""}</div>
         <details class="cdesc priv"><summary>🔒 Private note${privP(p.id).note?" · has a note":""}</summary><textarea data-cpnote rows="2" maxlength="300" placeholder="Only staff see this: supplier, where it's stored, reorder info…">${esc(privP(p.id).note||"")}</textarea></details>
         <details class="cdesc"><summary>Description${(phO(p.id)||{}).desc!=null?" · edited":""}</summary><textarea data-cdesc rows="3" placeholder="What customers read on the product page">${esc((phO(p.id)||{}).desc??p.desc??"")}</textarea></details></div>
-      <div class="cside"><label class="abtn cpic">${((phO(p.id)||{}).pics||[]).length?"Add photo":"Upload photo"}<input type="file" accept="image/*" multiple data-cpic hidden></label>${((phO(p.id)||{}).pics||[]).length?`<button type="button" class="abtn" data-cpicdel>Remove my photos (${phO(p.id).pics.length})</button>`:""}${p.np?`<button type="button" class="abtn danger" data-npdel>Delete</button>`:""}<button type="button" class="abtn" data-chide>${hid?"Show on store":"Hide"}</button>${phEdited(p)?`<button type="button" class="abtn" data-creset>Reset</button>`:""}</div></div>`}
+      <div class="cside"><label class="abtn cpic">${((phO(p.id)||{}).pics||[]).length?"Add photo":"Upload photo"}<input type="file" accept="image/*" multiple data-cpic hidden></label>${((phO(p.id)||{}).pics||[]).length?`<button type="button" class="abtn" data-cpicdel>Remove my photos (${phO(p.id).pics.length})</button>`:""}${phDel(p)?`<button type="button" class="abtn" data-prest>Restore</button>`:`<button type="button" class="abtn danger" ${p.np?"data-npdel":"data-pdel"}>Delete</button><button type="button" class="abtn" data-chide>${hid?"Show on store":"Hide"}</button>`}${phEdited(p)?`<button type="button" class="abtn" data-creset>Reset</button>`:""}</div></div>`}
 function renderCatalog(){
   if(!$("cDept").options.length)$("cDept").innerHTML=`<option value="">All departments</option>`+PH.depts.map(([d,l])=>`<option value="${d}">${esc(l)}</option>`).join("");
-  const all=PHI.filter(p=>!isTablet(p)),list=catList();
+  const gone=PHI.filter(p=>!isTablet(p)&&phDel(p)).length,all=PHI.filter(p=>!isTablet(p)&&!phDel(p)),list=catList();
+  {const db=$("cFilter").querySelector('[data-v=deleted]');if(db)db.textContent="Deleted ("+gone+")"}
   /* department tabs (scrollable, like the store) and the types inside the chosen department */
   const cnt=d=>all.filter(p=>!d||p.dept==d).length;
   $("cTabs").innerHTML=[["","All"],...PH.depts].filter(([d])=>!d||cnt(d)).map(([d,l])=>`<button class="tab" data-d="${d}" aria-pressed="${cadm.dept==d}">${esc(l)} <span class="tn">${cnt(d)}</span></button>`).join("");
@@ -12889,6 +12897,9 @@ el.addEventListener("click",e=>{const row=e.target.closest("[data-c]");if(!row)r
   if(e.target.closest("[data-chide]")){const o=DB.ph[p.id]||(DB.ph[p.id]={}),def=(window.PH_DEFAULT_HIDE||[]).includes(p.id.slice(2));o.hide=!phHidden(p);if(o.hide===def)delete o.hide;if(!Object.keys(o).length)delete DB.ph[p.id];commit(phHidden(p)?"Hidden from the store":"Back on the store");return}
   if(e.target.closest("[data-cpicdel]")){if(!confirm("Remove the photos you uploaded for this product?"))return;const o=DB.ph[p.id];if(o){delete o.pics;if(!Object.keys(o).length)delete DB.ph[p.id]}applyOwnerPhotos();commit("Your photos were removed");return}
   if(e.target.closest("[data-creset]")){if(!confirm("Undo all your changes to this product (price, stock, description, photos)?"))return;delete DB.ph[p.id];applyOwnerPhotos();commit("Back to the original price and stock")}});
+el.addEventListener("click",e=>{const b=e.target.closest("[data-pdel],[data-prest]");if(!b)return;const id=b.closest("[data-c]").dataset.c,o=DB.ph[id]||(DB.ph[id]={});
+  if(b.hasAttribute("data-pdel")){if(!confirm("Delete this product from the store? You can bring it back from the Deleted list."))return;o.del=true;commit("Product deleted")}
+  else{delete o.del;if(!Object.keys(o).length)delete DB.ph[id];commit("Product restored")}});
 el.addEventListener("click",e=>{const b=e.target.closest("[data-npdel]");if(!b)return;const id=b.closest("[data-c]").dataset.c;
   if(!confirm("Delete this product from the store?"))return;DB.newp=(DB.newp||[]).filter(a=>a.id!=id);delete DB.ph[id];cadm.q="";$("cQ").value="";applyOwnerPhotos();commit("Product deleted")});
 }
@@ -12977,15 +12988,16 @@ const tadm={q:"",b:"all",f:"all"};
 const TAB_BRANDS={apple:"Apple",samsung:"Samsung",xiaomi:"Xiaomi",lenovo:"Lenovo",huawei:"Huawei",honor:"Honor",microsoft:"Microsoft",amazon:"Amazon",oneplus:"OnePlus",realme:"Realme",oppo:"Oppo",tcl:"TCL"};
 const tabSub=b=>b=="Apple"?"iPads":b=="Samsung"?"Galaxy Tab":"Tablets";
 function renderTablets(){
-  const all=PHI.filter(isTablet),q=lc2(tadm.q).trim();
+  const all=PHI.filter(p=>isTablet(p)&&!phDel(p)),gone=PHI.filter(p=>isTablet(p)&&phDel(p)),q=lc2(tadm.q).trim();
+  {const db=$("tFilter").querySelector('[data-v=deleted]');if(db)db.textContent="Deleted ("+gone.length+")"}
   const brands=[...new Set(all.map(p=>p.brand||"Other"))].sort((a,b)=>(a=="Apple"?-2:a=="Samsung"?-1:0)-(b=="Apple"?-2:b=="Samsung"?-1:0)||a.localeCompare(b));
   if(tadm.b!="all"&&!brands.includes(tadm.b))tadm.b="all";
   const units=all.filter(p=>!phHidden(p)).reduce((t,p)=>t+phVars(p).reduce((a,v)=>a+(v.q>0?v.q:0),0),0);
   $("tStats").innerHTML=`<div><b>${all.length}</b><span>tablets</span></div><div><b>${all.filter(phOK).length}</b><span>in stock</span></div><div><b>${units}</b><span>pieces in stock</span></div><div><b>${brands.length}</b><span>brands</span></div>`;
   $("tBrand").innerHTML=[["all","All brands"],...brands.map(b=>[b,b])].map(([v,l])=>`<button data-v="${esc(v)}" aria-pressed="${tadm.b==v}">${esc(l)} <span>${v=="all"?all.length:all.filter(p=>(p.brand||"Other")==v).length}</span></button>`).join("");
   $("tFilter").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v==tadm.f));
-  const list=all.filter(p=>(tadm.b=="all"||(p.brand||"Other")==tadm.b)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+phVars(p).map(v=>v.t).join(" ")).includes(t)))&&
-    ({all:1,in:phOK(p),out:!phHidden(p)&&!phOK(p),hidden:phHidden(p)})[tadm.f]).sort((a,b)=>(phOK(b)-phOK(a))||a.name.localeCompare(b.name));
+  const list=(tadm.f=='deleted'?gone:all).filter(p=>(tadm.b=="all"||(p.brand||"Other")==tadm.b)&&(!q||q.split(/\s+/).every(t=>lc2(p.name+" "+p.brand+" "+phVars(p).map(v=>v.t).join(" ")).includes(t)))&&
+    ({all:1,in:phOK(p),out:!phHidden(p)&&!phOK(p),hidden:phHidden(p),deleted:1})[tadm.f]).sort((a,b)=>(phOK(b)-phOK(a))||a.name.localeCompare(b.name));
   $("tRows").innerHTML=list.map(rowHTML).join("")||`<div class="dempty">${all.length?"Nothing matches.":"No tablets yet. Tap “Add a tablet”."}</div>`;
 }
 bindRows($("tRows"));
