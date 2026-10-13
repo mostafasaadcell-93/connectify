@@ -1,0 +1,22 @@
+model,storage_gb,resale_reference_usd,resale_basis,trade_base_usd,like_new_quote_usd,connectify_shelf_usd,shop_used_ask_usd,confidence,note
+iPhone 14 Pro,256,588,sourced Apple row,400,380-410,585 used,630,low,Resale table is below the one current used shop
+iPhone 15 Pro Max,256,799,sourced Apple row,545,520-560,795 damaged,860 like new,low,Quote is for clean; shelf unit has replaced glass
+iPhone 15 Pro Max,512,844,interpolated,575,545-590,839,890 like new,low,"Storage step is calculated, not listed"
+iPhone 14 Pro Max,256,680,sourced Apple row,460,435-475,676,680,medium,Resale reference matches the shop ask
+iPhone 13,128,325,sourced Apple row,220,210-225,321,380,low,Clean quote is far under both the shelf and the shop
+iPhone 13 Pro,128,433,sourced Apple row,295,280-305,428 battery 74%,480,low,One shop
+iPhone 13 Pro,256,466,sourced Apple row,315,300-325,461,530,low,One shop
+iPhone 13 Pro Max,128,480,sourced Apple row,325,310-335,475 parts replaced,575,low,One shop
+iPhone 13 Pro Max,256,522,sourced Apple row,355,335-365,519 parts replaced,610,low,One shop
+iPhone 12 Pro Max,256,375,sourced Apple row,255,240-265,371,430,low,One shop
+iPhone 12 Pro,512,333,interpolated,225,215-230,329 repaired,none,low,No matching used offer
+iPhone 14,128,399,sourced Apple row,270,255-280,395,none,low,No matching used offer
+iPhone 17 Pro Max,256,1250,sourced Apple row,850,810-875,1462 new,none,low,New shelf is not a used resale
+iPhone 17 Pro Max,512,1388,interpolated,945,900-975,1385 used,none,low,No used shop price
+iPhone 18 Pro Max,256,1550,"estimate, not in source flag",1055,1000-1085,1856 new,none,low,Samsung-style estimate flag does not include this id in RESALE_SOURCE
+iPhone 18 Pro Max,512,1721,interpolated,1170,1110-1205,2120 new,none,low,Interpolated
+iPhone Air,256,950,estimate,645,615-665,945 used,none,low,No used shop price
+Galaxy S26 Ultra,256,1050,Samsung estimate,715,680-735,1356 new,none,low,Not in the sourced-Apple flag
+Galaxy S25 Ultra,256,800,Samsung estimate,545,520-560,796 screen broken,930 working,low,Do not treat the broken shelf price as resale
+Galaxy Z Fold7,256,1050,Samsung estimate,715,680-735,1047 used,1700 new out of stock,low,New list is not used resale
+Galaxy Z Fold7,512,1166,interpolated,795,755-820,1163 used,none,low,Interpolated

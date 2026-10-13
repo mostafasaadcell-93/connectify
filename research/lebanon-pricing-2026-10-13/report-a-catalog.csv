@@ -1,0 +1,30 @@
+unit_id,kind,brand,model,model_id,storage,ram,color,condition,sim,warranty,qty,battery_health,note,current_price_usd,price_source,limitation
+u1,phone,Apple,iPhone 14 Pro,14pro,256GB,not recorded,Space Black,Used,Dual nano-SIM,3 months warranty,1,0 (not recorded),,585,store_state.units.p (matches CX_UPRICE). Updated 2026-10-12T10:35:28Z,Reference used price $503 is not the cart price
+u2,phone,Samsung,Galaxy Z Fold7,fold7,512GB,not recorded,Jetblack,Used,Nano-SIM + eSIM,3 months warranty,1,0 (not recorded),,1163,store_state.units.p,Reference price $1399 is higher than the selling price and is not charged
+u3,phone,Apple,iPhone 15 Pro Max,15promax,256GB,not recorded,Natural Titanium,Used,Nano-SIM + eSIM,3 months warranty,1,85,Back glass replaced,795,store_state.units.p,Same price as the Black Titanium 256GB unit
+u4,phone,Samsung,Galaxy Z Fold7,fold7,256GB,not recorded,Jetblack,Used,Nano-SIM + eSIM,3 months warranty,1,0 (not recorded),With warranty,1047,store_state.units.p,Note says warranty; standard used warranty text is still 3 months unless the note is shown
+u5,phone,Apple,iPhone 13,13,128GB,not recorded,Pink,Used,Nano-SIM + eSIM,3 months warranty,1,88,,321,store_state.units.p,
+u6,phone,Apple,iPhone 14,14,128GB,not recorded,Purple,Used,Nano-SIM + eSIM,3 months warranty,1,80,,395,store_state.units.p,
+u7,phone,Apple,iPhone 14 Pro Max,14promax,256GB,not recorded,Space Black,Used,Nano-SIM + eSIM,3 months warranty,1,0 (not recorded),,676,store_state.units.p,
+u8,phone,Apple,iPhone 13 Pro,13pro,256GB,not recorded,Sierra Blue,Used,Nano-SIM + eSIM,3 months warranty,1,0 (not recorded),,461,store_state.units.p,
+u9,phone,Apple,iPhone 12 Pro,12pro,512GB,not recorded,Pacific Blue,Used,Nano-SIM + eSIM,3 months warranty,1,0 (not recorded),Screen replaced. Speaker replaced. Ask us for the color,329,store_state.units.p,Color on the unit may not match the label
+u10,phone,Samsung,Galaxy S26 Ultra,s26ultra,256GB,not recorded on the unit,Black,New,Nano-SIM + eSIM,1 year official warranty,1,100,,1356,store_state.units.p,Matches the model reference for new 256GB
+u11,phone,Apple,iPhone 15 Pro Max,15promax,256GB,not recorded,Black Titanium,Used,Nano-SIM + eSIM,3 months warranty,1,86,Light scratches on the screen,795,store_state.units.p,Same price as Natural Titanium
+u12,phone,Apple,iPhone 17 Pro Max,17promax,256GB,12GB on this generation,Silver,New,Nano-SIM + eSIM,1 year official warranty,2,100,Never activated,1462,store_state.units.p,Same price as Deep Blue
+u13,phone,Apple,iPhone 17 Pro Max,17promax,256GB,12GB on this generation,Deep Blue,New,Nano-SIM + eSIM,1 year official warranty,1,100,Never activated,1462,store_state.units.p,Same price as Silver
+u14,phone,Apple,iPhone 15 Pro Max,15promax,512GB,not recorded,Black Titanium,Used,Nano-SIM + eSIM,3 months warranty,1,0 (not recorded),,839,store_state.units.p,
+u15,phone,Apple,iPhone 12 Pro Max,12promax,256GB,not recorded,Graphite,Used,Nano-SIM + eSIM,3 months warranty,1,0 (not recorded),,371,store_state.units.p,
+u16,phone,Apple,iPhone 13 Pro,13pro,128GB,not recorded,Alpine Green,Used,Nano-SIM + eSIM,3 months warranty,1,74,,428,store_state.units.p,Battery under 80%
+u17,phone,Apple,iPhone 13 Pro Max,13promax,128GB,not recorded,Graphite,Used,Nano-SIM + eSIM,3 months warranty,1,75,Screen replaced. Camera replaced,475,store_state.units.p,
+u18,phone,Apple,iPhone 18 Pro Max,18promax,256GB,not recorded on the unit,Black,New,Nano-SIM + eSIM,1 year official warranty,1,100,1 year warranty. Never activated,1856,store_state.units.p,Color-specific reference exists and matches this unit price. Burgundy reference is $1946 and is not in stock
+u19,phone,Apple,iPhone 17 Pro Max,17promax,512GB,12GB on this generation,Silver,Used,Nano-SIM + eSIM,3 months warranty,1,95,,1385,store_state.units.p,"Used, not the new 512GB price"
+u20,phone,Samsung,Galaxy S25 Ultra,s25ultra,256GB,not recorded,Titanium Black,Used,Nano-SIM + eSIM,3 months warranty,1,0 (not recorded),Screen is broken,796,store_state.units.p,Not a working-screen unit
+u21,phone,Apple,iPhone Air,air,256GB,not recorded,Space Black,Used,eSIM only,3 months warranty,1,0 (not recorded),,945,store_state.units.p,Catalog SIM list for Air is eSIM only
+u22,phone,Apple,iPhone 13 Pro Max,13promax,256GB,not recorded,Graphite,Used,Nano-SIM + eSIM,3 months warranty,1,76,Screen replaced. Camera replaced,519,store_state.units.p,
+u23,phone,Apple,iPhone 18 Pro Max,18promax,512GB,not recorded on the unit,Black,New,Nano-SIM + eSIM,1 year official warranty,1,100,1 year warranty. Never activated,2120,store_state.units.p,Color-specific reference matches. Burgundy 512GB reference is $2195 and is not in stock
+cx57,phone,Samsung,Galaxy A07,cx57,128GB,listed as 12GB,not stated,not stated,not stated,not stated,1,,,222,"CX_PRICE, no admin price override",12GB RAM is not a configuration sold by the shops checked
+cx58-4,phone,Samsung,Galaxy A17,cx58,128GB,4GB,Black,not stated on this row,not stated,not stated,1,,,212,"CX_PRICE, no admin price override",
+cx58-6,phone,Samsung,Galaxy A17,cx58,128GB,6GB,Black,New,not stated,not stated,1,,,246,"CX_PRICE, no admin price override",
+cx2-128,tablet,Samsung,Galaxy Tab A11,cx2,128GB,8GB,Gray,New,not stated,not stated,1,,Wi-Fi or LTE not stated,197,"CX_PRICE, no admin price override",Silver 8GB/128GB is quantity 0 and was not repriced
+cx2-64,tablet,Samsung,Galaxy Tab A11,cx2,64GB,4GB,Gray,New,not stated,not stated,1,,Wi-Fi or LTE not stated,137,"CX_PRICE, no admin price override",Silver 4GB/64GB is quantity 0 and was not repriced
+cx54,tablet,Apple,iPad,cx54,not stated,not stated,not stated,not stated,not stated,not stated,1,,Listing text is only M4 Pro,1097,"CX_PRICE, no admin price override","Storage, cellular, color, and condition are not recorded"
