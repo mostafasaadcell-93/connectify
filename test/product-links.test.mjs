@@ -167,11 +167,25 @@ test("order message keeps the existing wording and adds one link under every ite
   assert.equal(trade.includes("Product link:"), false);
   assert.equal(cx.cxProductURL({kind: "nope", id: "x"}), "");
   assert.equal(cx.cxProductURL(null), "");
+
+  assert.equal(cx.cxProductURL({key: "ph:cx12:0", title: "Apple Adapter 25W"}), "https://connectifystore.vercel.app/?p=ph&id=cx12&v=0");
+  assert.equal(cx.cxProductURL({kind: "ph", id: "cx14", vi: 1}), "https://connectifystore.vercel.app/?p=ph&id=cx14&v=1");
+  assert.equal(cx.cxProductURL({key: "ph:cx14:1"}), "https://connectifystore.vercel.app/?p=ph&id=cx14&v=1");
+  const stored = cx.cxOrderMessage({
+    id: "C-bbbbbbbbbbbbbbbbbb",
+    items: [{kind: "ph", id: "cx12", vi: 0, title: "Apple Adapter 25W", detail: "White, 25W", price: 38}],
+    form: {name: "Karim", area: "Beirut", address: "Hamra street building 4"}
+  }, money, "+961 71 062 768").msg;
+  assert.match(stored, /• Apple Adapter 25W, White, 25W \(\$38\)\n\nProduct link: https:\/\/connectifystore\.vercel\.app\/\?p=ph&id=cx12&v=0/);
+  assert.match(stored, /Can you confirm the prices and send me real photos\?/);
+  assert.match(html, /window\.cxOrderMessage\(\{id,cart:snap/);
+  assert.equal(html.includes("cart.map(i=>`• ${i.title}"), false);
 });
 
-async function openPage(urlPath, viewport = {width: 1280, height: 900}) {
+async function openPage(urlPath, viewport = {width: 1280, height: 900}, prepare) {
   await boot;
   const context = await browser.newContext({viewport, locale: "en-US"});
+  if (prepare) await prepare(context);
   const page = await context.newPage();
   const writes = [];
   await page.route("**/*supabase.co/**", route => {
@@ -422,4 +436,190 @@ test("the homepage and the admin hash do not open a product", async () => {
   } finally {
     await finish(admin);
   }
+});
+
+test("every orderable category gets its own link through checkout, including a charger", async () => {
+  await boot;
+  const context = await browser.newContext({viewport: {width: 1280, height: 900}});
+  const page = await context.newPage();
+  const orderPosts = [];
+  await page.route("**/*supabase.co/**", route => {
+    const method = route.request().method();
+    const url = route.request().url();
+    if (method === "POST" && url.includes("/rest/v1/orders")) {
+      orderPosts.push(route.request().postData());
+      return route.fulfill({status: 201, contentType: "application/json", body: "[]"});
+    }
+    return route.abort();
+  });
+  await page.goto(origin + "/", {waitUntil: "domcontentloaded", timeout: 60000});
+  await page.waitForFunction(() => window.LIVE && LIVE.ready && typeof addPH === "function" && typeof CX_CHECKOUT === "function" && typeof cxOrderMessage === "function", null, {timeout: 60000});
+  const added = await page.evaluate(() => {
+    const ids = ["cx12", "cx16", "cx20", "cx19", "cx11", "cx27", "cx24", "cx131", "cx130", "cx2", "cx54", "cx57", "cx25", "cx14"];
+    ids.forEach(id => addPH(PHmap.get(id), 0));
+    addPH(PHmap.get("cx14"), 1);
+    addPH(PHmap.get("cx11"), 2);
+    DB.newp = [{id: "nptestone", name: "Anker Charger", brand: "Anker", dept: "power", sub: "Chargers", desc: "30W USB-C", c: "2026-10-13", vars: [{t: "30W USB-C", p: 20, q: 2}]}];
+    syncNewProducts();
+    addPH(PHmap.get("nptestone"), 0);
+    const shared = PHI.find(p => p.ph && !p.cx && phOK(p));
+    if (shared) addPH(shared, 0);
+    openPhone("17promax", "Silver");
+    document.querySelector("#pvAdd").click();
+    openPhone("s26ultra", "Black");
+    document.querySelector("#pvAdd").click();
+    return {
+      shared: shared ? {id: shared.id, name: shared.name} : null,
+      count: document.querySelectorAll("#items .line").length
+    };
+  });
+  assert.ok(added.shared, "an in-stock shared-catalog product should be orderable");
+  assert.ok(added.count >= 17, "cart lines " + added.count);
+  await page.evaluate(() => {
+    openCart(true);
+    document.querySelector("#oName").value = "Karim";
+    document.querySelector("#oPhone").value = "70 123 456";
+    const area = document.querySelector("#oArea");
+    if (![...area.options].some(o => o.value === "Beirut")) area.innerHTML = '<option value="Beirut">Beirut</option>';
+    area.value = "Beirut";
+    document.querySelector("#oAddr").value = "Hamra street building 4";
+  });
+  await page.click("#checkout");
+  await page.waitForFunction(() => document.querySelector("#waModal").classList.contains("on"), null, {timeout: 20000});
+  const bubble = await page.evaluate(() => document.querySelector("#bubble").textContent);
+  const lines = bubble.split("\n");
+  const bullets = lines.filter(line => line.startsWith("• "));
+  const pairs = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].startsWith("• ")) continue;
+    let j = i + 1;
+    while (j < lines.length && lines[j] === "") j++;
+    assert.match(lines[j] || "", /^Product link: https:\/\/connectifystore\.vercel\.app\/\?/, "missing link under " + lines[i]);
+    pairs.push({item: lines[i], url: lines[j].slice("Product link: ".length)});
+  }
+  assert.equal(pairs.length, bullets.length);
+  assert.ok(pairs.some(pair => pair.item.includes("Apple Adapter 25W") && pair.url.includes("id=cx12&v=0")));
+  assert.ok(pairs.some(pair => pair.item.includes("Samsung Cable") && pair.url.includes("id=cx16")));
+  assert.ok(pairs.some(pair => pair.item.includes("Lightning") && pair.url.includes("id=cx20&v=0")));
+  assert.ok(pairs.some(pair => pair.item.includes("MagSafe") && pair.url.includes("id=cx19&v=0")));
+  assert.ok(pairs.some(pair => pair.item.includes("Silicone Case") && pair.url.includes("id=cx11&v=0")));
+  assert.ok(pairs.some(pair => pair.item.includes("Silicone Case") && pair.url.includes("id=cx11&v=2")));
+  assert.ok(pairs.some(pair => pair.item.includes("Tempered Glass") && pair.url.includes("id=cx27")));
+  assert.ok(pairs.some(pair => pair.item.includes("Power Bank") && pair.url.includes("id=cx24")));
+  assert.ok(pairs.some(pair => pair.item.includes("Car Charger") && pair.url.includes("id=cx131")));
+  assert.ok(pairs.some(pair => pair.item.includes("Desktop Stand") && pair.url.includes("id=cx130")));
+  assert.ok(pairs.some(pair => pair.item.includes("Galaxy Tab A11") && pair.url.includes("id=cx2")));
+  assert.ok(pairs.some(pair => pair.item.includes("iPad") && pair.url.includes("id=cx54")));
+  assert.ok(pairs.some(pair => pair.item.includes("Galaxy A07") && pair.url.includes("id=cx57")));
+  assert.ok(pairs.some(pair => pair.item.includes("Earpods") && pair.url.includes("id=cx25")));
+  assert.ok(pairs.some(pair => pair.item.includes("Anker Charger") && pair.url.includes("id=nptestone&v=0")));
+  assert.ok(pairs.some(pair => pair.item.includes("iPhone 17 Pro Max") && pair.url.includes("p=phone&id=17promax") && pair.url.includes("color=Silver")));
+  assert.ok(pairs.some(pair => pair.item.includes("Galaxy S26 Ultra") && pair.url.includes("p=phone&id=s26ultra")));
+  assert.ok(pairs.some(pair => pair.url.includes("v=0") && pair.item.includes("Samsung Adapter")) && pairs.some(pair => pair.url.includes("id=cx14&v=1")));
+  if (added.shared) assert.ok(pairs.some(pair => pair.url.includes("id=" + added.shared.id)));
+  assert.match(bubble, /Hi Connectify! Order C-/);
+  assert.match(bubble, /Delivery to Beirut, cash on delivery/);
+  assert.match(bubble, /Address: Hamra street building 4/);
+  assert.match(bubble, /Name: Karim/);
+  assert.match(bubble, /Can you confirm the prices and send me real photos\?/);
+  assert.equal(bubble.includes("70123456"), false);
+  assert.equal(orderPosts.length, 1);
+  const storeSnapshot = await page.evaluate(() => localStorage.getItem("connectify-demo-v7"));
+  assert.match(storeSnapshot, /nptestone/);
+  await context.close();
+
+  for (const pair of pairs) {
+    const local = pair.url.replace("https://connectifystore.vercel.app", origin);
+    const session = await openPage(local.slice(origin.length), {width: 1280, height: 900}, pair.url.includes("id=nptestone") ? async context => {
+      await context.addInitScript(snapshot => localStorage.setItem("connectify-demo-v7", snapshot), storeSnapshot);
+    } : null);
+    try {
+      await session.page.waitForFunction(() => {
+        const modal = document.querySelector("#pvModal");
+        const title = document.querySelector("#pvTitle");
+        return window.LIVE && LIVE.ready && modal && modal.classList.contains("on") && title && title.textContent;
+      }, null, {timeout: 60000}).catch(error => {
+        throw new Error(pair.item + "\n" + pair.url + "\n" + error.message);
+      });
+      const view = await session.page.evaluate(readProduct);
+      const phone = await session.page.evaluate(readPhone);
+      const title = view.title || phone.title;
+      assert.ok(pair.item.includes(title), title + " not in " + pair.item);
+      const params = new URL(pair.url).searchParams;
+      if (params.get("p") === "phone") {
+        assert.equal(phone.color, params.get("color"));
+        assert.equal(phone.st, params.get("st"));
+        assert.equal(phone.cond, params.get("cond"));
+        assert.equal(phone.sim, params.get("sim"));
+      } else if (view.chips.length) {
+        for (const chip of view.chips) assert.ok(pair.item.includes(chip), chip + " not in " + pair.item);
+      }
+    } finally {
+      await finish(session);
+    }
+  }
+
+  const sold = await openPage("/?p=ph&id=cx208&v=0");
+  try {
+    await waitReady(sold.page, "Tecno Spark 20");
+    const view = await sold.page.evaluate(readProduct);
+    assert.match(view.ask, /Ask for availability/);
+    assert.equal(view.price, "");
+  } finally {
+    await finish(sold);
+  }
+});
+
+test("a failed charger checkout keeps the cart and the retry reuses one reference with a link", async () => {
+  await boot;
+  const context = await browser.newContext({viewport: {width: 1280, height: 900}});
+  const page = await context.newPage();
+  let fail = true;
+  const codes = [];
+  await page.route("**/*supabase.co/**", route => {
+    const method = route.request().method();
+    const url = route.request().url();
+    if (method === "POST" && url.includes("/rest/v1/orders")) {
+      const body = JSON.parse(route.request().postData() || "{}");
+      codes.push(body.code);
+      if (fail) return route.fulfill({status: 400, contentType: "application/json", body: JSON.stringify({code: "23514", message: "check violation"})});
+      return route.fulfill({status: 201, contentType: "application/json", body: "[]"});
+    }
+    return route.abort();
+  });
+  await page.goto(origin + "/", {waitUntil: "domcontentloaded", timeout: 60000});
+  await page.waitForFunction(() => window.LIVE && LIVE.ready && typeof addPH === "function", null, {timeout: 60000});
+  await page.evaluate(() => {
+    addPH(PHmap.get("cx12"), 0);
+    openCart(true);
+    document.querySelector("#oName").value = "Karim";
+    document.querySelector("#oPhone").value = "70 123 456";
+    const area = document.querySelector("#oArea");
+    if (![...area.options].some(o => o.value === "Beirut")) area.innerHTML = '<option value="Beirut">Beirut</option>';
+    area.value = "Beirut";
+    document.querySelector("#oAddr").value = "Hamra street building 4";
+  });
+  await page.click("#checkout");
+  await page.waitForFunction(() => /not saved|couldn't confirm/i.test(document.querySelector("#toast").textContent || ""), null, {timeout: 20000});
+  const afterFail = await page.evaluate(() => ({
+    open: document.querySelector("#waModal").classList.contains("on"),
+    lines: document.querySelectorAll("#items .line").length
+  }));
+  assert.equal(afterFail.open, false);
+  assert.equal(afterFail.lines, 1);
+  await page.reload({waitUntil: "domcontentloaded", timeout: 60000});
+  await page.waitForFunction(() => {
+    const note = document.querySelector("#pendNote");
+    return window.LIVE && LIVE.ready && document.querySelectorAll("#items .line").length === 1 && note && !note.hidden && /C-/.test(note.textContent || "");
+  }, null, {timeout: 60000});
+  fail = false;
+  await page.evaluate(() => openCart(true));
+  await page.click("#checkout");
+  await page.waitForFunction(() => document.querySelector("#waModal").classList.contains("on"), null, {timeout: 20000});
+  const bubble = await page.evaluate(() => document.querySelector("#bubble").textContent);
+  assert.match(bubble, /Apple Adapter 25W, White, 25W \(\$38\)\n\nProduct link: https:\/\/connectifystore\.vercel\.app\/\?p=ph&id=cx12&v=0/);
+  assert.equal(codes.length, 2);
+  assert.equal(codes[0], codes[1]);
+  assert.match(codes[0], /^C-[0-9a-f]{18}$/);
+  await context.close();
 });

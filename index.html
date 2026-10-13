@@ -11851,10 +11851,13 @@ onSubmit("dfoot",e=>{e.preventDefault();
   fieldErr("oArea",area?"":"Pick your area so we can plan delivery");
   fieldErr("oAddr",address.length>=4?"":"Add your address so the driver finds you");
   if(!name||phone.length<7||!area||address.length<4){toast("A few details are missing");return}
+  if(typeof window.cxOrderMessage!=="function"){toast("Checkout is temporarily unavailable. Your cart and details are still here. Please try again in a moment.");return}
   const id=nextCode("C");
-  DB.orders.unshift({id,type:"order",t:now(),name,phone:$("oPhone").value.trim(),area,address,pay,status:"new",items:cart.map(i=>({kind:i.kind,id:i.id,vi:i.vi,unit:i.unit,title:i.title,detail:i.detail,hex:i.hex,price:i.price}))});
+  const snap=cart.map(i=>Object.assign({},i));
+  const built=window.cxOrderMessage({id,cart:snap,form:{name,area,address},name,area,address},money,WA_SHOW);
+  DB.orders.unshift({id,type:"order",t:now(),name,phone:$("oPhone").value.trim(),area,address,pay,status:"new",items:snap.map(i=>({kind:i.kind,id:i.id,vi:i.vi,unit:i.unit,key:i.key||"",title:i.title,detail:i.detail,hex:i.hex,price:i.price}))});
   save();
-  showWA(`Hi Connectify! Order ${id}\n${cart.map(i=>`• ${i.title}, ${i.detail}${i.price!=null?` (${money(i.price)})`:""}`).join("\n")}${cart.some(i=>i.price!=null)?`\nSubtotal: ${money(cart.filter(i=>i.price!=null).reduce((s,i)=>s+i.price,0))} + delivery`:""}\nDelivery to ${area}, cash on delivery\nAddress: ${address}\nName: ${name}\nCan you confirm the prices and send me real photos?`,`Order ${id} saved`,`Last step: send it to us on WhatsApp (${WA_SHOW}). We reply with prices and real photos.`);
+  showWA(built.msg,built.title,built.lead);
   cart.length=0;renderCart();renderGrid();openCart(false);if(window.adminRefresh)adminRefresh();
 });
 document.addEventListener("keydown",e=>{if(e.key=="Escape"){if($("waModal").classList.contains("on"))closeWA();else{openCart(false);closeModals()}}});
@@ -13476,6 +13479,9 @@ let lastX=0,t0=performance.now(),holdT=-1e9,swayT=0;
    Only the public "publishable" key is here. Security comes from the database rules (RLS). */
 (function(){
 window.CX_LIVE_PAGE=1;
+/* these are declared later in this function and hoisted, so both checkout paths can share them even if setup returns early */
+window.cxOrderMessage=cxOrderMessage;
+window.cxProductURL=cxProductURL;
 if(!window.supabase||!supabase.createClient)return;
 const sb=(()=>{try{return supabase.createClient("https://yxkzjwcmmtiljakttyfh.supabase.co","sb_publishable_xI4ClmxtlUFNqINxKFq2hA_QyMqbjSq",
   {auth:{persistSession:true,autoRefreshToken:true,storageKey:"connectify-auth"}})}catch(e){console.warn(e);return null}})();
@@ -13576,7 +13582,7 @@ function cxValidateTrade(form){
   return errs;
 }
 function cxItems(cart){
-  return (cart||[]).map(i=>({kind:i.kind,id:i.id,vi:i.vi,unit:i.unit,title:i.title,detail:i.detail,hex:i.hex,price:i.price}));
+  return (cart||[]).map(i=>({kind:i.kind,id:i.id,vi:i.vi,unit:i.unit,key:i.key||"",title:i.title,detail:i.detail,hex:i.hex,price:i.price}));
 }
 function cxOrderRow(o){
   const row={
@@ -13651,23 +13657,41 @@ function cxLegacyNotice(orders){
 function cxMayShowWA(status){return status==="confirmed"}
 /* a public product address. It carries the model, the chosen options, and the stock unit. No customer details. */
 function cxProductURL(item){
-  if(!item||!item.kind||item.id==null||item.id==="") return "";
+  if(!item) return "";
   const out=[];
   const add=(k,v)=>{if(v==null||v==="")return;out.push(encodeURIComponent(k)+"="+encodeURIComponent(String(v)))};
-  if(item.kind==="phone"){
-    add("p","phone");add("id",item.id);add("unit",item.unit);
-    const parts=String(item.key||"").split("|");
-    if(parts.length>=5&&parts[0]===String(item.id)){add("color",parts[1]);add("st",parts[2]);add("cond",parts[3]);add("sim",parts[4])}
-  }else if(item.kind==="ph"){
-    add("p","ph");add("id",item.id);
-    if(item.vi!=null&&item.vi!=="") add("v",item.vi);
-  }else if(item.kind==="acc"){
-    add("p","acc");add("id",item.id);
+  const key=String(item.key||"");
+  let kind=item.kind||"", id=item.id==null?"":String(item.id), vi=item.vi, unit=item.unit||"";
+  const phKey=key.split(":");
+  if(phKey[0]==="ph"&&phKey.length>=2){
+    if(!kind) kind="ph";
+    if(!id) id=phKey[1];
+    if((vi==null||vi==="")&&phKey.length>=3) vi=phKey[2];
+  }else if(phKey[0]==="acc"&&phKey.length>=2){
+    if(!kind) kind="acc";
+    if(!id) id=phKey.slice(1).join(":");
+  }
+  const pipe=key.split("|");
+  if(!kind&&pipe.length>=5) kind="phone";
+  if(!kind&&unit) kind="phone";
+  if(!kind&&id&&(vi!=null&&vi!==""||phKey[0]==="ph")) kind="ph";
+  if(kind==="phone"){
+    if(!id&&pipe.length>=5) id=pipe[0];
+    if(!id) return "";
+    add("p","phone");add("id",id);add("unit",unit);
+    if(pipe.length>=5&&pipe[0]===String(id)){add("color",pipe[1]);add("st",pipe[2]);add("cond",pipe[3]);add("sim",pipe[4])}
+  }else if(kind==="ph"){
+    if(!id) return "";
+    add("p","ph");add("id",id);
+    if(vi!=null&&vi!=="") add("v",vi);
+  }else if(kind==="acc"){
+    if(!id) return "";
+    add("p","acc");add("id",id);
   }else return "";
   return out.length?"https://connectifystore.vercel.app/?"+out.join("&"):"";
 }
 function cxOrderMessage(p,money,waShow){
-  const cart=p.cart||[];
+  const cart=(p.cart&&p.cart.length)?p.cart:(p.items||[]);
   const form=p.form||{};
   const area=form.area||p.area||"";
   const address=form.address||p.address||"";

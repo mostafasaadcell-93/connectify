@@ -581,7 +581,9 @@ test("live init failure does not use the local success flow", () => {
   assert.match(html, /Trade-in is temporarily unavailable/);
   const orderHandler = html.slice(html.indexOf('onSubmit("dfoot"'), html.indexOf('onSubmit("tReq"'));
   assert.match(orderHandler, /if\(cxRunLive\("order"\)\)return;/);
-  assert.match(orderHandler, /Order \$\{id\} saved/);
+  assert.match(orderHandler, /window\.cxOrderMessage\(\{id,cart:snap/);
+  assert.match(orderHandler, /showWA\(built\.msg,built\.title,built\.lead\)/);
+  assert.doesNotMatch(orderHandler, /cart\.map\(i=>`• /);
   const tradeHandler = html.slice(html.indexOf('onSubmit("tReq"'), html.indexOf("/* ================= store details"));
   assert.match(tradeHandler, /if\(cxRunLive\("trade"\)\)return;/);
   assert.match(tradeHandler, /Trade-in \$\{id\} saved/);
