@@ -373,7 +373,6 @@ footer{border-top:1px solid var(--line);padding:64px 0 40px;background:var(--dee
 .series{display:flex;flex-wrap:wrap;gap:6px}
 .series button{min-width:44px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--mist)}
 .series button[aria-pressed=true]{background:var(--ice);border-color:var(--ice);color:var(--ink)}
-.instock{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:var(--mist);cursor:pointer}
 .pcard .meta{font-size:13px;color:var(--mist)}
 .pcard .from{font-size:13px;color:var(--mist);font-weight:600}
 .pcard .add.view{background:transparent;color:var(--ice);border:1px solid var(--line)}
@@ -1859,7 +1858,6 @@ select option:disabled{color:#6A6A6A}
     </div>
     <div class="pfilters" id="pfilters">
       <div class="series" role="group" aria-label="Series" id="series"></div>
-      <label class="instock"><button class="switch" role="switch" aria-checked="false" id="onlyStock" aria-label="Show in-stock only"></button>In stock only</label>
     </div>
     <div class="acctools" id="acctools" hidden>
       <label><span>Brand</span><select id="brandSel" aria-label="Brand"></select></label>
@@ -11506,7 +11504,7 @@ $("lineup").addEventListener("click",e=>{const c=e.target.closest(".model");if(c
 $("lineup").addEventListener("keydown",e=>{if(e.key=="Enter"&&e.target.classList.contains("model"))openPhone(e.target.dataset.id)});
 
 /* ================= shop grid ================= */
-const shop={cat:"apple",series:"all",only:false,q:"",fit:"",limit:24};
+const shop={cat:"apple",series:"all",q:"",fit:"",limit:24};
 const isPhoneCat=c=>c=="apple"||c=="samsung"||c=="other";
 /* phone brands: Apple and Samsung have their own tabs, every other brand goes under "Other phones" */
 const BRAND_NAMES={apple:"Apple",samsung:"Samsung",xiaomi:"Xiaomi",redmi:"Redmi",poco:"Poco",infinix:"Infinix",tecno:"Tecno",itel:"itel",honor:"Honor",huawei:"Huawei",oppo:"Oppo",realme:"Realme",vivo:"Vivo",oneplus:"OnePlus",google:"Google Pixel",motorola:"Motorola",nokia:"Nokia",nothing:"Nothing",zte:"ZTE"};
@@ -11527,7 +11525,6 @@ const unitPrice=us=>{const ps=us.filter(u=>u.qty>0&&u.p>0).map(u=>u.p);return ps
 function renderSeries(){$("series").innerHTML=(shop.cat=="other"?otherSeries():shop.cat=="samsung"?SSERIES:SERIES).map(([v,l])=>`<button data-v="${v}" aria-pressed="${v==shop.series}">${l}</button>`).join("")}
 renderSeries();
 $("series").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("series").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));shop.series=b.dataset.v;renderGrid()});
-$("onlyStock").onclick=()=>{shop.only=!shop.only;$("onlyStock").setAttribute("aria-checked",shop.only);renderGrid()};
 $("tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;$("tabs").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));setShopCat(b.dataset.v)});
 function setShopCat(c){shop.cat=c;shop.series="all";shop.limit=24;if(!FIT_CATS.includes(c))shop.fit="";
   $("tabs").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.v==c));
@@ -11555,7 +11552,6 @@ function renderGrid(reanimate){
   if(isPhoneCat(shop.cat)){
     let list=q?searchModels(q).map(r=>r.m):allModels().slice().sort((a,b)=>b.year-a.year);
     list=list.filter(m=>inPhoneCat(m,shop.cat,shop.series));
-    if(shop.only)list=list.filter(m=>status(m).k=="ok");
     n=list.length;html=list.slice(0,shop.limit).map(phoneCard).join("");
     $("countLine").textContent=`${n} model${n==1?"":"s"}`;
   }else{
@@ -12086,7 +12082,6 @@ function shopList(){const q=lc2(shop.q).trim();
   if(shop.brand)list=list.filter(x=>x.brand==shop.brand);
   // phone filter: cases & protectors must be made for that phone; chargers, holders etc. that fit any phone stay
   if(shop.fit)list=list.filter(x=>x.fits.includes(shop.fit)||(!x.fits.length&&x.dept!="cases"));
-  if(shop.only)list=list.filter(x=>x.ok);
   const S={
     featured:(a,b)=>(b.ok-a.ok)||((shop.fit&&b.fits.includes(shop.fit))-(shop.fit&&a.fits.includes(shop.fit)))||(!!badgeOf(b.id)-!!badgeOf(a.id))||(b.off-a.off)||(b.c>a.c?1:b.c<a.c?-1:0),
     low:(a,b)=>(b.ok-a.ok)||((a.price??1e9)-(b.price??1e9)),high:(a,b)=>(b.ok-a.ok)||((b.price??-1)-(a.price??-1)),
@@ -12110,9 +12105,8 @@ function renderGrid(reanimate){
     const q=shop.q.toLowerCase();
     let list=q?searchModels(q).map(r=>r.m):allModels().slice().sort((a,b)=>b.year-a.year);
     list=list.filter(m=>inPhoneCat(m,shop.cat,shop.series));
-    if(shop.only)list=list.filter(m=>status(m).k=="ok");
     // the phones sold as products, in stock first
-    let its=phoneItems(shop.cat,q?"all":shop.series);if(q)its=its.filter(x=>matchQ(x,q));if(shop.only)its=its.filter(x=>x.ok);
+    let its=phoneItems(shop.cat,q?"all":shop.series);if(q)its=its.filter(x=>matchQ(x,q));
     its.sort((a,b)=>(b.ok-a.ok)||(b.c>a.c?1:b.c<a.c?-1:0));
     const all=[...list.map(m=>({m})),...its.map(x=>({x}))];
     n=all.length;html=all.slice(0,shop.limit).map((r,i)=>r.m?phoneCard(r.m,i):anyCard(r.x,i)).join("");
