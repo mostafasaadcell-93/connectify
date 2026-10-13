@@ -56,9 +56,10 @@ test("menu counts include every visible listing and ignore stock", async () => {
   await page.waitForSelector("#catbar .cb");
 
   const readMenus = () => page.evaluate(() => {
-    const num = el => {
-      const s = el && el.querySelector(":scope > span, span");
-      return s ? +s.textContent : 0;
+    const badge = el => {
+      if (!el) return "";
+      const s = el.querySelector(":scope > span, span");
+      return s ? s.textContent.trim() : "";
     };
     const desktop = [];
     document.querySelectorAll("#catbar [data-gi]").forEach(btn => {
@@ -67,8 +68,9 @@ test("menu counts include every visible listing and ignore stock", async () => {
         const head = sec.querySelector(".mh");
         desktop.push({
           cat: head.dataset.cat,
-          n: num(head),
-          subs: [...sec.querySelectorAll(".mm")].map(b => ({sub: b.dataset.sub, n: num(b)}))
+          n: badge(head),
+          label: head.childNodes[0] ? head.childNodes[0].textContent.trim() : head.textContent.trim(),
+          subs: [...sec.querySelectorAll(".mm")].map(b => ({sub: b.dataset.sub, n: badge(b), label: b.textContent.trim()}))
         });
       });
     });
@@ -80,16 +82,18 @@ test("menu counts include every visible listing and ignore stock", async () => {
       const summary = group.querySelector("summary");
       return {
         label: summary ? summary.childNodes[0].textContent.trim() : "",
-        n: summary ? num(summary) : 0,
+        n: summary ? badge(summary) : "",
         secs: [...group.querySelectorAll(".mdsec")].map(sec => ({
           cat: sec.dataset.cat,
-          n: num(sec),
-          subs: [...sec.parentElement.querySelectorAll(`.mdi[data-cat="${sec.dataset.cat}"]:not(.mdsec)`)].map(b => ({sub: b.dataset.sub, n: num(b)}))
+          n: badge(sec),
+          label: sec.textContent.trim(),
+          subs: [...sec.parentElement.querySelectorAll(`.mdi[data-cat="${sec.dataset.cat}"]:not(.mdsec)`)].map(b => ({sub: b.dataset.sub, n: badge(b), label: b.textContent.trim()}))
         }))
       };
     });
+    const barCounts = [...document.querySelectorAll("#catbar .cb")].filter(b => /\(\d+\)|\d/.test(b.textContent) && b.querySelector("span")).length;
     document.querySelector("#burgerBtn").click();
-    return {desktop, mobile};
+    return {desktop, mobile, barCounts};
   });
 
   const expectOf = () => page.evaluate(() => {
@@ -148,8 +152,10 @@ test("menu counts include every visible listing and ignore stock", async () => {
       assert.equal(mob.has(key), false, "empty mobile " + key);
       continue;
     }
-    assert.equal(desk.get(key), row.n, "desktop " + key);
-    assert.equal(mob.get(key), row.n, "mobile " + key);
+    assert.equal(desk.has(key), true, "desktop missing " + key);
+    assert.equal(mob.has(key), true, "mobile missing " + key);
+    assert.equal(desk.get(key), "", "desktop count " + key);
+    assert.equal(mob.get(key), "", "mobile count " + key);
     if (row.stock === 0) sawUnavailable = true;
     if (row.stock > 0 && row.n > row.stock) sawMixed = true;
     if (row.variants > row.n) sawVariants = true;
@@ -157,6 +163,20 @@ test("menu counts include every visible listing and ignore stock", async () => {
   assert.equal(sawUnavailable, true);
   assert.equal(sawMixed, true);
   assert.equal(sawVariants, true);
+  assert.equal(menus.barCounts, 0);
+  const bare = text => !/\(\s*\d+\s*\)/.test(text);
+  menus.desktop.forEach(sec => {
+    assert.equal(bare(sec.label), true, sec.label);
+    sec.subs.forEach(sub => assert.equal(bare(sub.label), true, sub.label));
+  });
+  menus.mobile.forEach(group => {
+    assert.equal(group.n, "");
+    assert.equal(bare(group.label), true, group.label);
+    group.secs.forEach(sec => {
+      assert.equal(bare(sec.label), true, sec.label);
+      sec.subs.forEach(sub => assert.equal(bare(sub.label), true, sub.label));
+    });
+  });
 
   const grid = await page.evaluate(() => {
     const open = (cat, sub) => {menuGo(cat, sub || null); return parseInt($("countLine").textContent, 10);};
@@ -181,10 +201,7 @@ test("menu counts include every visible listing and ignore stock", async () => {
     const models = ids.map(id => allModels().find(m => m.id === id));
     DB.units.forEach(u => { if (ids.includes(u.m)) u.qty = 0; });
     window.menuRefresh();
-    const num = el => {
-      const s = el && el.querySelector(":scope > span, span");
-      return s ? +s.textContent : 0;
-    };
+    const badge = el => el && el.querySelector("span") ? el.querySelector("span").textContent.trim() : "";
     [...document.querySelectorAll("#catbar [data-gi]")].find(b => b.textContent.startsWith("Phones")).click();
     const desk = [...document.querySelectorAll("#megaMenu .mm")].find(b => b.dataset.cat === "apple" && b.dataset.sub === "11");
     const drawer = document.querySelector("#mDrawer");
@@ -194,17 +211,24 @@ test("menu counts include every visible listing and ignore stock", async () => {
     const mobile = [...document.querySelectorAll("#mdBody .mdi")].find(b => b.dataset.cat === "apple" && b.dataset.sub === "11" && !b.classList.contains("mdsec"));
     menuGo("apple", "11");
     const listed = models.filter(Boolean).map(m => ({id: m.id, name: m.name, status: status(m).k}));
+    const cards = [...document.querySelectorAll("#grid .card")].map(c => c.dataset.id);
     return {
       listed,
-      desktop: num(desk),
-      mobile: num(mobile),
+      desktop: desk ? desk.textContent.trim() : "",
+      desktopBadge: badge(desk),
+      mobile: mobile ? mobile.textContent.trim() : "",
+      mobileBadge: badge(mobile),
+      cards,
       page: parseInt($("countLine").textContent, 10)
     };
   });
   assert.deepEqual(iphone11.listed.map(m => m.id), ["11", "11pro", "11promax"]);
   assert.deepEqual(iphone11.listed.map(m => m.status === "ok"), [false, false, false]);
-  assert.equal(iphone11.desktop, 3, "desktop iPhone 11 series");
-  assert.equal(iphone11.mobile, 3, "mobile iPhone 11 series");
+  assert.equal(iphone11.desktop, "iPhone 11");
+  assert.equal(iphone11.mobile, "iPhone 11");
+  assert.equal(iphone11.desktopBadge, "");
+  assert.equal(iphone11.mobileBadge, "");
+  assert.ok(iphone11.cards.includes("11") && iphone11.cards.includes("11pro") && iphone11.cards.includes("11promax"));
   assert.equal(iphone11.page, 3, "iPhone 11 series page");
 
   const owner = await page.evaluate(() => {
@@ -251,7 +275,7 @@ test("menu counts include every visible listing and ignore stock", async () => {
     drawer.classList.remove("on");
     document.querySelector("#burgerBtn").click();
     const gamingMobile = [...document.querySelectorAll("#mdBody .mdi")].find(b => b.dataset.cat === "gaming" && b.dataset.sub === sub && !b.classList.contains("mdsec"));
-    const read = el => el && el.querySelector("span") ? +el.querySelector("span").textContent : 0;
+    const read = el => el ? (el.querySelector("span") ? el.querySelector("span").textContent.trim() : "") : null;
     const availHead = [...document.querySelectorAll("#megaMenu .mh")].find(b => b.dataset.cat === availDept);
     const availMobile = [...document.querySelectorAll("#mdBody .mdsec")].find(b => b.dataset.cat === availDept);
     menuGo(availDept);
@@ -288,15 +312,26 @@ test("menu counts include every visible listing and ignore stock", async () => {
   assert.equal(owner.appleDropped, true);
   assert.ok(owner.soldOutCount > 0);
   assert.equal(owner.soldOutAvailable, 0);
-  assert.equal(owner.menu, owner.soldOutCount);
-  assert.equal(owner.mobile, owner.soldOutCount);
+  assert.equal(owner.menu, "");
+  assert.equal(owner.mobile, "");
   assert.equal(owner.page, owner.soldOutCount);
   assert.ok(owner.availKeep > 0);
   assert.equal(owner.availLeft, owner.availKeep);
   assert.equal(owner.availAllInStock, true);
-  assert.equal(owner.availMenu, owner.availKeep);
-  assert.equal(owner.availMobile, owner.availKeep);
+  assert.equal(owner.availMenu, "");
+  assert.equal(owner.availMobile, "");
   assert.equal(owner.availPage, owner.availKeep);
+  const admin = await page.evaluate(() => {
+    renderDash();
+    renderCatalog();
+    const dash = [...document.querySelectorAll("#aStats b")].map(b => b.textContent.trim());
+    const catalog = [...document.querySelectorAll("#cStats b")].map(b => b.textContent.trim());
+    const tabs = [...document.querySelectorAll("#cTabs .tn")].map(b => b.textContent.trim());
+    return {dash, catalog, tabs};
+  });
+  assert.ok(admin.dash.length >= 4 && admin.dash.every(n => /^\d+$/.test(n)));
+  assert.ok(admin.catalog.length >= 5 && admin.catalog.some(n => +n > 0));
+  assert.ok(admin.tabs.length > 1 && admin.tabs.every(n => /^\d+$/.test(n)));
   assert.equal(writes.length, 0);
   } finally {
     if (browser) await browser.close();

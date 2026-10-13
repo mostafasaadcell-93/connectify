@@ -12284,7 +12284,7 @@ const bar=$("catbar"),mega=$("megaMenu");let G=[],hideT=null,openIdx=-1;
 function renderBar(){G=groups();
   bar.innerHTML=G.map((g,i)=>`<button type="button" class="cb" data-gi="${i}" aria-haspopup="true" aria-expanded="false">${esc(g.label)}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`).join("")
     +FLAT.map((f,i)=>`<button type="button" class="cb flat" data-fi="${i}">${f.label}</button>`).join("")}
-const secHTML=sec=>`<div class="msec"><button type="button" class="mh" data-cat="${sec.cat}">${esc(sec.title)}<span>${cnt(sec.cat)}</span></button>${sec.items.map(it=>`<button type="button" class="mm" data-cat="${sec.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}${(n=>n?`<span>${n}</span>`:"")(cnt(sec.cat,it.sub))}</button>`).join("")}</div>`;
+const secHTML=sec=>`<div class="msec"><button type="button" class="mh" data-cat="${sec.cat}">${esc(sec.title)}</button>${sec.items.map(it=>`<button type="button" class="mm" data-cat="${sec.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}</button>`).join("")}</div>`;
 function openMega(i,btn){clearTimeout(hideT);const g=G[i];if(!g){closeMega();return}
   openIdx=i;bar.querySelectorAll(".cb").forEach(b=>b.setAttribute("aria-expanded",b===btn?"true":"false"));
   mega.className="megamenu"+(g.wide?" wide":"")+(g.secs.length>1&&!g.wide?" cols":"");
@@ -12307,8 +12307,8 @@ document.addEventListener("click",e=>{if(!mega.hidden&&!e.target.closest("#megaM
 /* ---- phone drawer ---- */
 const dr=$("mDrawer"),burger=$("burgerBtn");
 function renderDrawer(){const g=groups();
-  $("mdBody").innerHTML=g.map(x=>`<details class="mdg"><summary>${esc(x.label)}<span>${x.secs.reduce((t,sec)=>t+cnt(sec.cat),0)}</span></summary>${x.secs.map(sec=>
-      `<button type="button" class="mdi mdsec" data-cat="${sec.cat}">${esc(sec.title)}<span>${cnt(sec.cat)}</span></button>${sec.items.map(it=>`<button type="button" class="mdi" data-cat="${sec.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}${(n=>n?`<span>${n}</span>`:"")(cnt(sec.cat,it.sub))}</button>`).join("")}`).join("")}</details>`).join("")
+  $("mdBody").innerHTML=g.map(x=>`<details class="mdg"><summary>${esc(x.label)}</summary>${x.secs.map(sec=>
+      `<button type="button" class="mdi mdsec" data-cat="${sec.cat}">${esc(sec.title)}</button>${sec.items.map(it=>`<button type="button" class="mdi" data-cat="${sec.cat}" data-sub="${esc(it.sub)}">${esc(it.label)}</button>`).join("")}`).join("")}</details>`).join("")
     +FLAT.map((f,i)=>`<button type="button" class="mdg flat" data-mfi="${i}">${f.label}</button>`).join("")
     +`<div class="mdlinks"><a href="#trade" data-mlink>Trade-in your phone</a><a href="#how" data-mlink>How to order</a><a href="#reviews" data-mlink>Reviews</a><a href="https://wa.me/${WA_NUM}" target="_blank" rel="noopener">WhatsApp ${WA_SHOW}</a></div>`}
 function openDrawer(){renderDrawer();dr.hidden=false;requestAnimationFrame(()=>dr.classList.add("on"));burger.setAttribute("aria-expanded","true");document.documentElement.style.overflow="hidden"}
