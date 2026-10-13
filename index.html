@@ -11519,7 +11519,7 @@ const looksGalaxy=m=>(m.look||m.brand)=="samsung"||(m.brand&&m.brand!="apple"&&!
 const otherSeries=()=>{const L=new Map(allModels().filter(m=>phoneTab(m)=="other").map(m=>[brandOf(m),brandName(brandOf(m))]));
   (window.phoneItemBrands?phoneItemBrands():[]).forEach(([k,l])=>{if(!L.has(k))L.set(k,l)});
   return[["all","All"],...[...L].sort((x,y)=>x[1].localeCompare(y[1]))]};
-/* reference prices: what a unit would cost, from the Lebanese store price list (cxprices.js), so out-of-stock colours and storages still show a price */
+/* reference prices: in-stock units with no selling price yet, from the Lebanese store price list (cxprices.js). Out-of-stock selections show no price. */
 const REFCF={new:{new:1,open:.95,likenew:.9,used:.82,refurb:.85},open:{new:1.05,open:1,likenew:.94,used:.86,refurb:.88}};
 function refPrice(m,st,cond,col){const r=(window.CX_MREF||{})[m.id];if(!r||r.p[st]==null)return null;const base=(col&&r.c&&r.c[col]&&r.c[col][st])||r.p[st];return Math.round(base*((REFCF[r.b]||{})[cond]||1))}
 function refFrom(m){const r=(window.CX_MREF||{})[m.id];return r?Math.min(...Object.values(r.p)):null}
@@ -11538,17 +11538,18 @@ function fitOptions(sel){const g=b=>allModels().filter(m=>brandOf(m)==b).sort((x
 $("fitSel").innerHTML=fitOptions("");
 $("fitSel").onchange=e=>{shop.fit=e.target.value;shop.limit=24;renderGrid()};
 $("more").onclick=()=>{shop.limit+=24;renderGrid()};
-function phoneCard(m,i){const s=status(m),q=qtyOf(m);
+function phoneCard(m,i){const s=status(m);
+  const pr=s.k=="ok"?(unitPrice(DB.units.filter(u=>u.m==m.id))||refFrom(m)):null;
   return `<article class="card pcard ${s.k=="ok"?"":"na"}" data-id="${m.id}" tabindex="0" style="animation-delay:${(i%8)*50}ms" aria-label="${esc(m.name)}">
   <div class="art">${cardPill(s)}${badgeHTML(m.id)}${mSVG(m)}</div>
   <div class="info"><h3>${esc(m.name)}</h3><div class="meta">${m.year}, ${esc(m.chip)}, ${m.size}"</div>
   <div class="cdots">${m.colors.map(([c,h])=>`<span class="cdot" style="background:${h}" title="${esc(c)}"></span>`).join("")}</div>
-  <div class="buy"><span class="from">${(p=>p?`From <b>$${p}</b> · `:"")(unitPrice(DB.units.filter(u=>u.m==m.id))||refFrom(m))}${stRange(m)}</span><button class="add view">View options</button></div></div></article>`}
+  <div class="buy"><span class="from">${pr?`From <b>$${pr}</b> · `:""}${stRange(m)}</span><button class="add view">View options</button></div></div></article>`}
 function accCard(a,i){const ok=accOK(a);
   return `<article class="card pcard ${ok?"":"na"}" data-acc="${a.id}" tabindex="0" style="animation-delay:${(i%8)*50}ms" aria-label="${esc(a.name)}">
   <div class="art">${badgeHTML(a.id)}${a.photos.length?`<img class="cardphoto" src="${a.photos[0]}" alt="">`:art(a)}</div>
   <div class="info"><h3>${esc(a.name)}</h3><div class="spec">${esc(a.spec)}</div>${fitsLabel(a)?`<div class="fits ${a.cat=="cover"&&!a.fits.length?"fitask":""}">${esc(fitsLabel(a))}</div>`:""}${a.note?`<div class="note">${esc(a.note)}</div>`:""}
-  <div class="buy"><span class="price q">Ask for price</span>${ok?`<button class="add" data-add="${a.id}" ${cartHas("acc:"+a.id)?"disabled":""}>${cartHas("acc:"+a.id)?"In your cart":"Add to cart"}</button>`:`<button class="add view" type="button">View</button>`}</div></div></article>`}
+  <div class="buy">${ok?`<span class="price q">Ask for price</span>`:""}${ok?`<button class="add" data-add="${a.id}" ${cartHas("acc:"+a.id)?"disabled":""}>${cartHas("acc:"+a.id)?"In your cart":"Add to cart"}</button>`:`<button class="add view" type="button">View</button>`}</div></div></article>`}
 function renderGrid(reanimate){
   const q=shop.q.toLowerCase();let html="",n=0;
   if(isPhoneCat(shop.cat)){
@@ -11709,8 +11710,8 @@ function renderPV(){
   <div class="opt"><h4>Condition</h4><div class="chips2">${chipsHTML("cond",CK,v=>CONDS[v].label,v=>test("cond",v))}</div><div class="tip">${CONDS[pvs.cond].tip}</div></div>
   <div class="opt"><h4>SIM</h4><div class="chips2">${chipsHTML("sim",m.sims,v=>SIMS[v].label,v=>test("sim",v))}</div><div class="tip">${SIMS[pvs.sim].tip}</div></div>
   <div class="verdict" aria-live="polite">
-    ${u&&u.p>0?`<div class="pvprice"><b>$${u.p}</b>${u.cp>u.p?`<s>$${u.cp}</s><span class="offb">-${Math.round((1-u.p/u.cp)*100)}%</span>`:""}</div>`:""}
-    ${!(u&&u.p>0)&&refPrice(m,pvs.st,pvs.cond,pvs.color)?`<div class="pvprice"><b>$${refPrice(m,pvs.st,pvs.cond,pvs.color)}</b></div><span>Reference price for this one. We confirm the final price on WhatsApp.</span>`:""}
+    ${ok&&u&&u.p>0?`<div class="pvprice"><b>$${u.p}</b>${u.cp>u.p?`<s>$${u.cp}</s><span class="offb">-${Math.round((1-u.p/u.cp)*100)}%</span>`:""}</div>`:""}
+    ${ok&&!(u&&u.p>0)&&refPrice(m,pvs.st,pvs.cond,pvs.color)?`<div class="pvprice"><b>$${refPrice(m,pvs.st,pvs.cond,pvs.color)}</b></div><span>Reference price for this one. We confirm the final price on WhatsApp.</span>`:""}
     <span>${esc(desc)}</span>
     ${u&&u.cond!="new"?`<span>${u.bat?`Battery health ${u.bat}%`:"Battery health: ask us"}${u.note?`. ${esc(u.note)}`:""}</span>`:u&&u.note?`<span>${esc(u.note)}</span>`:""}
   </div>
@@ -11758,7 +11759,7 @@ function openAcc(id){PV_KIND="acc";
   <div class="pvhead"><small>${esc(CONDS[a.cond].label)}</small><h3 id="pvTitle">${esc(a.name)}</h3></div>
   <div class="spec">${esc(a.spec)}</div>
   ${badgeOf(a.id)?`<div class="pvbdg">${badgeHTML(a.id)}</div>`:""}
-  <div class="specs"><div><span>Condition</span><b>${CONDS[a.cond].label}</b></div>${fitsLabel(a)?`<div><span>Compatibility</span><b>${esc(fitsLabel(a).replace(/^Fits /,""))}${a.fits&&a.fits.length>2?"":""}</b></div>`:""}${a.note?`<div><span>Note</span><b>${esc(a.note)}</b></div>`:""}<div><span>Delivery</span><b>Beirut: ${esc(DB.content.info.beirut)}. Other areas: ${esc(DB.content.info.other)}</b></div><div><span>Payment</span><b>${esc(payList().join(", "))}</b></div><div><span>Price</span><b>Ask on WhatsApp</b></div></div>
+  <div class="specs"><div><span>Condition</span><b>${CONDS[a.cond].label}</b></div>${fitsLabel(a)?`<div><span>Compatibility</span><b>${esc(fitsLabel(a).replace(/^Fits /,""))}${a.fits&&a.fits.length>2?"":""}</b></div>`:""}${a.note?`<div><span>Note</span><b>${esc(a.note)}</b></div>`:""}<div><span>Delivery</span><b>Beirut: ${esc(DB.content.info.beirut)}. Other areas: ${esc(DB.content.info.other)}</b></div><div><span>Payment</span><b>${esc(payList().join(", "))}</b></div>${ok?`<div><span>Price</span><b>Ask on WhatsApp</b></div>`:""}</div>
   <div class="pvacts">${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${cartHas("acc:"+id)?"disabled":""}>${cartHas("acc:"+id)?"In your cart":"Add to cart"}</button>`:`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availText(parts))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}</div>`;
   $("pvClose").onclick=closeModals;
   const b=$("pvAdd");if(b)b.onclick=()=>{if(!accOK(accById(id))){openAcc(id);return}addAcc(id);closeModals()};
@@ -12092,11 +12093,11 @@ function shopList(){const q=lc2(shop.q).trim();
     new:(a,b)=>(b.c>a.c?1:b.c<a.c?-1:0),deals:(a,b)=>(b.off-a.off)||(b.ok-a.ok)};
   return list.sort(S[shop.sort]||S.featured)}
 
-function priceHTML(p){const r=phPrice(p);if(r.p==null)return `<span class="pp askp">Price on WhatsApp</span>`;return `<span class="pp">${r.from?"<small>From</small> ":""}<b>${money(r.p)}</b>${r.cp?` <s>${money(r.cp)}</s>`:""}</span>`}
+function priceHTML(p){if(!phOK(p))return "";const r=phPrice(p);if(r.p==null)return `<span class="pp askp">Price on WhatsApp</span>`;return `<span class="pp">${r.from?"<small>From</small> ":""}<b>${money(r.p)}</b>${r.cp?` <s>${money(r.cp)}</s>`:""}</span>`}
 function phFitsLine(p){if(p.fits.length){const n=p.fits.map(id=>(modelById(id)||{}).name).filter(Boolean);return `<div class="fits">Fits ${esc(n.length>2?n.slice(0,2).join(", ")+` +${n.length-2}`:n.join(" and "))}</div>`}return""}
 function phCard(p,i){const ok=phOK(p),off=phOff(p),nv=p.vars.length,inCart=cartHas("ph:"+p.id+":0");
   return `<article class="card pcard phc ${ok?"":"na"}" data-ph="${p.id}" tabindex="0" style="animation-delay:${(i%8)*40}ms" aria-label="${esc(p.name)}">
-  <div class="art phart">${off?`<span class="offb">-${off}%</span>`:""}${badgeHTML(p.id)}
+  <div class="art phart">${ok&&off?`<span class="offb">-${off}%</span>`:""}${badgeHTML(p.id)}
     ${hasImg(p.imgs[0])?`<img class="phimg" loading="lazy" decoding="async" src="${phImg(p.imgs[0],600)}" ${phSrcset(p.imgs[0])} alt="">`:`<span class="noimg">${DEPT_ICON[p.dept]||"✨"}</span>`}</div>
   <div class="info"><small class="pbrand">${esc(p.brand)}${p.brand?" · ":""}${esc(p.sub)}</small><h3 class="pname">${esc(p.name)}</h3>${phFitsLine(p)}
   <div class="buy">${priceHTML(p)}${ok?`<button class="add" data-phadd="${p.id}" ${inCart?"disabled":""}>${nv>1?"Options":inCart?"In cart":"Add"}</button>`:`<button class="add view" type="button">View</button>`}</div></div></article>`}
@@ -12180,7 +12181,7 @@ function renderPH(resetPhoto){const p=pvp.p,vi=Math.max(0,phVarIdx(p,pvp.sel)),v
   const photos=!!(PHOTO_CONDS[cond]&&(ok||v.q>0));
   $("pvBody").innerHTML=`<button class="x" id="pvClose" aria-label="Close">✕</button>
   <div class="pvhead"><small>${esc(p.brand)}${p.brand?" · ":""}${esc(p.sub)}</small><h3 id="pvTitle">${esc(p.name)}</h3>${badgeHTML(p.id)}</div>
-  <div class="pvprice">${v.p==null?`<b class="askp">Price on WhatsApp</b>`:`<b>${money(v.p)}</b>`}${off?`<s>${money(v.cp)}</s><span class="offb">-${off}%</span>`:""}</div>
+  ${ok?`<div class="pvprice">${v.p==null?`<b class="askp">Price on WhatsApp</b>`:`<b>${money(v.p)}</b>`}${off?`<s>${money(v.cp)}</s><span class="offb">-${off}%</span>`:""}</div>`:""}
   ${colHTML}${chips}
   ${ok&&(window.PH_COLORASK||[]).includes(p.id.slice(2))?`<p class="tip">Colors change fast: confirm yours on WhatsApp.</p>`:""}
   <div class="pvacts">${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${cartHas(key)?"disabled":""}>${cartHas(key)?"In your cart":(v.p==null?"Add to cart":`Add to cart · ${money(v.p)}`)}</button>`:`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availText(parts))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}</div>
@@ -12375,9 +12376,9 @@ function attach({inp,res,anchor,onClose,onOpenEmpty}){
     let h="";
     if(r.cats.length){h+=`<div class="hsh">Categories</div><div class="hscats">`+r.cats.map(c=>{rows.push({k:"cat",c});return`<button type="button" class="hsc" data-i="${rows.length-1}">${esc(c.label)}<small>${esc(c.where)}</small></button>`}).join("")+`</div>`}
     if(r.phones.length){h+=`<div class="hsh">Phones</div>`+r.phones.map(p=>{rows.push({k:"phone",p});const st=status(p.m),pr=unitPrice(DB.units.filter(u=>u.m==p.m.id));
-      return`<button type="button" class="hsi" data-i="${rows.length-1}"><span class="hsp">${mSVG(p.m,p.colorHit&&p.colorHit[1])}</span><span class="hsg"><b>${esc(p.m.name)}</b><small>${esc(brandName(brandOf(p.m)))}${p.colorHit?" · "+esc(p.colorHit[0]):""}${st.k=="soon"?" · "+esc(st.t):""}</small></span>${pr?`<span class="hspr">from ${money(pr)}</span>`:""}</button>`}).join("")}
+      return`<button type="button" class="hsi" data-i="${rows.length-1}"><span class="hsp">${mSVG(p.m,p.colorHit&&p.colorHit[1])}</span><span class="hsg"><b>${esc(p.m.name)}</b><small>${esc(brandName(brandOf(p.m)))}${p.colorHit?" · "+esc(p.colorHit[0]):""}${st.k=="soon"?" · "+esc(st.t):""}</small></span>${st.k=="ok"&&pr?`<span class="hspr">from ${money(pr)}</span>`:""}</button>`}).join("")}
     if(r.items.length){h+=`<div class="hsh">${r.items.length} product${r.items.length>1?"s":""}</div>`+r.items.slice(0,8).map(({it})=>{const x=it.x;rows.push({k:"ph",x});
-      return`<button type="button" class="hsi" data-i="${rows.length-1}"><span class="hsp">${pic(x)}</span><span class="hsg"><b>${esc(x.name)}</b><small>${esc(DEPT_LABEL[x.dept]||"iPads")} · ${esc(x.sub)}</small></span>${x.price>0?`<span class="hspr">${money(x.price)}</span>`:""}</button>`}).join("")}
+      return`<button type="button" class="hsi" data-i="${rows.length-1}"><span class="hsp">${pic(x)}</span><span class="hsg"><b>${esc(x.name)}</b><small>${esc(DEPT_LABEL[x.dept]||"iPads")} · ${esc(x.sub)}</small></span>${x.ok&&x.price>0?`<span class="hspr">${money(x.price)}</span>`:""}</button>`}).join("")}
     const total=r.phones.length+r.items.length;
     if(r.items.length){rows.push({k:"all",q:q.trim()});h+=`<button type="button" class="hsall" data-i="${rows.length-1}">See all ${r.items.length} result${r.items.length>1?"s":""} for “${esc(q.trim())}”</button>`}
     if(!total&&!r.cats.length){h=`<div class="hsnone">Nothing in the store matches “${esc(q.trim())}”.<a href="https://wa.me/${WA_NUM}?text=${encodeURIComponent("Hi Connectify, do you have "+q.trim()+"?")}" target="_blank" rel="noopener">Ask us on WhatsApp</a></div>`;
