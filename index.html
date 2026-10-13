@@ -12259,17 +12259,17 @@ $("oAddr").addEventListener("input",()=>{if($("oAddr").value.trim().length>=4)fi
 
 /* ================= shop menu: category bar on desktop, burger drawer on phones ================= */
 (function(){
-const cnt=(cat,sub)=>{try{if(isPhoneCat(cat)){const its=window.phoneItems?phoneItems(cat,sub||"all"):[];
-    // other brands are listed even when sold out, so the number is how many phones are on that page
-    if(cat=="other")return allModels().filter(m=>inPhoneCat(m,cat,sub||"all")).length+its.length;
-    return allModels().filter(m=>inPhoneCat(m,cat,sub||"all")&&status(m).k=="ok").length+its.filter(x=>x.ok).length}
-  return storeItems().filter(x=>x.dept==cat&&(!sub||x.sub==sub)&&x.sub!="Phones"&&x.ok).length}catch(e){return 0}};
-/* our own menu: only what Connectify has in stock right now */
+const cnt=(cat,sub)=>{try{
+  /* one listing each, in stock or not. Variants and quantities are not extra products. Hidden and deleted listings stay out. */
+  if(isPhoneCat(cat)){const its=window.phoneItems?phoneItems(cat,sub||"all"):[];
+    return allModels().filter(m=>inPhoneCat(m,cat,sub||"all")).length+its.length}
+  return storeItems().filter(x=>x.dept==cat&&(!sub||x.sub==sub)).length}catch(e){return 0}};
+/* menu counts are the visible listings, not how many are in stock */
 function groups(){const G=[];
   const ph=[{title:"iPhone",cat:"apple",items:SERIES.filter(([v])=>v!="all").map(([v,l])=>({label:"iPhone "+l,sub:v}))},
             {title:"Samsung Galaxy",cat:"samsung",items:SSERIES.filter(([v])=>v!="all").map(([v,l])=>({label:"Galaxy "+l,sub:v}))}];
   if(allModels().some(m=>phoneTab(m)=="other")||(window.phoneItems&&phoneItems("other").length))ph.push({title:"Other brands",cat:"other",items:otherSeries().filter(([v])=>v!="all").map(([v,l])=>({label:l,sub:v}))});
-  // every phone series is listed (iPhone 11 too), even when it is sold out right now; the number shows what is in stock
+  // every phone series is listed (iPhone 11 too), sold out or not; the number is the listings on that page
   ph.forEach(sec=>sec.items=sec.items.filter(it=>allModels().some(m=>inPhoneCat(m,sec.cat,it.sub))||(window.phoneItems&&phoneItems(sec.cat,it.sub).length)));
   G.push({label:"Phones",secs:ph.filter(sec=>sec.items.length||cnt(sec.cat)>0)});
   const tabs=deptSubs("ipad").filter(s=>cnt("ipad",s)>0);
