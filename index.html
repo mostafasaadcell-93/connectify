@@ -11588,17 +11588,23 @@ function fitSelection(){
   const score=u=>(u.st==pvs.st)*3+(u.cond==pvs.cond)*2+(u.sim==pvs.sim);
   const u=us.sort((a,b)=>score(b)-score(a))[0];pvs.st=u.st;pvs.cond=u.cond;pvs.sim=u.sim;
 }
-function openPhone(id,colorName){PV_KIND="phone";
-  const m=modelById(id);if(!m)return;
+function openPhone(id,colorName,exact){PV_KIND="phone";
+  const m=modelById(id);if(!m)return false;
   pvs.m=m;
   const c=colorName&&m.colors.find(k=>k[0]==colorName)||showColor(m);
-  pvs.color=c[0];pvs.st=m.st[0];pvs.cond=CK[0];pvs.sim=m.sims[0];pvs.photo=0;fitSelection();
+  pvs.color=c[0];pvs.st=m.st[0];pvs.cond=CK[0];pvs.sim=m.sims[0];pvs.photo=0;
+  if(exact){
+    if(exact.st!=null&&exact.st!==""&&m.st.some(s=>s==exact.st))pvs.st=+exact.st;
+    if(exact.cond&&CONDS[exact.cond])pvs.cond=exact.cond;
+    if(exact.sim&&m.sims.includes(exact.sim))pvs.sim=exact.sim;
+  }else fitSelection();
   logView(m,c[0]);
   const V=pv3();
   $("pvSize").textContent=m.fold?`${m.display.split(",")[0].replace(" main","")} foldable`:`${m.size}-inch`;$("pvSize").style.display="";
   if(V)V.set(buildDevice(m,c[1]));
   const u=bestUnit(m,pvs);pvs.view=u&&u.photos.length||mPic(m)?"photo":"3d";
   renderPV();openModal("pvModal");
+  return true;
 }
 /* media order: real photos uploaded in the admin first, then the clean product image, then the 3D view */
 let MEDIA={photos:[],art:"",fold:false},MEDIA_WIDE=false;
@@ -11751,7 +11757,8 @@ $("pvBody").addEventListener("click",e=>{
 });
 let pvBodyTok=0;
 function openAcc(id){PV_KIND="acc";
-  const a=accById(id),ok=accOK(a),V=pv3();
+  const a=accById(id);if(!a)return false;
+  const ok=accOK(a),V=pv3();
   $("pvSize").style.display="none";
   if(V)V.set(buildModel(a));
   const noArt=true;pvs.view=a.photos.length?"photo":noArt?"3d":"art";pvs.photo=0;MEDIA={photos:a.photos,art:art(a),noArt,fold:false,label:a.name};
@@ -11765,6 +11772,7 @@ function openAcc(id){PV_KIND="acc";
   $("pvClose").onclick=closeModals;
   const b=$("pvAdd");if(b)b.onclick=()=>{if(!accOK(accById(id))){openAcc(id);return}addAcc(id);closeModals()};
   showMedia();openModal("pvModal");
+  return true;
 }
 $("foldBtn").onclick=()=>{if(!PV||!PV.model||!PV.model.setClosed)return;const closed=PV.model.target<.5;PV.model.setClosed(closed);$("foldBtn").textContent=closed?"Unfold it":"Fold it"};
 
@@ -12140,11 +12148,12 @@ const optVals=(p,k)=>[...new Set(p.vars.map(v=>(v.t||"").split(" / ")[k]).filter
 const isTablet=p=>!!p.tab||p.dept=="ipad"&&/ipad|tab\b|tablet|galaxy tab|matepad|pad\b/i.test(p.name);
 const tabColor=t=>{t=(t||"").toLowerCase();return /space ?gr[ae]y|graphite|gr[ae]y/.test(t)?"#5E6168":/silver|white/.test(t)?"#D9DCE1":/starlight|gold|cream/.test(t)?"#E4DACA":/blue/.test(t)?"#7E9CC4":/purple|lavender|violet/.test(t)?"#B6A6D3":/pink|rose/.test(t)?"#E4B9C3":/black|midnight/.test(t)?"#2C2D31":/green|mint/.test(t)?"#AFC7B4":"#8A909A"};
 function phVarIdx(p,sel){return p.vars.findIndex(v=>{const parts=(v.t||"").split(" / ");return sel.every((s,k)=>!s||parts[k]==s)})}
-function openPH(id){const p=PHmap.get(id);if(!p)return;PV_KIND="ph";pvp.p=p;pvp.tabKey=null;pvp.pc=null;
-  const first=phVars(p).findIndex(v=>v.ok),i=first<0?0:first;pvp.sel=(p.vars[i].t||"").split(" / ").filter(Boolean);pvp.photo=0;
+function openPH(id,vi){const p=PHmap.get(id);if(!p)return false;PV_KIND="ph";pvp.p=p;pvp.tabKey=null;pvp.pc=null;
+  const want=vi!=null&&p.vars[vi]?vi:null,first=phVars(p).findIndex(v=>v.ok),i=want!=null?want:(first<0?0:first);
+  pvp.sel=(p.vars[i].t||"").split(" / ").filter(Boolean);pvp.photo=0;
   $("pvSize").style.display="none";
   DB.logs.views[id]=(DB.logs.views[id]||0)+1;track("view",id);save();
-  pvp.first=true;renderPH(true);openModal("pvModal")}
+  pvp.first=true;renderPH(true);openModal("pvModal");return true}
 function renderPH(resetPhoto){const p=pvp.p,vi=Math.max(0,phVarIdx(p,pvp.sel)),v=phV(p,vi),ok=v.ok&&!phHidden(p),key="ph:"+p.id+":"+vi;
   const nopt=Math.max(p.opts.length,(p.vars[0].t||"").split(" / ").filter(Boolean).length);
   const names=Array.from({length:nopt},(_,k)=>p.opts[k]||(k?"Option":"Choose"));
@@ -13640,13 +13649,34 @@ function cxLegacyNotice(orders){
   return {ids:ids.slice(),text:"This device still has unconfirmed "+(many?"orders ":"order ")+ids.join(", ")+". They were kept on this device and not sent again. Message us on WhatsApp with "+(many?"these references":"this reference")+"."};
 }
 function cxMayShowWA(status){return status==="confirmed"}
+/* a public product address. It carries the model, the chosen options, and the stock unit. No customer details. */
+function cxProductURL(item){
+  if(!item||!item.kind||item.id==null||item.id==="") return "";
+  const out=[];
+  const add=(k,v)=>{if(v==null||v==="")return;out.push(encodeURIComponent(k)+"="+encodeURIComponent(String(v)))};
+  if(item.kind==="phone"){
+    add("p","phone");add("id",item.id);add("unit",item.unit);
+    const parts=String(item.key||"").split("|");
+    if(parts.length>=5&&parts[0]===String(item.id)){add("color",parts[1]);add("st",parts[2]);add("cond",parts[3]);add("sim",parts[4])}
+  }else if(item.kind==="ph"){
+    add("p","ph");add("id",item.id);
+    if(item.vi!=null&&item.vi!=="") add("v",item.vi);
+  }else if(item.kind==="acc"){
+    add("p","acc");add("id",item.id);
+  }else return "";
+  return out.length?"https://connectifystore.vercel.app/?"+out.join("&"):"";
+}
 function cxOrderMessage(p,money,waShow){
   const cart=p.cart||[];
   const form=p.form||{};
   const area=form.area||p.area||"";
   const address=form.address||p.address||"";
   const name=form.name||p.name||"";
-  const lines=cart.map(i=>"• "+i.title+", "+i.detail+(i.price!=null?" ("+money(i.price)+")":"")).join("\n");
+  const lines=cart.map(i=>{
+    const row="• "+i.title+", "+i.detail+(i.price!=null?" ("+money(i.price)+")":"");
+    const url=cxProductURL(i);
+    return url?row+"\n\nProduct link: "+url+"\n":row;
+  }).join("\n");
   const priced=cart.filter(i=>i.price!=null);
   const sub=priced.length?"\nSubtotal: "+money(priced.reduce((s,i)=>s+(Number(i.price)||0),0))+" + delivery":"";
   return {
@@ -14123,8 +14153,43 @@ function setSync(s,why){const d=document.querySelector(".demo-strip");if(!d)retu
 document.querySelectorAll(".ldemo").forEach(e=>e.hidden=true);
 setSync("ok");
 
+/* ---------- product links from an order message ---------- */
+function cxReadProductLink(){
+  if(location.hash==="#admin") return null;
+  let q;try{q=new URLSearchParams(location.search)}catch(e){return null}
+  const kind=q.get("p");if(!kind) return null;
+  return {p:kind,id:q.get("id")||"",unit:q.get("unit")||"",color:q.get("color")||"",st:q.get("st")||"",cond:q.get("cond")||"",sim:q.get("sim")||"",v:q.get("v")};
+}
+function cxOpenProductLink(link){
+  if(!link) return false;
+  if(link.p==="phone"){
+    const spec={};
+    const u=(DB.units||[]).find(x=>link.unit&&x.id===link.unit&&(!link.id||x.m===link.id));
+    if(u){spec.color=u.c;spec.st=u.st;spec.cond=u.cond;spec.sim=u.sim}
+    if(link.color) spec.color=link.color;
+    if(link.st) spec.st=link.st;
+    if(link.cond) spec.cond=link.cond;
+    if(link.sim) spec.sim=link.sim;
+    const id=link.id||(u&&u.m)||"";
+    const exact=spec.color||spec.st!=null||spec.cond||spec.sim?spec:null;
+    if(id&&openPhone(id,spec.color||null,exact)) return true;
+  }else if(link.p==="ph"){
+    const vi=link.v==null||link.v===""?null:+link.v;
+    if(link.id&&openPH(link.id,Number.isInteger(vi)?vi:null)) return true;
+  }else if(link.p==="acc"){
+    if(link.id&&openAcc(link.id)) return true;
+  }
+  toast("That product link is no longer in the catalog.");
+  return false;
+}
+let cxLinkOpened=false;
+function cxApplyProductLink(){
+  if(cxLinkOpened) return;
+  const link=cxReadProductLink();if(!link){cxLinkOpened=true;return}
+  cxLinkOpened=true;cxOpenProductLink(link);
+}
 /* ---------- start ---------- */
-pullState().then(ok=>{if(ok)rerender();L.ready=true});
+pullState().then(ok=>{if(ok)rerender();L.ready=true;cxApplyProductLink()}).catch(()=>{L.ready=true;cxApplyProductLink()});
 checkStaff().then(s=>{if(s)refreshStaff().then(()=>{if(ADMIN_ON)showAdmin();if(window.reviewsRefresh)reviewsRefresh()})});
 sb.auth.onAuthStateChange((ev)=>{if(ev=="SIGNED_OUT"){L.staff=false;if(ADMIN_ON)showAdmin()}
   /* "reset password" email link lands here: let the owner pick a new password */
