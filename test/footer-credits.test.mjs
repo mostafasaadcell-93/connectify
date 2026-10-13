@@ -36,14 +36,18 @@ function startServer() {
   return new Promise(resolve => server.listen(0, "127.0.0.1", () => resolve(server)));
 }
 
-test("footer names Mostafa and no longer carries the 3D credit", () => {
+test("footer says Powered by Connectify and has no demo notice", () => {
   const footer = html.slice(html.indexOf("<footer>"), html.indexOf("</footer>"));
-  assert.match(footer, /Design concept prepared for Connectify by Mostafa/);
+  assert.match(footer, /<span>Powered by Connectify<\/span>/);
+  assert.equal(footer.includes("Mostafa"), false);
   assert.equal(footer.includes("Haidar"), false);
+  assert.equal(footer.includes("Design concept"), false);
+  assert.equal(footer.includes("Designed by"), false);
+  assert.equal(footer.includes("Developed by"), false);
   assert.equal(footer.includes("MajdyModels"), false);
   assert.equal(footer.includes("CC BY"), false);
   assert.equal(footer.includes("sketchfab.com"), false);
-  assert.match(footer, /Not a live store/);
+  assert.equal(/not a live|this store is not live|prototype|demo/i.test(footer), false);
   assert.match(footer, /Instagram @connectify\.lb/);
   assert.match(footer, /WhatsApp \+961 71 062 768/);
   assert.match(html, /models\/iphone16pm\.glb/);
@@ -77,8 +81,10 @@ test("the 3D credit appears only while the licensed hero is selected", async () 
       await page.evaluate(() => { const splash = document.querySelector("#splash"); if (splash) splash.remove(); });
 
       const footer = await page.locator("footer .concept").innerText();
-      assert.match(footer, /Design concept prepared for Connectify by Mostafa/);
+      assert.equal(footer.trim(), "Powered by Connectify");
+      assert.equal(footer.includes("Mostafa"), false);
       assert.equal(footer.includes("Haidar"), false);
+      assert.equal(/not a live|this store is not live|prototype|demo/i.test(footer), false);
       assert.equal(footer.includes("Majdy"), false);
       assert.equal(await page.locator("#heroCredit").isVisible(), false);
 
