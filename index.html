@@ -1627,6 +1627,9 @@ select option:disabled{color:#6A6A6A}
 .hpick .sw.loading i::after{content:"";position:absolute;left:3px;top:50%;width:30px;height:30px;margin-top:-15px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;animation:spin .8s linear infinite;box-sizing:border-box}
 .hpick .sw.failed{opacity:.4}
 .hero:not(.multi) .hpick .sw:not([data-dev=pm18]),.hero:not(.multi) .hpick-h{display:none}
+.herocredit{position:absolute;z-index:4;left:0;bottom:8px;width:max-content;max-width:100%;margin:0;font-size:11px;line-height:1.35;color:rgba(255,255,255,.7)}
+.herocredit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.herocredit[hidden]{display:none}
 /* the colour carries on up behind the glass navigation bar */
 .hfield{inset:-140px 0 0;-webkit-mask-image:linear-gradient(transparent 0,#000 130px,#000 80%,transparent);mask-image:linear-gradient(transparent 0,#000 130px,#000 80%,transparent)}
 @media (max-width:760px){
@@ -1635,9 +1638,9 @@ select option:disabled{color:#6A6A6A}
   .hpick .sw{padding:6px 12px 6px 6px;gap:8px;border-radius:999px}
   .hpick .sw i{width:24px;height:24px}
   .hpick .sw b{font-size:12.5px}
+  .herocredit{left:50%;right:auto;bottom:70px;width:max-content;max-width:calc(100% - 16px);transform:translateX(-50%);text-align:center}
   .hfield{inset:-74px 0 0;-webkit-mask-image:linear-gradient(transparent 0,#000 70px,#000 85%,transparent);mask-image:linear-gradient(transparent 0,#000 70px,#000 85%,transparent)}
 }
-.concept .credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 @media (max-width:760px){
   .hfield{background:radial-gradient(90% 46% at 50% 30%,var(--hc1) 0%,var(--hc2) 55%,var(--hc3) 100%)}
   .hfield::after{background:radial-gradient(50% 24% at 50% 28%,rgba(255,255,255,.12),transparent 70%)}
@@ -1803,6 +1806,7 @@ select option:disabled{color:#6A6A6A}
         <button class="sw" data-dev="pm17" aria-pressed="false" aria-label="iPhone 17 Pro Max, Cosmic Orange"><i style="background:#E0692C"></i><span><b>17 Pro Max</b><small>Cosmic Orange</small></span></button>
         <button class="sw" data-dev="pm16" aria-pressed="false" aria-label="iPhone 16 Pro Max, Desert Titanium"><i style="background:#C4A88F"></i><span><b>16 Pro Max</b><small>Desert Titanium</small></span></button>
       </div>
+      <p class="herocredit" id="heroCredit" hidden>iPhone 16 Pro Max 3D model by <a href="https://sketchfab.com/MG990" target="_blank" rel="noopener">MajdyModels</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
     </div>
   </div>
 </header>
@@ -2004,7 +2008,7 @@ select option:disabled{color:#6A6A6A}
       <ul><li><a href="#shop">Shop</a></li><li><a href="#trade">Trade-in</a></li><li><a href="#grades">Conditions</a></li><li><button class="adminlink" data-open-info>Warranty and exchange</button></li><li><button class="adminlink" data-open-admin>Store admin</button></li></ul>
       <ul><li><a href="https://www.instagram.com/connectify.lb/" target="_blank" rel="noopener">Instagram @connectify.lb</a></li><li><a href="https://wa.me/96171062768" target="_blank" rel="noopener">WhatsApp +961 71 062 768</a></li><li>Delivery all over Lebanon</li><li>Cash on delivery</li></ul>
     </div>
-    <div class="concept"><span>Design concept prepared for Connectify by Haidar</span><span>Not a live store</span><span class="credit">iPhone 16 Pro Max 3D model by <a href="https://sketchfab.com/MG990" target="_blank" rel="noopener">MajdyModels</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></span></div>
+    <div class="concept"><span>Design concept prepared for Connectify by Mostafa</span><span>Not a live store</span></div>
   </div>
 </footer>
 
@@ -7195,7 +7199,7 @@ const HERO_DEVICES={
     rotY:Math.PI/2}                                // front of this file faces -x
 };
 const HERO_ORDER=["pm18","pm17","pm16"];
-/* author credit required by the CC BY 4.0 licence of a hero model */
+/* pm16 is MajdyModels' CC BY 4.0 model. #heroCredit is the visible attribution, shown only while that phone is on screen. */
 const HERO_CREDITS={pm16:'"iPhone 16 Pro Max" 3D model by MajdyModels (sketchfab.com/MG990), CC BY 4.0'};
 
 function heroLockDraw(dev){const P=dev.palette;return (g,w,h)=>{
@@ -11225,6 +11229,7 @@ if(window.HERO3)heroFrostStart();
     document.querySelectorAll(".finish .sw").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.dev==key)));
     if($("finishModel"))$("finishModel").textContent=d.name;if($("finishName"))$("finishName").textContent=h.finish;$("glow").style.background=h.sw;
     canvas.setAttribute("aria-label",`3D ${d.name} in ${h.finish} you can rotate by dragging`);
+    const credit=$("heroCredit");if(credit)credit.hidden=!(typeof HERO_CREDITS!="undefined"&&HERO_CREDITS[key]);
     if(window.setLiquidTint)setLiquidTint(h.sw);
     // the giant number behind the phone slides out the same way the phone leaves
     const box=$("heroNum");if(box){const old=box.querySelector("span:not(.out)"),n=document.createElement("span");n.textContent=h.num;n.className="in";box.appendChild(n);
