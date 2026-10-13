@@ -176,6 +176,37 @@ test("menu counts include every visible listing and ignore stock", async () => {
   });
   grid.forEach(row => assert.equal(row.page, row.n, "grid " + row.cat + "/" + (row.sub || "all")));
 
+  const iphone11 = await page.evaluate(() => {
+    const ids = ["11", "11pro", "11promax"];
+    const models = ids.map(id => allModels().find(m => m.id === id));
+    DB.units.forEach(u => { if (ids.includes(u.m)) u.qty = 0; });
+    window.menuRefresh();
+    const num = el => {
+      const s = el && el.querySelector(":scope > span, span");
+      return s ? +s.textContent : 0;
+    };
+    [...document.querySelectorAll("#catbar [data-gi]")].find(b => b.textContent.startsWith("Phones")).click();
+    const desk = [...document.querySelectorAll("#megaMenu .mm")].find(b => b.dataset.cat === "apple" && b.dataset.sub === "11");
+    const drawer = document.querySelector("#mDrawer");
+    drawer.hidden = true;
+    drawer.classList.remove("on");
+    document.querySelector("#burgerBtn").click();
+    const mobile = [...document.querySelectorAll("#mdBody .mdi")].find(b => b.dataset.cat === "apple" && b.dataset.sub === "11" && !b.classList.contains("mdsec"));
+    menuGo("apple", "11");
+    const listed = models.filter(Boolean).map(m => ({id: m.id, name: m.name, status: status(m).k}));
+    return {
+      listed,
+      desktop: num(desk),
+      mobile: num(mobile),
+      page: parseInt($("countLine").textContent, 10)
+    };
+  });
+  assert.deepEqual(iphone11.listed.map(m => m.id), ["11", "11pro", "11promax"]);
+  assert.deepEqual(iphone11.listed.map(m => m.status === "ok"), [false, false, false]);
+  assert.equal(iphone11.desktop, 3, "desktop iPhone 11 series");
+  assert.equal(iphone11.mobile, 3, "mobile iPhone 11 series");
+  assert.equal(iphone11.page, 3, "iPhone 11 series page");
+
   const owner = await page.evaluate(() => {
     window.menuRefresh();
     const before = {
