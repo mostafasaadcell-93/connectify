@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {execSync} from "node:child_process";
 import {
   DEFAULT_SETTINGS, undercut, toUsd, parseSpecs, observationsFromWoo, observationsFromShopify,
-  parseManualCsv, matchPair, evaluate, canApply, canRestore
+  observationsFromShopifySuggest, observationsFromShopifyJs, coverageQueries, coverageUrl,
+  decideRecord, parseManualCsv, matchPair, evaluate, canApply, canRestore
 } from "../market/engine.mjs";
+import {runCoverage} from "../market/coverage.mjs";
 
 const phone = {
   sku: "unit:u12", kind: "phone", ref: {unit: "u12"}, title: "iPhone 17 Pro Max",
@@ -115,21 +117,39 @@ test("missing cost, a thin margin, a jump, or a currency without a rate blocks t
   assert.equal(toUsd(100, "EUR", {}).reason, "unsupported_currency");
 });
 
-test("apply and restore stay off unless every gate is open, and they do not touch stock or orders", () => {
+test("manual approval does not require scheduled automation, and automatic updates stay off", () => {
   const proposal = evaluate([phone], [quote({price: 1515})], {minMarginPct: 2}, []).proposals[0];
-  assert.equal(canApply(proposal, {}, "approved").reason, "automation_disabled");
-  const open = Object.assign({}, DEFAULT_SETTINGS, {automationEnabled: true, writesEnabled: true, minMarginPct: 2, productAuto: {"unit:u12": true}});
-  const allowed = canApply(proposal, open, "approved");
-  assert.equal(allowed.ok, true);
-  assert.equal(allowed.price, proposal.target);
-  assert.equal(Object.hasOwn(allowed, "qty"), false);
-  assert.equal(JSON.stringify(allowed).includes("C-"), false);
-  assert.equal(canApply(proposal, open, "approved").ok, true);
-  open.appliedKeys = [allowed.key];
-  assert.equal(canApply(proposal, open, "approved").reason, "already_applied");
-  assert.equal(canApply(proposal, Object.assign({}, open, {appliedKeys: [], productAuto: {}}), "approved").reason, "product_disabled");
-  assert.equal(canRestore({sku: phone.sku, previous: 1542}, DEFAULT_SETTINGS).reason, "writes_disabled");
-  assert.equal(canRestore({sku: phone.sku, previous: 1542, ref: phone.ref, kind: "phone"}, Object.assign({}, DEFAULT_SETTINGS, {writesEnabled: true})).price, 1542);
+  const manual = canApply(proposal, DEFAULT_SETTINGS, "approved", "manual");
+  assert.equal(manual.ok, true);
+  assert.equal(manual.mode, "manual");
+  assert.equal(manual.price, proposal.target);
+  assert.equal(Object.hasOwn(manual, "qty"), false);
+  assert.equal(JSON.stringify(manual).includes("C-"), false);
+  assert.equal(canApply(proposal, DEFAULT_SETTINGS, "approved", "automatic").reason, "automation_disabled");
+  const open = Object.assign({}, DEFAULT_SETTINGS, {automationEnabled: true, writesEnabled: true, minMarginPct: 2, productAuto: {}});
+  assert.equal(canApply(proposal, open, "approved", "automatic").reason, "product_disabled");
+  open.productAuto = {"unit:u12": true};
+  assert.equal(canApply(proposal, open, "approved", "automatic").ok, true);
+  open.appliedKeys = [manual.key];
+  assert.equal(canApply(proposal, open, "approved", "manual").reason, "already_applied");
+  assert.equal(canRestore({sku: phone.sku, previous: 1542, ref: phone.ref, kind: "phone"}).price, 1542);
+  assert.equal(canRestore({sku: phone.sku}).reason, "no_previous_price");
+});
+
+test("approved and rejected decisions survive a second session, and a manual apply is refused without approval", () => {
+  const audit = {settings: {automation_enabled: false, writes_enabled: false}, flags: {}, decisions: []};
+  assert.equal(decideRecord(audit, {staff: false, status: "approved", sku: "unit:u12", target: 1511.97}).reason, "staff only");
+  const approved = decideRecord(audit, {staff: true, status: "approved", sku: "unit:u12", target: 1511.97, previous: 1542, now: "2026-10-15T10:00:00Z"});
+  assert.equal(approved.ok, true);
+  const second = {settings: audit.settings, flags: audit.flags, decisions: audit.decisions};
+  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k1", mode: "manual"}).ok, true);
+  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k1", mode: "manual"}).reason, "already applied");
+  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u13", target: 900, previous: 1000, applyKey: "k2", mode: "automatic"}).reason, "automation disabled");
+  const rejected = decideRecord(second, {staff: true, status: "rejected", sku: "unit:u13", target: 900, now: "2026-10-15T10:05:00Z"});
+  assert.equal(rejected.ok, true);
+  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u13", target: 900, applyKey: "k3", mode: "manual"}).reason, "not approved");
+  assert.equal(second.decisions.filter(row => row.status === "approved").length, 1);
+  assert.equal(second.decisions.filter(row => row.status === "rejected").length, 1);
 });
 
 test("public catalog records keep only a real variant price", () => {
@@ -147,6 +167,29 @@ test("public catalog records keep only a real variant price", () => {
   );
   assert.equal(ranged[0].price, null);
   assert.equal(ranged[0].status, "incomplete");
+  const named = observationsFromWoo(
+    {id: "najem", name: "Najem Starcall", currency: "USD"},
+    {name: "Apple iPhone 17 Pro Max 256GB 1 SIM Silver New", type: "variable", permalink: "https://najemstarcall.com/p", is_in_stock: true, variations: [{id: 3, attributes: [{name: "color", value: "silver"}]}], prices: {price: "1510", currency_code: "USD", currency_minor_unit: 0}},
+    "2026-10-15T09:00:00Z"
+  );
+  assert.equal(named[0].price, 1510);
+  assert.equal(named[0].status, "ok");
+  const suggest = observationsFromShopifySuggest(
+    {id: "abedtahan", name: "Abed Tahan", origin: "https://abedtahan.com", currency: "USD"},
+    {resources: {results: {products: [
+      {title: "iPhone 17 Pro Max 256GB Nano SIM Silver", handle: "iphone-17", price_min: "1515.00", price_max: "1515.00", available: true, vendor: "APPLE"},
+      {title: "iPhone 17 Pro Max", handle: "range", price_min: "1400.00", price_max: "1800.00", available: true, vendor: "APPLE"}
+    ]}}},
+    "2026-10-15T09:00:00Z"
+  );
+  assert.equal(suggest[0].price, 1515);
+  assert.equal(suggest[1].price, null);
+  const js = observationsFromShopifyJs(
+    {id: "abedtahan", name: "Abed Tahan", origin: "https://abedtahan.com", currency: "USD"},
+    {title: "iPhone 17 Pro Max 256GB", handle: "iphone-17", vendor: "APPLE", variants: [{id: 9, title: "Silver", price: 151500, available: true, option1: "Silver"}]},
+    "2026-10-15T09:00:00Z"
+  );
+  assert.equal(js[0].price, 1515);
   const shop = observationsFromShopify(
     {id: "bms", name: "BMS", origin: "https://lb.bmsmena.com", currency: "USD", brandAllow: ["samsung"]},
     {title: "Samsung Galaxy S26 Ultra", handle: "s26", vendor: "BMS Samsung Lebanon", options: [{name: "Color"}, {name: "Storage"}], variants: [
@@ -167,6 +210,40 @@ test("public catalog records keep only a real variant price", () => {
   const csv = parseManualCsv("store,name,price,currency,url,available\nNajem,iPhone,,USD,https://najemstarcall.com/x,in_stock\n", "2026-10-15T09:00:00Z");
   assert.equal(csv[0].price, null);
   assert.equal(csv[0].status, "incomplete");
+});
+
+test("targeted coverage pages through search results and stops at the request cap", async () => {
+  const calls = [];
+  const headers = (map) => ({get: name => map[String(name).toLowerCase()] || null});
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (String(url).includes("captcha")) return {ok: false, status: 202, headers: headers({"content-type": "text/html"}), json: async () => ({})};
+    if (String(url).endsWith(".js")) {
+      return {ok: true, status: 200, headers: headers({"content-type": "text/javascript"}), json: async () => ({title: "Galaxy S26 Ultra", handle: "s26", vendor: "Samsung", variants: [{id: 1, title: "Black", price: 118000, available: true, option1: "Black"}]})};
+    }
+    if (String(url).includes("suggest.json")) {
+      return {ok: true, status: 200, headers: headers({"content-type": "application/json"}), json: async () => ({resources: {results: {products: [{title: "Galaxy S26 Ultra", handle: "s26", price_min: "1000.00", price_max: "1400.00", available: true, vendor: "Samsung"}]}}})};
+    }
+    const page = Number(new URL(url).searchParams.get("page") || "1");
+    return {ok: true, status: 200, headers: headers({"content-type": "application/json", "x-wp-totalpages": "2"}), json: async () => page === 1 ? [{name: "iPhone 17 Pro Max 256GB Silver 1 SIM New", type: "simple", permalink: "https://classcellulars.com/p/" + page, is_in_stock: true, prices: {price: "151500", currency_code: "USD", currency_minor_unit: 2}}] : []};
+  };
+  const catalog = [
+    phone,
+    {sku: "unit:s26", kind: "phone", title: "Galaxy S26 Ultra", specs: {brand: "samsung", model: "s26ultra"}}
+  ];
+  const result = await runCoverage({
+    fetchImpl, sleep: async () => {}, delayMs: 0, retries: 0, maxPages: 2, perPage: 20, maxRequests: 3,
+    queries: coverageQueries(catalog),
+    sources: [
+      {id: "class", name: "Class Cellulars", kind: "woo", origin: "https://classcellulars.com", endpoint: "https://classcellulars.com/wp-json/wc/store/v1/products", currency: "USD"},
+      {id: "bms", name: "BMS", kind: "shopify", origin: "https://lb.bmsmena.com", endpoint: "https://lb.bmsmena.com/products.json", currency: "USD", brandAllow: ["samsung"]}
+    ]
+  });
+  assert.equal(result.requests <= 3, true);
+  assert.equal(calls.some(url => url.includes("search=iPhone+17+Pro+Max") || url.includes("search=iPhone%2017%20Pro%20Max")), true);
+  assert.equal(calls.some(url => url.includes("type=variation")), false);
+  assert.equal(result.observations.some(row => row.price === 1515), true);
+  assert.equal(coverageUrl({kind: "woo", endpoint: "https://phonefinity.net/wp-json/wc/store/v1/products"}, "iPhone 17", 1, 20).includes("/?rest_route="), false);
 });
 
 test("the storefront diff does not rewrite checkout or availability markup", () => {

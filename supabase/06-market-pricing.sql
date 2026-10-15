@@ -82,11 +82,13 @@ alter table public.market_decisions enable row level security;
 drop policy if exists "staff read market decisions" on public.market_decisions;
 create policy "staff read market decisions" on public.market_decisions for select to authenticated using (public.is_staff());
 drop policy if exists "staff write market decisions" on public.market_decisions;
-create policy "staff write market decisions" on public.market_decisions for insert to authenticated with check (public.is_staff());
+-- No direct insert policy. Staff write decisions only through market_decide, which checks is_staff().
 
--- Staff-only audit record. A duplicate apply_key is rejected.
--- This function does not write product prices or quantities.
-create or replace function public.market_decide(p_sku text, p_status text, p_target numeric, p_previous numeric, p_apply_key text, p_proposal jsonb)
+-- Manual approval is allowed while scheduled automation stays off.
+-- Applied is recorded only after the caller has confirmed the staff price save.
+-- This function does not write product prices, stock, or orders.
+drop function if exists public.market_decide(text, text, numeric, numeric, text, jsonb);
+create or replace function public.market_decide(p_sku text, p_status text, p_target numeric, p_previous numeric, p_apply_key text, p_proposal jsonb, p_mode text default 'manual')
 returns uuid
 language plpgsql
 security definer
@@ -95,6 +97,7 @@ as $$
 declare
   new_id uuid;
   settings public.market_settings;
+  latest public.market_decisions;
 begin
   if not public.is_staff() then
     raise exception 'staff only';
@@ -102,26 +105,44 @@ begin
   if p_status not in ('approved','rejected','applied','restored') then
     raise exception 'bad status';
   end if;
+  if p_mode is null or p_mode not in ('manual','automatic') then
+    raise exception 'bad mode';
+  end if;
   select * into settings from public.market_settings where id = 1;
   if p_status = 'applied' then
-    if settings.automation_enabled is not true or settings.writes_enabled is not true then
-      raise exception 'automation disabled';
-    end if;
-    if not exists (select 1 from public.market_product_flags where sku = p_sku and auto_enabled) then
-      raise exception 'product disabled';
-    end if;
     if p_target is null or p_target <= 0 then
       raise exception 'missing target';
+    end if;
+    if p_apply_key is null or char_length(p_apply_key) < 3 then
+      raise exception 'missing apply key';
+    end if;
+    if p_mode = 'automatic' then
+      if settings.automation_enabled is not true or settings.writes_enabled is not true then
+        raise exception 'automation disabled';
+      end if;
+      if not exists (select 1 from public.market_product_flags where sku = p_sku and auto_enabled) then
+        raise exception 'product disabled';
+      end if;
+    else
+      select * into latest from public.market_decisions
+      where sku = p_sku and status in ('approved','rejected')
+      order by created_at desc, id desc
+      limit 1;
+      if latest.id is null or latest.status <> 'approved' or latest.target_price is distinct from p_target then
+        raise exception 'not approved';
+      end if;
     end if;
   end if;
   insert into public.market_decisions (sku, status, target_price, previous_price, apply_key, proposal)
   values (p_sku, p_status, p_target, p_previous, case when p_status = 'applied' then p_apply_key else null end, coalesce(p_proposal, '{}'::jsonb))
   returning id into new_id;
   return new_id;
+exception when unique_violation then
+  raise exception 'already applied';
 end;
 $$;
-revoke all on function public.market_decide(text, text, numeric, numeric, text, jsonb) from public, anon;
-grant execute on function public.market_decide(text, text, numeric, numeric, text, jsonb) to authenticated;
+revoke all on function public.market_decide(text, text, numeric, numeric, text, jsonb, text) from public, anon;
+grant execute on function public.market_decide(text, text, numeric, numeric, text, jsonb, text) to authenticated;
 
 -- One checker at a time. Observations only; prices stay where they are.
 create or replace function public.market_begin_run()

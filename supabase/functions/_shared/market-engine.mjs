@@ -173,11 +173,16 @@ export function observationsFromWoo(store, product, checkedAt) {
   };
   if (!product || !name) return [{...base, name: name || "", price: null, available: null, status: "failed", error: "missing_product", specs: parseSpecs("")}];
   const variations = Array.isArray(product.variations) ? product.variations : [];
-  const detailed = variations.filter(v => v && typeof v === "object" && (v.prices || v.price != null));
-  const rows = detailed.length ? detailed : (product.type === "variation" || product.type === "simple" || !variations.length ? [product] : []);
+  const detailed = variations.filter(v => v && typeof v === "object" && ((v.prices && v.prices.price != null && v.prices.price !== "") || (v.price != null && v.price !== "")));
+  let rows = detailed.length ? detailed : (product.type === "variation" || product.type === "simple" || !variations.length ? [product] : []);
+  const parentMoney = wooAmount(product.prices);
+  const parentRange = product.prices && product.prices.price_range;
+  const parentRanged = parentRange && parentRange.min_amount != null && parentRange.max_amount != null && String(parentRange.min_amount) !== String(parentRange.max_amount);
+  if (!rows.length && !parentRanged && parentMoney.ok) rows = [product];
   if (!rows.length) {
     return [{
-      ...base, name, price: null, available: null, status: "incomplete", error: "needs_variant",
+      ...base, name, price: null, available: null, status: "incomplete",
+      error: parentRanged ? "variant_price_range" : "needs_variant",
       specs: parseSpecs(name)
     }];
   }
@@ -241,6 +246,121 @@ export function observationsFromShopify(store, product, checkedAt) {
       status, error, specs
     };
   }).filter(row => !store.brandAllow || (row.specs.brand && store.brandAllow.includes(row.specs.brand)));
+}
+
+export function observationsFromShopifySuggest(store, payload, checkedAt) {
+  const products = ((((payload || {}).resources || {}).results || {}).products) || [];
+  const when = checkedAt || null;
+  return products.flatMap(product => {
+    const title = clean(product && product.title);
+    if (!title) return [];
+    const min = Number(product.price_min != null ? product.price_min : product.price);
+    const max = Number(product.price_max != null ? product.price_max : product.price);
+    const handle = product.handle || "";
+    const specs = parseSpecs(title, {brand: /samsung/i.test(product.vendor || "") ? "samsung" : null});
+    const url = handle ? store.origin + "/products/" + handle : "";
+    const single = Number.isFinite(min) && Number.isFinite(max) && min > 0 && min === max;
+    let status = "ok";
+    let error = "";
+    if (!single) { status = "incomplete"; error = "variant_price_range"; }
+    else if (product.available == null) { status = "unverified_stock"; error = "stock_not_stated"; }
+    else if (!product.available) status = "out_of_stock";
+    if (/pre-?\s*order/i.test(title)) { status = "incomplete"; error = "preorder"; }
+    return [{
+      store: store.name, sourceId: store.id, name: title, handle,
+      price: single && status !== "incomplete" ? round2(min) : null,
+      currency: store.currency || "USD", url, available: product.available === true,
+      checkedAt: when, status, error, specs
+    }];
+  }).filter(row => !store.brandAllow || (row.specs.brand && store.brandAllow.includes(row.specs.brand)));
+}
+
+export function observationsFromShopifyJs(store, product, checkedAt) {
+  const variants = ((product && product.variants) || []).map(variant => Object.assign({}, variant, {
+    price: Number.isFinite(Number(variant.price)) ? (Number(variant.price) / 100).toFixed(2) : ""
+  }));
+  return observationsFromShopify(store, Object.assign({}, product, {variants}), checkedAt);
+}
+
+export function coverageQueries(catalog) {
+  const seen = new Set();
+  const queries = [];
+  for (const sku of catalog || []) {
+    if (!sku || sku.kind !== "phone" || !sku.title) continue;
+    const key = sku.title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    queries.push({text: sku.title, brand: (sku.specs && sku.specs.brand) || null});
+  }
+  return queries;
+}
+
+export function coverageUrl(source, query, page, perPage) {
+  if (source.kind === "woo") {
+    const url = new URL(source.endpoint);
+    url.searchParams.set("search", query);
+    url.searchParams.set("per_page", String(perPage));
+    url.searchParams.set("page", String(page));
+    return url.toString();
+  }
+  const url = new URL("/search/suggest.json", source.origin);
+  url.searchParams.set("q", query);
+  url.searchParams.set("resources[type]", "product");
+  url.searchParams.set("resources[limit]", String(Math.min(10, perPage)));
+  return url.toString();
+}
+
+export function matchReport(catalog, observations, settings) {
+  const result = evaluate(catalog, observations, settings, observations);
+  const phones = (catalog || []).filter(sku => sku.kind === "phone");
+  const bySku = new Map(result.proposals.map(row => [row.sku, row]));
+  const high = [];
+  const review = [];
+  const unmatched = [];
+  for (const sku of phones) {
+    const row = bySku.get(sku.sku);
+    const entry = {sku: sku.sku, title: sku.title, detail: sku.detail || "", store: row ? row.store : "", competitor: row ? row.competitor : null, block: row ? row.block : "no_verified_price"};
+    if (row && row.confidence === "high") high.push(entry);
+    else if (row && row.confidence === "review") review.push(entry);
+    else unmatched.push(entry);
+  }
+  return {relevant: phones.length, high: high.length, review: review.length, unmatched: unmatched.length, highSkus: high, reviewSkus: review};
+}
+
+export function decideRecord(state, input) {
+  const box = state || {};
+  const decisions = box.decisions || (box.decisions = []);
+  if (!input || input.staff !== true) return {ok: false, reason: "staff only"};
+  const status = input.status;
+  if (!["approved", "rejected", "applied", "restored"].includes(status)) return {ok: false, reason: "bad status"};
+  const settings = box.settings || {};
+  if (status === "applied") {
+    const mode = input.mode || "manual";
+    if (!(Number(input.target) > 0)) return {ok: false, reason: "missing target"};
+    if (!input.applyKey) return {ok: false, reason: "missing apply key"};
+    if (decisions.some(row => row.status === "applied" && row.apply_key === input.applyKey)) return {ok: false, reason: "already applied"};
+    if (mode === "automatic") {
+      if (settings.automation_enabled !== true || settings.writes_enabled !== true) return {ok: false, reason: "automation disabled"};
+      if (!(box.flags && box.flags[input.sku] === true)) return {ok: false, reason: "product disabled"};
+    } else if (mode !== "manual") return {ok: false, reason: "bad mode"};
+    else {
+      const reviews = decisions.filter(row => row.sku === input.sku && (row.status === "approved" || row.status === "rejected"));
+      const latest = reviews[reviews.length - 1];
+      if (!latest || latest.status !== "approved" || Number(latest.target_price) !== Number(input.target)) return {ok: false, reason: "not approved"};
+    }
+  }
+  const row = {
+    id: "d" + (decisions.length + 1),
+    sku: input.sku,
+    status,
+    target_price: input.target == null ? null : Number(input.target),
+    previous_price: input.previous == null ? null : Number(input.previous),
+    apply_key: status === "applied" ? input.applyKey : null,
+    proposal: input.proposal || {},
+    created_at: input.now || new Date().toISOString()
+  };
+  decisions.push(row);
+  return {ok: true, id: row.id, row};
 }
 
 export function parseManualCsv(text, checkedAt) {
@@ -419,20 +539,21 @@ export function applyKey(proposal) {
   return [proposal.sku, proposal.target, proposal.url, proposal.competitor].join("|");
 }
 
-export function canApply(proposal, settings, decision) {
+export function canApply(proposal, settings, decision, mode) {
   const cfg = Object.assign({}, DEFAULT_SETTINGS, settings || {});
-  if (!cfg.automationEnabled || !cfg.writesEnabled) return {ok: false, reason: "automation_disabled"};
-  if (!cfg.productAuto || !cfg.productAuto[proposal.sku]) return {ok: false, reason: "product_disabled"};
+  const path = mode || "manual";
+  if (path === "automatic") {
+    if (!cfg.automationEnabled || !cfg.writesEnabled) return {ok: false, reason: "automation_disabled"};
+    if (!cfg.productAuto || !cfg.productAuto[proposal.sku]) return {ok: false, reason: "product_disabled"};
+  } else if (path !== "manual") return {ok: false, reason: "bad_mode"};
   if (decision !== "approved") return {ok: false, reason: "not_approved"};
   if (!proposal || proposal.block || !(proposal.target > 0)) return {ok: false, reason: (proposal && proposal.block) || "no_verified_price"};
   const key = applyKey(proposal);
   if ((cfg.appliedKeys || []).includes(key)) return {ok: false, reason: "already_applied"};
-  return {ok: true, reason: "ok", price: proposal.target, previous: proposal.current, key, sku: proposal.sku, ref: proposal.ref, kind: proposal.kind};
+  return {ok: true, reason: "ok", price: proposal.target, previous: proposal.current, key, sku: proposal.sku, ref: proposal.ref, kind: proposal.kind, mode: path};
 }
 
-export function canRestore(entry, settings) {
-  const cfg = Object.assign({}, DEFAULT_SETTINGS, settings || {});
-  if (!cfg.writesEnabled) return {ok: false, reason: "writes_disabled"};
+export function canRestore(entry) {
   if (!entry || !(entry.previous > 0) || !entry.sku) return {ok: false, reason: "no_previous_price"};
   return {ok: true, price: entry.previous, sku: entry.sku, ref: entry.ref, kind: entry.kind};
 }

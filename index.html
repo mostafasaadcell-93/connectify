@@ -13526,8 +13526,18 @@ async function push(){pushT=null;if(!L.staff||busy){if(busy)schedulePush();retur
       const{error}=await sb.from("orders").update({status:o.status,stock_applied:!!o.stockApplied}).eq("id",o.dbid);
       if(error)throw error;o._sig=sig}
     _save();setSync("ok");
-  }catch(e){console.warn(e);setSync("err",e&&(e.message||e.code));toast("Couldn't save to the database. Check the internet, it will retry.");setTimeout(schedulePush,8000)}
-  busy=false}
+    busy=false;
+    return true;
+  }catch(e){console.warn(e);setSync("err",e&&(e.message||e.code));toast("Couldn't save to the database. Check the internet, it will retry.");setTimeout(schedulePush,8000);busy=false;return false}
+}
+window.CX_STAFF_SAVE=async function(){
+  if(!L.staff)return false;
+  if(!_save())return false;
+  clearTimeout(pushT);pushT=null;
+  for(let i=0;i<30&&busy;i++)await new Promise(r=>setTimeout(r,100));
+  if(busy)return false;
+  return (await push())===true;
+};
 
 /* ---------- customer orders and trade-in requests ---------- */
 /* CXREL_START
