@@ -221,6 +221,10 @@ footer{border-top:1px solid var(--line);padding:64px 0 40px;background:var(--dee
 .foot p{color:var(--mist);max-width:36ch;margin-top:14px;font-size:15px}
 .foot ul{list-style:none;display:grid;gap:8px;color:var(--mist);font-size:15px}
 .concept{margin-top:48px;padding-top:24px;border-top:1px solid var(--line);font-size:13px;color:var(--mist);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.mktable{width:100%;border-collapse:collapse;font-size:13px}
+.mktable th,.mktable td{border-bottom:1px solid var(--line);text-align:left;vertical-align:top;padding:8px 6px}
+.mktnote{color:var(--mist);font-size:13px}
+#marketCsv,#marketQ{width:100%;margin:8px 0}
 
 /* OVERLAYS */
 .scrim{position:fixed;inset:0;background:rgba(6,6,6,.6);opacity:0;pointer-events:none;transition:opacity .3s;z-index:50}
@@ -2095,6 +2099,7 @@ select option:disabled{color:#6A6A6A}
         <button data-go="trade"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>Trade-in prices</button>
         <button data-go="front"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>Storefront</button>
         <button data-go="add" id="navAdd"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Add a model</button>
+        <button data-go="market"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/></svg>Market pricing</button>
       </nav>
       <div class="afoot">
         <button class="abtn" id="aExit">View store</button>
@@ -2312,6 +2317,7 @@ select option:disabled{color:#6A6A6A}
           <button class="btn btn-main" type="submit">Add this phone</button>
         </form>
       </section>
+      <section class="apage" id="ap-market" hidden><div id="marketRoot"></div></section>
     </main>
   </div>
 </div>
@@ -14269,5 +14275,6 @@ try{CX.restore()}catch(err){console.warn(err)}
 sendOrders();
 })();
 </script>
+<script type="module" src="market/admin.js"></script>
 </body>
 </html>
