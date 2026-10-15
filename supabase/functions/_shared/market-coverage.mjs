@@ -31,7 +31,10 @@ export async function runCoverage(options) {
   const pause = options.sleep || sleep;
   const observations = [];
   const errors = [];
+  const checked = [];
+  const skipped = [];
   let requests = 0;
+  const only = options.pairs || null;
 
   async function one(url) {
     if (requests >= maxRequests) return {error: "request cap"};
@@ -65,45 +68,91 @@ export async function runCoverage(options) {
     return {error: last};
   }
 
-  for (const source of sources) {
-    for (const query of queries) {
-      if (requests >= maxRequests) break;
-      if (source.brandAllow && query.brand && !source.brandAllow.includes(query.brand)) continue;
-      if (source.kind === "woo") {
-        for (let page = 1; page <= maxPages; page++) {
-          const result = await one(coverageUrl(source, query.text, page, perPage));
-          await pause(delayMs);
-          if (!result || result.error) {
-            errors.push({store: source.name, query: query.text, page, error: result ? result.error : "failed"});
-            break;
-          }
-          const products = Array.isArray(result.body) ? result.body : [];
-          observations.push(...products.flatMap(product => observationsFromWoo(source, product, checkedAt)));
-          if (products.length < perPage) break;
-          if (result.pages && page >= result.pages) break;
-        }
-      } else {
-        const result = await one(coverageUrl(source, query.text, 1, perPage));
-        await pause(delayMs);
-        if (!result || result.error) {
-          errors.push({store: source.name, query: query.text, error: result ? result.error : "failed"});
-          continue;
-        }
-        const found = observationsFromShopifySuggest(source, result.body, checkedAt);
-        const ranged = found.filter(row => row.error === "variant_price_range" && row.handle).slice(0, 4);
-        observations.push(...found.filter(row => row.error !== "variant_price_range"));
-        for (const item of ranged) {
-          const js = await one(source.origin + "/products/" + item.handle + ".js");
-          await pause(delayMs);
-          if (!js || js.error) {
-            observations.push(item);
-            errors.push({store: source.name, query: item.handle, error: js ? js.error : "failed"});
-            continue;
-          }
-          observations.push(...observationsFromShopifyJs(source, js.body, checkedAt));
+  const work = [];
+  if (only) {
+    for (const source of sources) {
+      for (const query of queries) {
+        if (source.brandAllow && query.brand && !source.brandAllow.includes(query.brand)) {
+          skipped.push({store: source.name, storeId: source.id, query: query.text, reason: "brand_not_sold"});
         }
       }
     }
+    for (const pair of only) {
+      const source = sources.find(item => item.id === pair.store);
+      const query = queries.find(item => item.text === pair.query);
+      if (!source || !query) continue;
+      if (source.brandAllow && query.brand && !source.brandAllow.includes(query.brand)) continue;
+      work.push({source, query});
+    }
+  } else {
+    for (const source of sources) {
+      for (const query of queries) {
+        if (source.brandAllow && query.brand && !source.brandAllow.includes(query.brand)) {
+          skipped.push({store: source.name, storeId: source.id, query: query.text, reason: "brand_not_sold"});
+          continue;
+        }
+        work.push({source, query});
+      }
+    }
   }
-  return {observations: dedupe(observations), errors, requests, checkedAt};
+  for (const item of work) {
+    const source = item.source;
+    const query = item.query;
+    if (requests >= maxRequests) {
+      skipped.push({store: source.name, storeId: source.id, query: query.text, reason: "request_cap"});
+      continue;
+    }
+    if (source.kind === "woo") {
+      let pagesSeen = 0;
+      let lastPage = 0;
+      for (let page = 1; page <= maxPages; page++) {
+        if (requests >= maxRequests) {
+          skipped.push({store: source.name, storeId: source.id, query: query.text, reason: "request_cap", page});
+          break;
+        }
+        const result = await one(coverageUrl(source, query.text, page, perPage));
+        await pause(delayMs);
+        if (!result || result.error) {
+          errors.push({store: source.name, query: query.text, page, error: result ? result.error : "failed"});
+          break;
+        }
+        pagesSeen = result.pages || pagesSeen;
+        lastPage = page;
+        const products = Array.isArray(result.body) ? result.body : [];
+        observations.push(...products.flatMap(product => observationsFromWoo(source, product, checkedAt)));
+        if (products.length < perPage) break;
+        if (result.pages && page >= result.pages) break;
+      }
+      checked.push({store: source.name, storeId: source.id, query: query.text, pages: lastPage});
+      if (pagesSeen > lastPage) skipped.push({store: source.name, storeId: source.id, query: query.text, reason: "further_pages_not_fetched", pages: pagesSeen});
+    } else {
+      const result = await one(coverageUrl(source, query.text, 1, perPage));
+      await pause(delayMs);
+      if (!result || result.error) {
+        errors.push({store: source.name, query: query.text, error: result ? result.error : "failed"});
+        checked.push({store: source.name, storeId: source.id, query: query.text, pages: 0});
+        continue;
+      }
+      checked.push({store: source.name, storeId: source.id, query: query.text, pages: 1});
+      const found = observationsFromShopifySuggest(source, result.body, checkedAt);
+      const ranged = found.filter(row => row.error === "variant_price_range" && row.handle).slice(0, 4);
+      observations.push(...found.filter(row => row.error !== "variant_price_range"));
+      for (const product of ranged) {
+        if (requests >= maxRequests) {
+          observations.push(product);
+          skipped.push({store: source.name, storeId: source.id, query: product.handle, reason: "request_cap"});
+          continue;
+        }
+        const js = await one(source.origin + "/products/" + product.handle + ".js");
+        await pause(delayMs);
+        if (!js || js.error) {
+          observations.push(product);
+          errors.push({store: source.name, query: product.handle, error: js ? js.error : "failed"});
+          continue;
+        }
+        observations.push(...observationsFromShopifyJs(source, js.body, checkedAt));
+      }
+    }
+  }
+  return {observations: dedupe(observations), errors, requests, checkedAt, checked, skipped};
 }

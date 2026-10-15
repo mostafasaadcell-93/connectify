@@ -46,6 +46,88 @@ function isAccessory(text) {
   return /\b(cases?|covers?|chargers?|cables?|protectors?|protection|tempered|magsafe|holders?|earbuds?|earphones?|headphones?|adapters?|power\s*banks?|screen\s*guards?|films?|lenses|lens|mounts?|kits?|skins?|bumpers?|pouches|straps?)\b/i.test(text);
 }
 
+const COLOR_PHRASES = [
+  ["cosmic orange", "cosmic orange"],
+  ["deep blue", "deep blue"],
+  ["space black", "space black"],
+  ["natural titanium", "natural titanium"],
+  ["black titanium", "black titanium"],
+  ["white titanium", "white titanium"],
+  ["blue titanium", "blue titanium"],
+  ["desert titanium", "desert titanium"],
+  ["pacific blue", "pacific blue"],
+  ["sierra blue", "sierra blue"],
+  ["alpine green", "alpine green"],
+  ["phantom black", "phantom black"],
+  ["titanium black", "titanium black"],
+  ["titanium gray", "titanium gray"],
+  ["titanium grey", "titanium grey"],
+  ["titanium violet", "titanium violet"],
+  ["cobalt violet", "cobalt violet"],
+  ["awesome navy", "awesome navy"],
+  ["awesome lightgray", "awesome lightgray"],
+  ["jet black", "jetblack"],
+  ["jetblack", "jetblack"],
+  ["icy blue", "icyblue"],
+  ["icyblue", "icyblue"],
+  ["product red", "product red"],
+  ["midnight", "midnight"],
+  ["starlight", "starlight"],
+  ["graphite", "graphite"],
+  ["ultramarine", "ultramarine"],
+  ["lavender", "lavender"],
+  ["silver", "silver"],
+  ["black", "black"],
+  ["white", "white"],
+  ["blue", "blue"],
+  ["green", "green"],
+  ["gold", "gold"],
+  ["pink", "pink"],
+  ["purple", "purple"],
+  ["yellow", "yellow"],
+  ["orange", "orange"],
+  ["coral", "coral"],
+  ["cream", "cream"],
+  ["navy", "navy"],
+  ["gray", "gray"],
+  ["grey", "grey"],
+  ["beige", "beige"],
+  ["red", "red"]
+].sort((a, b) => b[0].length - a[0].length);
+
+export function colorFromText(text) {
+  const s = clean(text).toLowerCase();
+  if (!s) return null;
+  for (const [phrase, canon] of COLOR_PHRASES) {
+    const token = phrase.replace(/\s+/g, "\\s+");
+    if (new RegExp("\\b" + token + "\\b", "i").test(s)) return canon;
+  }
+  return null;
+}
+
+export function storageFromText(text) {
+  const s = clean(text).toLowerCase();
+  if (!s) return null;
+  const terra = s.match(/(\d+(?:\.\d+)?)\s*terra\b/);
+  if (terra) return Number(terra[1]) * 1024;
+  const tb = s.match(/(\d+(?:\.\d+)?)\s*tb\b/);
+  if (tb) return Number(tb[1]) * 1024;
+  const gb = s.match(/(\d+(?:\.\d+)?)\s*gb\b/);
+  if (gb) return Number(gb[1]);
+  if (/^\d+(?:\.\d+)?$/.test(s)) return Number(s);
+  return null;
+}
+
+export function simFromText(text) {
+  const s = clean(text);
+  if (!s) return null;
+  if (/e-?\s*sim\s*only/i.test(s)) return "esim";
+  if (/\bdual\b/i.test(s)) return "dual";
+  if (/nano|physical|1\s*sim|single\s*sim/i.test(s)) return "psim";
+  if (/\besim\b|e-sim/i.test(s)) return "esim";
+  return null;
+}
+
 function modelFrom(text) {
   const s = clean(text);
   const rules = [
@@ -99,6 +181,10 @@ export function parseSpecs(text, hints) {
     storage = pair[3].toLowerCase() === "tb" ? Number(pair[2]) * 1024 : Number(pair[2]);
   }
   if (storage == null) {
+    const terra = s.match(/(\d+(?:\.\d+)?)\s*terra\b/i);
+    if (terra) storage = Number(terra[1]) * 1024;
+  }
+  if (storage == null) {
     const sizes = [];
     const re = /(\d+(?:\.\d+)?)\s*(tb|gb)\b/ig;
     let m;
@@ -116,24 +202,21 @@ export function parseSpecs(text, hints) {
   else if (/refurb/i.test(s)) condition = "refurb";
   else if (/\bused\b/i.test(s)) condition = "used";
   else if (/\bnew\b/i.test(s)) condition = "new";
-  let sim = null;
-  if (/e-?\s*sim\s*only/i.test(s)) sim = "esim";
-  else if (/dual/i.test(s)) sim = "dual";
-  else if (/nano|physical|1\s*sim|single\s*sim/i.test(s)) sim = "psim";
-  else if (/\besim\b|e-sim/i.test(s)) sim = "esim";
+  const sim = simFromText(s);
   const warranty = s.match(/(\d+)\s*year/i);
   let region = null;
   const regionMatch = s.match(/\b(uk|usa|us|hong kong|hk|eu|uae|ae|japan|china)\b/i);
   if (regionMatch) region = regionMatch[1].toLowerCase().replace("usa", "us").replace("hong kong", "hk").replace("uae", "ae");
+  const hintedStorage = extra.storage != null && extra.storage !== "" ? storageFromText(extra.storage) : null;
   const specs = {
     brand: identity.brand || extra.brand || null,
     model: isAccessory(s) ? null : (extra.model || identity.model),
-    storage: extra.storage != null ? Number(extra.storage) : storage,
-    ram: extra.ram != null ? Number(extra.ram) : ram,
+    storage: hintedStorage != null ? hintedStorage : storage,
+    ram: extra.ram != null && extra.ram !== "" ? Number(extra.ram) : ram,
     condition: extra.condition || condition,
     sim: extra.sim || sim,
-    color: extra.color ? String(extra.color).toLowerCase() : null,
-    warrantyYears: extra.warrantyYears != null ? Number(extra.warrantyYears) : (warranty ? Number(warranty[1]) : null),
+    color: extra.color ? (colorFromText(extra.color) || String(extra.color).toLowerCase()) : colorFromText(s),
+    warrantyYears: extra.warrantyYears != null && extra.warrantyYears !== "" ? Number(extra.warrantyYears) : (warranty ? Number(warranty[1]) : null),
     region: extra.region || region
   };
   return specs;
@@ -155,10 +238,36 @@ function attrMap(attributes) {
   const out = {};
   for (const attr of attributes || []) {
     const name = clean(attr.name || attr.taxonomy || "").toLowerCase();
-    const values = (attr.terms || attr.options || []).map(term => clean(term.name || term.value || term)).filter(Boolean);
+    let values = (attr.terms || attr.options || []).map(term => clean(term.name || term.value || term)).filter(Boolean);
+    if (!values.length && attr.value) values = [clean(attr.value)];
     if (name && values.length === 1) out[name] = values[0];
   }
   return out;
+}
+
+function sharedAttr(variations, names) {
+  const objects = (variations || []).filter(item => item && typeof item === "object");
+  if (!objects.length) return null;
+  const values = [];
+  for (const variation of objects) {
+    const attrs = attrMap(variation.attributes);
+    let found = null;
+    for (const name of names) {
+      if (attrs[name]) { found = attrs[name]; break; }
+    }
+    if (!found) return null;
+    values.push(found);
+  }
+  if (new Set(values.map(value => value.toLowerCase())).size !== 1) return null;
+  return values[0];
+}
+
+function wooHints(attrs) {
+  return {
+    color: colorFromText((attrs && (attrs.color || attrs.colour)) || "") || null,
+    storage: storageFromText((attrs && (attrs.storage || attrs["storage-capacity"] || attrs.capacity)) || ""),
+    sim: simFromText((attrs && (attrs.sim || attrs["sim-type"] || attrs["sim type"])) || "")
+  };
 }
 
 export function observationsFromWoo(store, product, checkedAt) {
@@ -178,7 +287,13 @@ export function observationsFromWoo(store, product, checkedAt) {
   const parentMoney = wooAmount(product.prices);
   const parentRange = product.prices && product.prices.price_range;
   const parentRanged = parentRange && parentRange.min_amount != null && parentRange.max_amount != null && String(parentRange.min_amount) !== String(parentRange.max_amount);
-  if (!rows.length && !parentRanged && parentMoney.ok) rows = [product];
+  const usingParent = !rows.length && !parentRanged && parentMoney.ok;
+  if (usingParent) rows = [product];
+  const shared = usingParent ? {
+    color: sharedAttr(variations, ["color", "colour"]),
+    storage: sharedAttr(variations, ["storage", "storage-capacity", "capacity"]),
+    sim: sharedAttr(variations, ["sim", "sim-type", "sim type"])
+  } : {};
   if (!rows.length) {
     return [{
       ...base, name, price: null, available: null, status: "incomplete",
@@ -190,9 +305,18 @@ export function observationsFromWoo(store, product, checkedAt) {
     const prices = row.prices || product.prices;
     const money = wooAmount(prices);
     const attrs = attrMap(row.attributes || product.attributes);
-    const label = [name, clean(row.name && row.name !== name ? row.name : ""), attrs.color, attrs.storage, attrs["storage-capacity"]].filter(Boolean).join(" ");
+    const hints = row === product && usingParent ? {
+      color: colorFromText(shared.color || "") || null,
+      storage: storageFromText(shared.storage || ""),
+      sim: simFromText(shared.sim || "")
+    } : wooHints(attrs);
+    const label = [name, clean(row.name && row.name !== name ? row.name : ""), shared.color, shared.storage, shared.sim, attrs.color, attrs.storage, attrs["storage-capacity"]].filter(Boolean).join(" ");
     const available = row.is_in_stock != null ? !!row.is_in_stock : (product.is_in_stock != null ? !!product.is_in_stock : null);
-    const specs = parseSpecs(label, {color: attrs.color || null});
+    const specs = parseSpecs(label, {
+      color: hints.color || null,
+      storage: hints.storage,
+      sim: hints.sim
+    });
     let status = "ok";
     let error = "";
     if (!money.ok) { status = "incomplete"; error = money.reason; }
@@ -319,12 +443,107 @@ export function matchReport(catalog, observations, settings) {
   const unmatched = [];
   for (const sku of phones) {
     const row = bySku.get(sku.sku);
-    const entry = {sku: sku.sku, title: sku.title, detail: sku.detail || "", store: row ? row.store : "", competitor: row ? row.competitor : null, block: row ? row.block : "no_verified_price"};
+    const reviews = result.matches.filter(match => match.sku && match.sku.sku === sku.sku && match.level === "review")
+      .sort((a, b) => (a.reasons || []).length - (b.reasons || []).length);
+    const closest = reviews[0] || null;
+    const entry = {
+      sku: sku.sku, title: sku.title, detail: sku.detail || "",
+      store: row && row.confidence === "high" ? row.store : (closest && closest.obs ? closest.obs.store : ""),
+      competitor: row ? row.competitor : null,
+      block: row ? row.block : "no_verified_price",
+      confidence: row ? row.confidence : "none",
+      reasons: row && row.confidence === "high" ? [] : (closest ? closest.reasons : [])
+    };
     if (row && row.confidence === "high") high.push(entry);
     else if (row && row.confidence === "review") review.push(entry);
     else unmatched.push(entry);
   }
-  return {relevant: phones.length, high: high.length, review: review.length, unmatched: unmatched.length, highSkus: high, reviewSkus: review};
+  return {relevant: phones.length, high: high.length, review: review.length, unmatched: unmatched.length, highSkus: high, reviewSkus: review, unmatchedSkus: unmatched};
+}
+
+const FACT_FIELDS = ["warrantyYears", "region", "sim", "condition"];
+
+export function applyVerifiedFacts(sku, facts) {
+  if (!sku || !facts || facts.verified !== true) return sku;
+  const specs = Object.assign({}, sku.specs);
+  for (const field of FACT_FIELDS) {
+    const value = facts[field];
+    if (value == null || value === "") continue;
+    if (specs[field] != null && specs[field] !== "") continue;
+    specs[field] = field === "warrantyYears" ? Number(value) : value;
+  }
+  return Object.assign({}, sku, {specs, factsVerified: true});
+}
+
+export function readStoredOffer(record, gate) {
+  if (!record || record.key == null) return {ok: false, reason: "no_readback"};
+  if (!gate || !gate.ref) return {ok: false, reason: "missing_sku"};
+  if (gate.kind === "phone") {
+    if (record.key !== "units") return {ok: false, reason: "wrong_key"};
+    const units = Array.isArray(record.data) ? record.data : [];
+    const unit = units.find(item => item && item.id === gate.ref.unit);
+    if (!unit) return {ok: false, reason: "missing_sku"};
+    return {ok: true, price: unit.p, qty: unit.qty, color: unit.c, storage: unit.st, sim: unit.sim, cond: unit.cond};
+  }
+  if (gate.kind === "ph") {
+    if (record.key !== "ph") return {ok: false, reason: "wrong_key"};
+    const data = record.data && typeof record.data === "object" ? record.data : {};
+    const box = data[gate.ref.id];
+    const variants = box && box.v && typeof box.v === "object" ? box.v : {};
+    const ov = variants[gate.ref.vi] || variants[String(gate.ref.vi)] || null;
+    return {ok: true, price: ov && ov.p != null ? Number(ov.p) : null, qty: ov && ov.q != null ? ov.q : null, variant: gate.ref.vi};
+  }
+  return {ok: false, reason: "unknown_kind"};
+}
+
+export function inspectStored(record, gate, expected) {
+  const offer = readStoredOffer(record, gate);
+  if (!offer.ok) return offer;
+  const wanted = expected || {};
+  if (gate.kind === "phone") {
+    for (const field of ["color", "storage", "sim", "cond"]) {
+      if (wanted[field] != null && String(offer[field]) !== String(wanted[field])) {
+        return {ok: false, reason: "variant_changed", offer};
+      }
+    }
+  }
+  const price = offer.price != null ? offer.price : (wanted.catalogPrice != null ? wanted.catalogPrice : null);
+  return {ok: true, offer: Object.assign({}, offer, {price}), priceMatches: Number(price) === Number(gate.price), qty: offer.qty};
+}
+
+export function confirmReadback(record, gate, expected) {
+  const inspected = inspectStored(record, gate, expected);
+  if (!inspected.ok) return inspected;
+  if (!inspected.priceMatches) return {ok: false, reason: "price_mismatch", offer: inspected.offer};
+  return {ok: true, offer: inspected.offer};
+}
+
+export function schedulerDecision(env, header, config) {
+  const secret = env && String(env.MARKET_SCHEDULER_SECRET || "");
+  if (!secret) return {ok: false, status: 403, reason: "scheduler secret is not configured"};
+  if (!header || header !== secret) return {ok: false, status: 403, reason: "scheduler unauthorized"};
+  if (!config || config.enabled !== true) return {ok: false, status: 403, reason: "scheduler disabled"};
+  return {ok: true, status: 200, reason: "ok"};
+}
+
+export function selectCoverageBatch(queries, sources, config) {
+  const maxRequests = Math.min(40, Math.max(1, Number(config && config.max_requests) || 24));
+  const offset = Math.max(0, Number(config && config.next_offset) || 0);
+  const pairs = [];
+  const skipped = [];
+  for (const query of queries || []) {
+    for (const source of sources || []) {
+      if (source.brandAllow && query.brand && !source.brandAllow.includes(query.brand)) {
+        skipped.push({store: source.id, query: query.text, reason: "brand_not_sold"});
+        continue;
+      }
+      pairs.push({store: source.id, query: query.text, brand: query.brand || null});
+    }
+  }
+  const selected = pairs.slice(offset, offset + maxRequests);
+  const deferred = pairs.slice(0, offset).concat(pairs.slice(offset + maxRequests)).map(pair => ({store: pair.store, query: pair.query, reason: "request_cap"}));
+  const nextOffset = !pairs.length || offset + selected.length >= pairs.length ? 0 : offset + selected.length;
+  return {selected, skipped: skipped.concat(deferred), nextOffset, eligible: pairs.length};
 }
 
 export function decideRecord(state, input) {

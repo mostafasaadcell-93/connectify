@@ -4,7 +4,8 @@ import {execSync} from "node:child_process";
 import {
   DEFAULT_SETTINGS, undercut, toUsd, parseSpecs, observationsFromWoo, observationsFromShopify,
   observationsFromShopifySuggest, observationsFromShopifyJs, coverageQueries, coverageUrl,
-  decideRecord, parseManualCsv, matchPair, evaluate, canApply, canRestore
+  decideRecord, parseManualCsv, matchPair, evaluate, canApply, canRestore, applyVerifiedFacts,
+  inspectStored, confirmReadback, schedulerDecision, selectCoverageBatch
 } from "../market/engine.mjs";
 import {runCoverage} from "../market/coverage.mjs";
 
@@ -64,6 +65,24 @@ test("names are parsed without treating a different variant as the same phone", 
   assert.equal(parsed.region, "uk");
   assert.equal(parsed.warrantyYears, 2);
   assert.equal(parsed.condition, "new");
+  assert.equal(parsed.color, "silver");
+  assert.equal(parseSpecs("iPhone 17 Pro Max 256GB Space Black").color, "space black");
+  assert.equal(parseSpecs("Refurbished iPhone 13 128GB").color, null);
+  assert.equal(parseSpecs("Refurbished iPhone 13 128GB").condition, "refurb");
+  assert.equal(matchPair(phone, {specs: parsed}).level, "review");
+  assert.equal(matchPair(phone, {specs: parsed}).reasons.includes("missing_region"), true);
+  assert.equal(matchPair(phone, {specs: parsed}).reasons.includes("missing_warrantyYears"), true);
+  const stated = parseSpecs("iPhone 17 Pro Max 256GB Silver 1 SIM New");
+  assert.equal(matchPair(phone, {specs: stated}).level, "high");
+  const unverified = applyVerifiedFacts(phone, {verified: false, warrantyYears: 2, region: "uk"});
+  assert.equal(unverified.specs.warrantyYears, null);
+  assert.equal(unverified.price, 1542);
+  const verified = applyVerifiedFacts(phone, {verified: true, warrantyYears: 2, region: "uk", sim: "esim"});
+  assert.equal(verified.specs.warrantyYears, 2);
+  assert.equal(verified.specs.region, "uk");
+  assert.equal(verified.specs.sim, "psim");
+  assert.equal(verified.price, 1542);
+  assert.equal(matchPair(verified, {specs: parsed}).level, "high");
   const ram = parseSpecs("Samsung Galaxy A56 8/256GB");
   assert.equal(ram.ram, 8);
   assert.equal(ram.storage, 256);
@@ -174,6 +193,29 @@ test("public catalog records keep only a real variant price", () => {
   );
   assert.equal(named[0].price, 1510);
   assert.equal(named[0].status, "ok");
+  const shared = observationsFromWoo(
+    {id: "najem", name: "Najem Starcall", currency: "USD"},
+    {name: "iPhone 17 Pro Max", type: "variable", permalink: "https://najemstarcall.com/p", is_in_stock: true, variations: [
+      {id: 1, attributes: [{name: "Storage", value: "256GB"}, {name: "SIM", value: "nano-sim-esim"}, {name: "Color", value: "Silver"}]},
+      {id: 2, attributes: [{name: "Storage", value: "256GB"}, {name: "SIM", value: "nano-sim-esim"}, {name: "Color", value: "Silver"}]}
+    ], prices: {price: "1510", currency_code: "USD", currency_minor_unit: 0}},
+    "2026-10-15T09:00:00Z"
+  );
+  assert.equal(shared[0].price, 1510);
+  assert.equal(shared[0].specs.storage, 256);
+  assert.equal(shared[0].specs.sim, "psim");
+  assert.equal(shared[0].specs.color, "silver");
+  const mixed = observationsFromWoo(
+    {id: "najem", name: "Najem Starcall", currency: "USD"},
+    {name: "iPhone 17 Pro Max", type: "variable", permalink: "https://najemstarcall.com/p", is_in_stock: true, variations: [
+      {id: 1, attributes: [{name: "Storage", value: "256GB"}, {name: "Color", value: "Silver"}]},
+      {id: 2, attributes: [{name: "Storage", value: "1terra"}, {name: "Color", value: "Deep Blue"}]}
+    ], prices: {price: "1510", currency_code: "USD", currency_minor_unit: 0}},
+    "2026-10-15T09:00:00Z"
+  );
+  assert.equal(mixed[0].specs.storage, null);
+  assert.equal(mixed[0].specs.color, null);
+  assert.equal(mixed[0].status, "ok");
   const suggest = observationsFromShopifySuggest(
     {id: "abedtahan", name: "Abed Tahan", origin: "https://abedtahan.com", currency: "USD"},
     {resources: {results: {products: [
@@ -244,6 +286,43 @@ test("targeted coverage pages through search results and stops at the request ca
   assert.equal(calls.some(url => url.includes("type=variation")), false);
   assert.equal(result.observations.some(row => row.price === 1515), true);
   assert.equal(coverageUrl({kind: "woo", endpoint: "https://phonefinity.net/wp-json/wc/store/v1/products"}, "iPhone 17", 1, 20).includes("/?rest_route="), false);
+  assert.equal(result.skipped.some(row => row.reason === "brand_not_sold" && row.storeId === "bms"), true);
+  assert.equal(result.checked.some(row => row.query === "iPhone 17 Pro Max"), true);
+  assert.equal(result.requests <= 3, true);
+});
+
+test("a fresh read confirms the exact variant and a disabled scheduler cannot start", () => {
+  const record = {key: "units", data: [{id: "u12", c: "Silver", st: 256, sim: "psim", cond: "new", qty: 2, p: 1542}]};
+  const gate = {kind: "phone", ref: {unit: "u12"}, price: 1511.97};
+  const expected = {color: "Silver", storage: 256, sim: "psim", cond: "new"};
+  const before = inspectStored(record, gate, expected);
+  assert.equal(before.ok, true);
+  assert.equal(before.priceMatches, false);
+  assert.equal(before.qty, 2);
+  const changed = {key: "units", data: [{id: "u12", c: "Gold", st: 256, sim: "psim", cond: "new", qty: 4, p: 1511.97}]};
+  assert.equal(inspectStored(changed, gate, expected).reason, "variant_changed");
+  const saved = {key: "units", data: [{id: "u12", c: "Silver", st: 256, sim: "psim", cond: "new", qty: 4, p: 1511.97}]};
+  const confirmed = confirmReadback(saved, gate, expected);
+  assert.equal(confirmed.ok, true);
+  assert.equal(confirmed.offer.qty, 4);
+  const missed = {key: "units", data: [{id: "u12", c: "Silver", st: 256, sim: "psim", cond: "new", qty: 4, p: 1542}]};
+  assert.equal(confirmReadback(missed, gate, expected).reason, "price_mismatch");
+  assert.equal(confirmReadback(null, gate, expected).reason, "no_readback");
+  assert.equal(schedulerDecision({}, "secret", {enabled: true}).reason, "scheduler secret is not configured");
+  assert.equal(schedulerDecision({MARKET_SCHEDULER_SECRET: "secret"}, "nope", {enabled: true}).reason, "scheduler unauthorized");
+  assert.equal(schedulerDecision({MARKET_SCHEDULER_SECRET: "secret"}, "secret", {enabled: false}).reason, "scheduler disabled");
+  const sources = [
+    {id: "class", brandAllow: null},
+    {id: "bms", brandAllow: ["samsung"]}
+  ];
+  const batch = selectCoverageBatch([
+    {text: "iPhone 17 Pro Max", brand: "apple"},
+    {text: "Galaxy S26 Ultra", brand: "samsung"}
+  ], sources, {max_requests: 1, next_offset: 0});
+  assert.equal(batch.selected.length, 1);
+  assert.equal(batch.skipped.some(row => row.reason === "brand_not_sold"), true);
+  assert.equal(batch.skipped.some(row => row.reason === "request_cap"), true);
+  assert.equal(batch.nextOffset, 1);
 });
 
 test("the storefront diff does not rewrite checkout or availability markup", () => {

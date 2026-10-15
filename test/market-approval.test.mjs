@@ -31,7 +31,7 @@ async function install(page) {
     const key = "cx-market-audit-staging";
     const load = () => JSON.parse(localStorage.getItem(key) || JSON.stringify({
       settings: {automation_enabled: false, writes_enabled: false, min_margin_pct: null, lbp_per_usd: null, lbp_rate_verified: false},
-      flags: {}, decisions: []
+      flags: {}, decisions: [], facts: {}
     }));
     const save = box => localStorage.setItem(key, JSON.stringify(box));
     const run = op => {
@@ -53,6 +53,18 @@ async function install(page) {
         return {data: rows, error: null};
       }
       if (op.table === "market_observations") return {data: [], error: null};
+      if (op.table === "market_sku_facts" && op.action === "upsert") {
+        box.facts = box.facts || {};
+        box.facts[op.body.sku] = op.body;
+        save(box);
+        return {data: null, error: null};
+      }
+      if (op.table === "market_sku_facts") return {data: Object.values(box.facts || {}), error: null};
+      if (op.table === "store_state") {
+        const key = op.eq && op.eq.key || "units";
+        if (key === "units") return {data: {key: "units", data: window.__dbUnits || []}, error: null};
+        return {data: {key, data: {}}, error: null};
+      }
       return {data: null, error: {message: "unknown table"}};
     };
     const chain = table => {
@@ -61,7 +73,7 @@ async function install(page) {
         select() { return api; },
         update(body) { op.action = "update"; op.body = body; return api; },
         upsert(body) { op.action = "upsert"; op.body = body; return api; },
-        eq() { return api; },
+        eq(column, value) { op.eq = Object.assign({}, op.eq, {[column]: value}); return api; },
         order() { return api; },
         limit() { return api; },
         maybeSingle() { return api; },
@@ -103,9 +115,11 @@ async function install(page) {
     DB.priv.u = DB.priv.u || {};
     DB.priv.u[unit.id] = {cost: 1400};
     window.__unitId = unit.id;
+    window.__dbUnits = JSON.parse(JSON.stringify(DB.units));
     window.CX_STAFF_SAVE = async () => {
       if (!window.LIVE.staff) return false;
       if (window.__failSave) { window.__failSave = false; return false; }
+      window.__dbUnits = JSON.parse(JSON.stringify(DB.units));
       const current = DB.units.find(item => item.id === window.__unitId);
       window.__saved = {price: current.p, qty: current.qty, color: current.c, st: current.st, sim: current.sim, cond: current.cond};
       return true;

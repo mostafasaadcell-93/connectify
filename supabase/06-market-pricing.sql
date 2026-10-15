@@ -185,7 +185,61 @@ $$;
 revoke all on function public.market_finish_run(uuid, text, text) from public, anon;
 grant execute on function public.market_finish_run(uuid, text, text) to authenticated;
 
--- Scheduling stays off. After approval, a 12-hour job may call the market-check function.
--- That function stores observations only. Do not point it at product price rows.
+-- Verified product facts. These do not change store_state, prices, stock, or orders.
+-- Unverified rows are ignored by matching. Missing values stay null.
+create table if not exists public.market_sku_facts (
+  sku text primary key check (char_length(sku) between 1 and 80),
+  warranty_years numeric check (warranty_years is null or warranty_years in (0, 1, 2)),
+  region text check (region is null or region in ('uk','us','hk','eu','ae','japan','china')),
+  sim text check (sim is null or sim in ('psim','esim','dual')),
+  condition text check (condition is null or condition in ('new','open','likenew','used','refurb')),
+  verified boolean not null default false,
+  verified_at timestamptz,
+  note text check (note is null or char_length(note) <= 200),
+  updated_at timestamptz not null default now()
+);
+alter table public.market_sku_facts enable row level security;
+drop policy if exists "staff read market facts" on public.market_sku_facts;
+create policy "staff read market facts" on public.market_sku_facts for select to authenticated using (public.is_staff());
+drop policy if exists "staff insert market facts" on public.market_sku_facts;
+create policy "staff insert market facts" on public.market_sku_facts for insert to authenticated with check (public.is_staff());
+drop policy if exists "staff update market facts" on public.market_sku_facts;
+create policy "staff update market facts" on public.market_sku_facts for update to authenticated using (public.is_staff()) with check (public.is_staff());
+
+-- Server-side query cursor for a future 12-hour checker. It stays disabled.
+create table if not exists public.market_query_config (
+  id int primary key default 1 check (id = 1),
+  enabled boolean not null default false,
+  queries jsonb not null default '[]'::jsonb,
+  batch_size int not null default 8 check (batch_size between 1 and 12),
+  max_requests int not null default 24 check (max_requests between 1 and 40),
+  next_offset int not null default 0 check (next_offset >= 0),
+  updated_at timestamptz not null default now()
+);
+insert into public.market_query_config (id) values (1) on conflict (id) do nothing;
+alter table public.market_query_config enable row level security;
+drop policy if exists "staff read market query config" on public.market_query_config;
+create policy "staff read market query config" on public.market_query_config for select to authenticated using (public.is_staff());
+drop policy if exists "staff update market query config" on public.market_query_config;
+create policy "staff update market query config" on public.market_query_config for update to authenticated using (public.is_staff()) with check (public.is_staff());
+
+create or replace function public.market_query_config_guard()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.enabled is true then
+    raise exception 'scheduler disabled';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists market_query_config_guard on public.market_query_config;
+create trigger market_query_config_guard
+  before insert or update on public.market_query_config
+  for each row execute function public.market_query_config_guard();
+
+-- Scheduling stays off. After a later owner decision, a 12-hour job may call market-check
+-- with the server secret and without a browser session. That function stores observations only.
 -- Example, not executed here:
 -- select cron.schedule('connectify-market', '0 */12 * * *', $$select 1$$);
