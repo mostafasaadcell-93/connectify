@@ -1,0 +1,99 @@
+# Hosted Supabase staging for Connectify PR #5
+
+This creates an empty free project and loads synthetic rows. It does not use the live store.
+
+The production project id is `yxkzjwcmmtiljakttyfh`. If a screen shows that id, stop. Do not paste these files there.
+
+Do not copy the production database password, service-role key, anon key, or Vault secrets. Do not deploy `market-check`. Do not schedule a job. Do not put the staging URL or keys in `index.html`.
+
+The free Supabase plan is enough. Do not add paid compute, point-in-time recovery, or a custom domain.
+
+## 1. Create the project
+
+1. Open [https://supabase.com/dashboard](https://supabase.com/dashboard) and sign in with the account that owns Connectify.
+2. Choose **New project**. Name it `connectify-staging`.
+3. Generate a new database password and store it outside this repo. Do not reuse the production password.
+4. Leave the plan on **Free**. Pick any region. It does not need to match production.
+5. Wait until the project status is healthy.
+6. Open **Project Settings → General** and copy the **Reference ID**.
+7. Confirm that id is not `yxkzjwcmmtiljakttyfh`. If it is, you opened production. Stop.
+8. Open **Project Settings → API**. Copy the project URL and the **anon public** key. Leave the service-role key unused. Do not send it in chat or commit it.
+
+## 2. Create two staging logins
+
+1. Open **Authentication → Sign In / Providers → Email** and turn off **Confirm email** for this staging project only.
+2. Open **Authentication → Users → Add user**. Create two users with passwords you choose:
+   - a staff address you control that contains the word `staging`
+   - a second address you control that also contains `staging`
+3. Do not invite or reuse the production owner login.
+4. Turn **Auto Confirm User** on for both.
+
+## 3. Run the schema in the staging SQL editor
+
+Open **SQL Editor → New query** for the staging project. Paste and run one file at a time, in this order:
+
+1. `supabase/connectify-setup.sql`
+   Leave `PUT-OWNER-EMAIL-HERE` unchanged. That line then matches nobody. The seed file adds the staging staff user.
+2. `supabase/02-private-costs.sql`
+   The result line should say `private row hidden from customers`.
+3. `supabase/03-reviews.sql`
+4. `supabase/05-order-address.sql`
+   The result line should say `address column ready`. No email is sent, because the Vault secrets are absent and the email trigger is not created.
+5. `supabase/06-market-pricing.sql`
+
+Do not run `supabase/04-order-email-alerts.sql`. That file installs `pg_net`, reads Resend secrets, and sends a test email.
+
+Do not run the commented `cron.schedule` line. Do not deploy an Edge Function.
+
+## 4. Load synthetic inventory
+
+In a new SQL Editor query on the same staging project, paste the three settings below, replace the placeholders, then paste the whole of `supabase/staging/07-synthetic-seed.sql` underneath and run it once.
+
+```sql
+select set_config('connectify.staging_project', 'connectify-staging', false);
+select set_config('connectify.project_ref', 'PASTE-THE-STAGING-REFERENCE-ID', false);
+select set_config('connectify.staging_staff_email', 'REPLACE-WITH-STAGING-STAFF-EMAIL', false);
+select set_config('connectify.staging_viewer_email', 'REPLACE-WITH-STAGING-VIEWER-EMAIL', false);
+```
+
+The reference id must be the new project, never `yxkzjwcmmtiljakttyfh`. Both emails must contain `staging` and must already exist under Authentication.
+
+A successful run ends with `staging seed ready`, silver price `900`, confirmed order `confirmed`, and both flags `false`.
+
+The synthetic catalog is:
+
+| Row | What it is | Price | Quantity |
+| --- | --- | --- | --- |
+| `u-stage-1` | iPhone 17 Pro Max, Silver, 256GB, new, nano-SIM + eSIM | $900 | 2 |
+| `u-stage-2` | iPhone 17 Pro Max, Deep Blue, 256GB, new, nano-SIM + eSIM | $910 | 1 |
+| `C-STAGE-CONF` | confirmed order, stock already applied | snapshot $900 | 1 |
+| `C-STAGE-NEW` | new order, stock not applied | snapshot $910 | 1 |
+
+Costs live only in the private row: $700 and $720. Warranty, region, SIM, and condition facts for `unit:u-stage-1` are stored unverified, so matching ignores them. The scheduler query list contains one iPhone 17 Pro Max search and `enabled` is false.
+
+Re-running the seed restores these prices and both order statuses. It refuses to run if it sees a real order code, a unit that is not marked `staging-synthetic`, or a staff email without `staging`.
+
+## 5. Run the hosted checks from your own machine
+
+Do this on a computer you control. Do not paste the keys into chat.
+
+```bash
+export STAGING_SUPABASE_URL='https://YOUR-STAGING-REF.supabase.co'
+export STAGING_ANON_KEY='the anon public key'
+export STAGING_STAFF_EMAIL='the staging staff email'
+export STAGING_STAFF_PASSWORD='the staging staff password'
+export STAGING_VIEWER_EMAIL='the staging viewer email'
+export STAGING_VIEWER_PASSWORD='the staging viewer password'
+node test/hosted-staging-check.mjs
+```
+
+The script refuses `yxkzjwcmmtiljakttyfh`. It uses the anon key and the two staging passwords. It does not ask for a service-role key.
+
+When it passes, send back only the printed summary. That summary has no keys.
+
+## What stays off
+
+- `market_settings.automation_enabled` and `writes_enabled` stay false.
+- `market_query_config.enabled` cannot be turned on. The database trigger raises `scheduler disabled`.
+- No cron job is installed.
+- `market-check` is not deployed, so competitor collection in this round is the database proof that an observation insert does not change `store_state`, plus the existing public fetch script, which has no Supabase credentials.
