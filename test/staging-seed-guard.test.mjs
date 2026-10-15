@@ -30,7 +30,9 @@ test("the hosted checker refuses the production project and the public fetch has
   assert.equal(fetchSource.includes(PRODUCTION_HOST), false);
   assert.equal(fetchSource.includes("service_role"), false);
   assert.equal(checkSource.includes(PRODUCTION_HOST), false);
-  assert.equal(checkSource.includes("store_state"), false);
+  assert.match(checkSource, /assertCollectorTarget/);
+  assert.doesNotMatch(checkSource, /from\("store_state"\)\.(update|insert|upsert|delete)/);
+  assert.doesNotMatch(checkSource, /from\("orders"\)\.(update|insert|upsert|delete)/);
 });
 
 test("the synthetic seed refuses production-like data and restores only staging rows", () => {

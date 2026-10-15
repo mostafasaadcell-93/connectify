@@ -1,8 +1,11 @@
-// Observation collector. It does not update selling prices or stock.
-// Deploy only after the owner approves. Scheduling is not installed by this file.
+// Observation collector for the staging project only.
+// It refuses every other project, including production, before any fetch or write.
+// It does not update selling prices, stock, or orders.
+// The scheduler path stays closed unless a secret is set and the database row is enabled.
+// The staging trigger currently rejects that enabled flag.
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2";
 import {runCoverage} from "../_shared/market-coverage.mjs";
-import {schedulerDecision, selectCoverageBatch} from "../_shared/market-engine.mjs";
+import {assertCollectorTarget, commercialDrift, schedulerDecision, selectCoverageBatch} from "../_shared/market-engine.mjs";
 
 const SOURCES = [
   {id: "class", name: "Class Cellulars", kind: "woo", origin: "https://classcellulars.com", endpoint: "https://classcellulars.com/wp-json/wc/store/v1/products", currency: "USD"},
@@ -20,8 +23,21 @@ function normalizeQueries(input: unknown, limit: number) {
     .slice(0, limit);
 }
 
+async function readCommercial(supabase) {
+  const units = await supabase.from("store_state").select("data").eq("key", "units").maybeSingle();
+  const orders = await supabase.from("orders").select("id,code,status,stock_applied,items").order("id");
+  if (units.error) throw new Error(units.error.message);
+  if (orders.error) throw new Error(orders.error.message);
+  return {
+    units: units.data && Array.isArray(units.data.data) ? units.data.data : [],
+    orders: Array.isArray(orders.data) ? orders.data : []
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", {status: 405});
+  const target = assertCollectorTarget(Deno.env.get("SUPABASE_URL") || "");
+  if (!target.ok) return new Response(target.reason, {status: target.status});
   const schedulerHeader = req.headers.get("x-connectify-market-scheduler");
   const supabase = createClient(Deno.env.get("SUPABASE_URL") || "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "", {auth: {persistSession: false}});
   let queries: Array<{text: string, brand: string | null}> = [];
@@ -44,7 +60,7 @@ Deno.serve(async (req) => {
     const batch = selectCoverageBatch(queries, SOURCES, {max_requests: maxRequests, next_offset: config.next_offset || 0});
     pairs = batch.selected;
     nextOffset = batch.nextOffset;
-    if (!queries.length || !pairs.length) return Response.json({observations: 0, errors: [{error: "no queries"}], checked: [], skipped: batch.skipped, pricesChanged: 0}, {status: 400});
+    if (!queries.length || !pairs.length) return Response.json({observations: 0, errors: [{error: "no queries"}], checked: [], skipped: batch.skipped, pricesChanged: 0, stockChanged: 0, ordersChanged: 0}, {status: 400});
   }
   if (!scheduler) {
     const auth = req.headers.get("authorization") || "";
@@ -55,7 +71,7 @@ Deno.serve(async (req) => {
     let payload: {queries?: Array<{text?: string, brand?: string}>} = {};
     try { payload = await req.json(); } catch { payload = {}; }
     queries = normalizeQueries(payload.queries, 12);
-    if (!queries.length) return Response.json({observations: 0, errors: [{error: "no queries"}], pricesChanged: 0}, {status: 400});
+    if (!queries.length) return Response.json({observations: 0, errors: [{error: "no queries"}], pricesChanged: 0, stockChanged: 0, ordersChanged: 0}, {status: 400});
   }
   const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
   await supabase.from("market_runs").update({status: "failed", finished_at: new Date().toISOString(), error: "timed out"}).eq("status", "running").lt("started_at", staleBefore);
@@ -63,6 +79,13 @@ Deno.serve(async (req) => {
   if (running && running.length) return new Response("A check is already running", {status: 409});
   const {data: run, error: runError} = await supabase.from("market_runs").insert({status: "running"}).select("id").single();
   if (runError) return new Response(runError.message, {status: 409});
+  let before;
+  try {
+    before = await readCommercial(supabase);
+  } catch (error) {
+    await supabase.from("market_runs").update({status: "failed", finished_at: new Date().toISOString(), error: String(error.message || error)}).eq("id", run.id);
+    return new Response(String(error.message || error), {status: 502});
+  }
   try {
     const result = await runCoverage({sources: SOURCES, queries, pairs, perPage: 20, maxPages: 1, delayMs: 1000, timeoutMs: 12000, retries: 1, maxRequests});
     if (result.observations.length) {
@@ -72,11 +95,17 @@ Deno.serve(async (req) => {
       })));
       if (error) throw new Error(error.message);
     }
+    const after = await readCommercial(supabase);
+    const drift = commercialDrift(before.units, before.orders, after.units, after.orders);
+    if (drift.pricesChanged || drift.stockChanged || drift.ordersChanged) {
+      await supabase.from("market_runs").update({status: "failed", finished_at: new Date().toISOString(), error: "selling prices, stock, or orders changed during collection"}).eq("id", run.id);
+      return Response.json(Object.assign({runId: run.id, observations: result.observations.length, requests: result.requests, errors: result.errors, checked: result.checked, skipped: result.skipped}, drift), {status: 500});
+    }
     if (scheduler && nextOffset != null) {
       await supabase.from("market_query_config").update({next_offset: nextOffset, updated_at: new Date().toISOString()}).eq("id", 1);
     }
     await supabase.from("market_runs").update({status: "ok", finished_at: new Date().toISOString(), error: result.errors.length ? JSON.stringify(result.errors) : null}).eq("id", run.id);
-    return Response.json({runId: run.id, observations: result.observations.length, requests: result.requests, errors: result.errors, checked: result.checked, skipped: result.skipped, pricesChanged: 0});
+    return Response.json(Object.assign({runId: run.id, observations: result.observations.length, requests: result.requests, errors: result.errors, checked: result.checked, skipped: result.skipped}, drift));
   } catch (error) {
     await supabase.from("market_runs").update({status: "failed", finished_at: new Date().toISOString(), error: String(error.message || error)}).eq("id", run.id);
     return new Response(String(error.message || error), {status: 502});

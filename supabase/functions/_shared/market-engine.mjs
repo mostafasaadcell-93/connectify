@@ -518,6 +518,42 @@ export function confirmReadback(record, gate, expected) {
   return {ok: true, offer: inspected.offer};
 }
 
+export const COLLECTOR_STAGING_HOST = "akgilfixljswqljmedmg.supabase.co";
+export const COLLECTOR_PRODUCTION_HOST = "yxkzjwcmmtiljakttyfh.supabase.co";
+
+export function assertCollectorTarget(url) {
+  let parsed;
+  try { parsed = new URL(String(url || "")); }
+  catch { return {ok: false, status: 403, reason: "refusing unset project"}; }
+  if (parsed.protocol !== "https:") return {ok: false, status: 403, reason: "refusing non-https project"};
+  if (parsed.host === COLLECTOR_PRODUCTION_HOST) return {ok: false, status: 403, reason: "refusing production project"};
+  if (parsed.host !== COLLECTOR_STAGING_HOST) return {ok: false, status: 403, reason: "market-check is limited to the staging project"};
+  return {ok: true, status: 200, host: parsed.host};
+}
+
+export function commercialDrift(beforeUnits, beforeOrders, afterUnits, afterOrders) {
+  const beforeU = new Map((beforeUnits || []).map(unit => [unit && unit.id, unit]));
+  const afterU = new Map((afterUnits || []).map(unit => [unit && unit.id, unit]));
+  let pricesChanged = 0;
+  let stockChanged = 0;
+  for (const id of new Set([...beforeU.keys(), ...afterU.keys()])) {
+    const before = beforeU.get(id);
+    const after = afterU.get(id);
+    if (!before || !after || Number(before.p) !== Number(after.p)) pricesChanged += 1;
+    if (!before || !after || Number(before.qty) !== Number(after.qty)) stockChanged += 1;
+  }
+  const beforeO = new Map((beforeOrders || []).map(order => [order && order.id, order]));
+  const afterO = new Map((afterOrders || []).map(order => [order && order.id, order]));
+  let ordersChanged = 0;
+  for (const id of new Set([...beforeO.keys(), ...afterO.keys()])) {
+    const before = beforeO.get(id);
+    const after = afterO.get(id);
+    const sameItems = before && after && JSON.stringify(before.items || []) === JSON.stringify(after.items || []);
+    if (!before || !after || before.status !== after.status || before.stock_applied !== after.stock_applied || before.code !== after.code || !sameItems) ordersChanged += 1;
+  }
+  return {pricesChanged, stockChanged, ordersChanged};
+}
+
 export function schedulerDecision(env, header, config) {
   const secret = env && String(env.MARKET_SCHEDULER_SECRET || "");
   if (!secret) return {ok: false, status: 403, reason: "scheduler secret is not configured"};

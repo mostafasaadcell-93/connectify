@@ -4,7 +4,7 @@ This creates an empty free project and loads synthetic rows. It does not use the
 
 The production project id is `yxkzjwcmmtiljakttyfh`. If a screen shows that id, stop. Do not paste these files there.
 
-Do not copy the production database password, service-role key, anon key, or Vault secrets. Do not deploy `market-check`. Do not schedule a job. Do not put the staging URL or keys in `index.html`.
+Do not copy the production database password, service-role key, anon key, or Vault secrets. Do not deploy `market-check` anywhere except the staging project in section 6. Do not schedule a job. Do not put the staging URL or keys in `index.html`.
 
 The free Supabase plan is enough. Do not add paid compute, point-in-time recovery, or a custom domain.
 
@@ -43,7 +43,7 @@ Open **SQL Editor → New query** for the staging project. Paste and run one fil
 
 Do not run `supabase/04-order-email-alerts.sql`. That file installs `pg_net`, reads Resend secrets, and sends a test email.
 
-Do not run the commented `cron.schedule` line. Do not deploy an Edge Function.
+Do not run the commented `cron.schedule` line. Do not deploy an Edge Function from this step. The staging deploy is section 6, and it targets only `akgilfixljswqljmedmg`.
 
 ## 4. Load synthetic inventory
 
@@ -91,9 +91,39 @@ The script refuses `yxkzjwcmmtiljakttyfh`. It uses the anon key and the two stag
 
 When it passes, send back only the printed summary. That summary has no keys.
 
+## 6. Deploy market-check to this staging project only
+
+Do this on a computer where you are signed in to the Supabase account that owns the staging project. Do not paste an access token into chat.
+
+1. Confirm the dashboard project reference is `akgilfixljswqljmedmg`. If the reference is `yxkzjwcmmtiljakttyfh`, you opened production. Stop.
+2. From this repo, sign in once. The browser login stores the token on that computer:
+
+```bash
+npx supabase login
+bash supabase/staging/deploy-market-check.sh
+```
+
+The script deploys only the `market-check` function and only to `akgilfixljswqljmedmg`. It refuses extra arguments and refuses to run when `SUPABASE_URL` contains the production project id. It does not pass `--no-verify-jwt`, so the platform still requires a signed-in user. It does not set `MARKET_SCHEDULER_SECRET`.
+
+The function reads the `SUPABASE_URL` Supabase injects for the project it was deployed to. If that host is not `akgilfixljswqljmedmg.supabase.co`, it returns 403 before it fetches a competitor or writes a row. It inserts `market_observations` and `market_runs` only. It reads selling prices, stock, and orders so it can prove they did not change, and it has no update, insert, or delete for `store_state` or `orders`.
+
+## 7. Collect one staging quote batch
+
+Use the same variables as section 5. Do not add a service-role key.
+
+```bash
+node test/staging-collector-check.mjs
+```
+
+The script signs in as the staging staff user, reads selling prices, quantities, and orders, then calls the deployed function with one query: `iPhone 17 Pro Max`. If the function is not deployed yet, it collects the same public quotes itself and inserts them through `market_begin_run`. It reads the prices, quantities, and orders again and exits with an error if any changed. It also exits if automation or the scheduler is on.
+
+Send back only the printed JSON summary. It contains source names, errors, counts, and quote URLs. It contains no keys.
+
+`node test/staging-collector-check.mjs --dry-run` fetches the same public quotes and prints the summary without signing in and without inserting. Use the command above when you want the rows in `market_observations`.
+
 ## What stays off
 
 - `market_settings.automation_enabled` and `writes_enabled` stay false.
 - `market_query_config.enabled` cannot be turned on. The database trigger raises `scheduler disabled`.
-- No cron job is installed.
-- `market-check` is not deployed, so competitor collection in this round is the database proof that an observation insert does not change `store_state`, plus the existing public fetch script, which has no Supabase credentials.
+- No cron job is installed, and `MARKET_SCHEDULER_SECRET` stays unset.
+- The live site and the production project `yxkzjwcmmtiljakttyfh` are not part of this deploy.
