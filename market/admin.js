@@ -17,6 +17,17 @@ const state = {
 
 function money(n) { return n == null || n === "" ? "—" : "$" + n; }
 
+function previewReadOnly() {
+  return !!window.CX_STAGING_PREVIEW;
+}
+
+function refusePreview(action) {
+  if (!previewReadOnly()) return false;
+  state.note = "Staging preview is read-only. " + action + " was not sent.";
+  renderMarket();
+  return true;
+}
+
 function catalog() {
   const items = [];
   (DB.units || []).forEach(unit => {
@@ -66,19 +77,22 @@ function renderMarket() {
   const failures = state.collection.errors || [];
   const accessorySkips = (state.collection.skipped || []).filter(row => row.reason === "accessory");
   const otherSkips = (state.collection.skipped || []).filter(row => row.reason !== "accessory");
+  const locked = previewReadOnly();
+  const off = locked ? " disabled" : "";
   root.innerHTML = `<div class="stockbar">
-      <button class="btn btn-main" type="button" id="marketRefresh">Refresh quotes</button>
-      <button class="abtn" type="button" id="marketApprove">Approve selected</button>
-      <button class="abtn" type="button" id="marketReject">Reject selected</button>
-      <button class="abtn" type="button" id="marketApply">Apply approved prices</button>
+      <button class="btn btn-main" type="button" id="marketRefresh"${off}>Refresh quotes</button>
+      <button class="abtn" type="button" id="marketApprove"${off}>Approve selected</button>
+      <button class="abtn" type="button" id="marketReject"${off}>Reject selected</button>
+      <button class="abtn" type="button" id="marketApply"${off}>Apply approved prices</button>
     </div>
     <p class="mktnote">${esc(state.note)}</p>
+    ${locked ? `<p class="mktnote">Staging preview is read-only on ${esc(String(window.CX_STAGING_PREVIEW.host || "the staging project"))}. Stored competitor quotes, match explanations, justified proposals, and decision history stay visible. Refresh, approval, apply, restore, imports, and rule saves are not sent.</p>` : ""}
     <div class="stockbar">
-      <label>Minimum margin % <input id="marketMargin" type="number" min="0" step="0.1" value="${state.settings.minMarginPct == null ? "" : esc(String(state.settings.minMarginPct))}"></label>
-      <label>Verified LBP per USD <input id="marketLbp" type="number" min="1" step="1" value="${state.settings.lbpPerUsd == null ? "" : esc(String(state.settings.lbpPerUsd))}"></label>
-      <label><input id="marketLbpOk" type="checkbox" ${state.settings.lbpRateVerified ? "checked" : ""}> Rate was checked</label>
-      <label><input id="marketAuto" type="checkbox" ${state.settings.automationEnabled && state.settings.writesEnabled ? "checked" : ""}> Scheduled automatic updates</label>
-      <button class="abtn" type="button" id="marketSaveSettings">Save rules</button>
+      <label>Minimum margin % <input id="marketMargin" type="number" min="0" step="0.1" value="${state.settings.minMarginPct == null ? "" : esc(String(state.settings.minMarginPct))}"${off}></label>
+      <label>Verified LBP per USD <input id="marketLbp" type="number" min="1" step="1" value="${state.settings.lbpPerUsd == null ? "" : esc(String(state.settings.lbpPerUsd))}"${off}></label>
+      <label><input id="marketLbpOk" type="checkbox" ${state.settings.lbpRateVerified ? "checked" : ""}${off}> Rate was checked</label>
+      <label><input id="marketAuto" type="checkbox" ${state.settings.automationEnabled && state.settings.writesEnabled ? "checked" : ""}${off}> Scheduled automatic updates</label>
+      <button class="abtn" type="button" id="marketSaveSettings"${off}>Save rules</button>
     </div>
     <div class="stockbar">
       <label>Product facts <select id="factSku">${catalog().filter(item => item.kind === "phone").map(item => `<option value="${esc(item.sku)}">${esc(item.title)} · ${esc(item.detail)}</option>`).join("")}</select></label>
@@ -86,12 +100,12 @@ function renderMarket() {
       <label>Region <select id="factRegion"><option value="">Unknown</option><option value="uk">UK</option><option value="us">US</option><option value="hk">Hong Kong</option><option value="eu">EU</option><option value="ae">UAE</option><option value="japan">Japan</option><option value="china">China</option></select></label>
       <label>SIM <select id="factSim"><option value="">Unknown</option><option value="psim">Nano-SIM + eSIM</option><option value="esim">eSIM only</option><option value="dual">Dual physical</option></select></label>
       <label>Condition <select id="factCondition"><option value="">Unknown</option><option value="new">New</option><option value="open">Open box</option><option value="likenew">Like new</option><option value="used">Used</option><option value="refurb">Refurbished</option></select></label>
-      <label><input id="factVerified" type="checkbox"> I verified these facts</label>
-      <button class="abtn" type="button" id="marketSaveFacts">Save facts</button>
+      <label><input id="factVerified" type="checkbox"${off}> I verified these facts</label>
+      <button class="abtn" type="button" id="marketSaveFacts"${off}>Save facts</button>
     </div>
     <p class="mktnote">Unknown facts stay blank. Saving them does not change a price, the stock list, or a competitor quote. Only facts you mark as verified fill gaps, and they never replace a value the inventory already states.</p>
-    <textarea id="marketCsv" rows="4" placeholder="store,name,price,currency,url,available,storage,condition,sim,color,warranty,region"></textarea>
-    <button class="abtn" type="button" id="marketImport">Import manager prices</button>
+    <textarea id="marketCsv" rows="4" placeholder="store,name,price,currency,url,available,storage,condition,sim,color,warranty,region"${off}></textarea>
+    <button class="abtn" type="button" id="marketImport"${off}>Import manager prices</button>
     <input id="marketQ" placeholder="Filter shown matches" value="${esc(kept)}">
     <div class="mkstatus">
       <p>Automatic pricing ${state.settings.automationEnabled && state.settings.writesEnabled ? "on" : "off"}</p>
@@ -120,12 +134,12 @@ function renderMarket() {
       <td>${esc(offerWhen || "—")}</td>
       <td>${esc(row.confidence)}</td>
       <td>${esc(state.decisions[row.sku] || row.status)}${row.explanation ? "<br><span class='mktnote'>" + esc(row.explanation) + "</span>" : ""}</td>
-      <td><label class="mktnote"><input type="checkbox" data-auto="${esc(row.sku)}" ${state.settings.productAuto[row.sku] ? "checked" : ""}> Auto</label></td>
+      <td><label class="mktnote"><input type="checkbox" data-auto="${esc(row.sku)}" ${state.settings.productAuto[row.sku] ? "checked" : ""}${off}> Auto</label></td>
     </tr>`;
     }).join("") || `<tr><td colspan="11">No catalog rows to review.</td></tr>`}
     </tbody></table></div>
     <h3>Recent decisions</h3>
-    <div class="olist">${state.ledger.slice(0, 12).map(item => `<div class="drow"><span class="grow"><b>${esc(item.sku)}</b><small>${esc(item.status)} ${item.price == null ? "" : "$" + item.price}</small></span>${item.status === "applied" ? `<button class="abtn" type="button" data-restore="${esc(item.key || "")}">Restore previous</button>` : ""}</div>`).join("") || "<p class='mktnote'>No price has been changed from this screen.</p>"}</div>`;
+    <div class="olist">${state.ledger.slice(0, 12).map(item => `<div class="drow"><span class="grow"><b>${esc(item.sku)}</b><small>${esc(item.status)} ${item.price == null ? "" : "$" + item.price}</small></span>${item.status === "applied" ? `<button class="abtn" type="button" data-restore="${esc(item.key || "")}"${off}>Restore previous</button>` : ""}</div>`).join("") || "<p class='mktnote'>No price has been changed from this screen.</p>"}</div>`;
   $("marketRefresh").onclick = refreshQuotes;
   $("marketImport").onclick = importCsv;
   $("marketApprove").onclick = () => decideSelected("approved", rows);
@@ -158,6 +172,7 @@ function readSettingsForm() {
 }
 
 async function saveSettings() {
+  if (refusePreview("Saving rules")) return;
   readSettingsForm();
   const requested = state.settings.automationEnabled && state.settings.writesEnabled;
   if (!window.LIVE || !LIVE.sb) {
@@ -240,6 +255,7 @@ function showFacts() {
 }
 
 async function saveFacts() {
+  if (refusePreview("Saving facts")) return;
   const sku = $("factSku") && $("factSku").value;
   if (!sku) { state.note = "Choose a product before saving facts."; renderMarket(); return; }
   const body = factPayload(sku);
@@ -264,6 +280,7 @@ async function saveFacts() {
 }
 
 function importCsv() {
+  if (refusePreview("Quote import")) return;
   const rows = parseManualCsv($("marketCsv").value, new Date().toISOString());
   state.observations = rows;
   state.note = rows.length ? "Imported " + rows.length + " manager quotes. Prices on the store were not changed." : "No rows found.";
@@ -315,7 +332,9 @@ async function loadAudit() {
   if (!quotes.error && quotes.data && quotes.data.length) {
     state.observations = quotes.data.map(observationFromRow);
   }
-  state.note = "Loaded saved decisions. Scheduled automatic updates are " + (state.settings.automationEnabled ? "on" : "off") + ".";
+  state.note = previewReadOnly()
+    ? "Loaded stored quotes and decision history. Staging preview did not send an approval or a price change."
+    : "Loaded saved decisions. Scheduled automatic updates are " + (state.settings.automationEnabled ? "on" : "off") + ".";
   renderMarket();
 }
 
@@ -327,6 +346,7 @@ function observationFromRow(row) {
 }
 
 async function refreshQuotes() {
+  if (refusePreview("Quote refresh")) return;
   state.note = "Asking the store database to collect public quotes. Selling prices are not part of that request.";
   renderMarket();
   if (!window.LIVE || !LIVE.sb) { state.note = "Refresh needs the store database. Use manager import until then."; renderMarket(); return; }
@@ -354,6 +374,7 @@ async function refreshQuotes() {
 }
 
 async function decideSelected(status, rows) {
+  if (refusePreview(status === "approved" ? "Approval" : "Rejection")) return;
   const picked = rows.filter(row => state.selected.has(row.sku));
   if (!picked.length) { state.note = "Select a row first."; renderMarket(); return; }
   if (!window.LIVE || !LIVE.sb) { state.note = "Decisions stay empty until the audit table is available. Nothing was stored."; renderMarket(); return; }
@@ -466,6 +487,7 @@ async function confirmSavedPrice(gate, expected) {
 }
 
 async function applyApproved(rows) {
+  if (refusePreview("Applying a price")) return;
   readSettingsForm();
   let changed = 0;
   state.quiet = true;
@@ -528,6 +550,7 @@ async function applyApproved(rows) {
 }
 
 async function restore(key) {
+  if (refusePreview("Restoring a price")) return;
   const entry = state.ledger.find(item => item.key === key && item.previous > 0);
   const gate = canRestore(entry);
   if (!gate.ok) { state.note = "No previous price is stored for that row."; renderMarket(); return; }

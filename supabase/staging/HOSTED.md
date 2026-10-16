@@ -129,6 +129,24 @@ Paste and run that file once, as one query. It replaces `market_decide` only. It
 
 After it succeeds, run `node test/hosted-staging-check.mjs` again with the same staging variables. Send back only the printed summary.
 
+## 9. Open a read-only local preview
+
+Do this on your own computer after the hosted checks have passed. Do not deploy the site, run SQL, or merge the pull request. The preview serves the existing Market Pricing screen from `127.0.0.1` and the browser may read the staging project `akgilfixljswqljmedmg` only. It refuses every other host, including `yxkzjwcmmtiljakttyfh`. Refresh, approval, apply, restore, imports, rule saves, and catalog saves are not sent.
+
+PowerShell, from the Connectify repo:
+
+```powershell
+git checkout cursor/market-pricing-7fc1
+git pull origin cursor/market-pricing-7fc1
+if (-not (Test-Path market\staging-preview.env)) { Copy-Item market\staging-preview.env.example market\staging-preview.env }
+notepad market\staging-preview.env
+node market/staging-preview.mjs
+```
+
+In Notepad, leave the URL as `https://akgilfixljswqljmedmg.supabase.co`. Set `STAGING_SUPABASE_PUBLISHABLE_KEY` to that project's anon or publishable key. Do not put the service-role key or a password in the file. Save it, then run the `node` command. Open the printed `http://127.0.0.1:4173/#admin` address and sign in with the existing staging staff user. Market pricing opens after sign-in and shows the stored competitor observations, match explanations, justified proposals, and decision history.
+
+The `node` process itself does not connect to Supabase. Stop it with Ctrl+C when you are done looking. Do not approve or apply a price from this screen.
+
 ## What stays off
 
 - `market_settings.automation_enabled` and `writes_enabled` stay false.
