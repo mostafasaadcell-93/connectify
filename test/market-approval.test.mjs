@@ -100,9 +100,15 @@ async function install(page) {
             if (box.settings.automation_enabled !== true || box.settings.writes_enabled !== true) return {data: null, error: {message: "automation disabled"}};
             if (box.flags[sku] !== true) return {data: null, error: {message: "product disabled"}};
           } else {
-            const reviews = box.decisions.filter(row => row.sku === sku && (row.status === "approved" || row.status === "rejected"));
-            const latest = reviews[reviews.length - 1];
+            let latest = null;
+            box.decisions.forEach(row => {
+              if (row.sku === sku && (row.status === "approved" || row.status === "rejected")) latest = row;
+            });
             if (!latest || latest.status !== "approved" || Number(latest.target_price) !== target) return {data: null, error: {message: "not approved"}};
+            const latestAt = box.decisions.indexOf(latest);
+            if (box.decisions.slice(latestAt + 1).some(row => row.sku === sku && (row.status === "applied" || row.status === "restored"))) {
+              return {data: null, error: {message: "not approved: approval already used"}};
+            }
           }
         }
         box.decisions.push({sku, status, target_price: target, previous_price: args.p_previous == null ? null : Number(args.p_previous), apply_key: status === "applied" ? args.p_apply_key : null, created_at: new Date().toISOString()});

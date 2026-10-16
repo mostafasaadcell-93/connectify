@@ -121,6 +121,14 @@ Send back only the printed JSON summary. It contains source names, errors, count
 
 `node test/staging-collector-check.mjs --dry-run` fetches the same public quotes and prints the summary without signing in and without inserting. Use the command above when you want the rows in `market_observations`.
 
+## 8. Replace the staging approval function
+
+Do this only after reviewing `supabase/staging/08-single-use-approval.sql`. In the staging SQL editor, confirm the reference is `akgilfixljswqljmedmg`. If it is `yxkzjwcmmtiljakttyfh`, stop.
+
+Paste and run that file once, as one query. It replaces `market_decide` only. It refuses live order codes and inventory that is not marked `staging-synthetic`. It does not delete decisions, rerun the seed, or change prices, stock, orders, or the scheduler.
+
+After it succeeds, run `node test/hosted-staging-check.mjs` again with the same staging variables. Send back only the printed summary.
+
 ## What stays off
 
 - `market_settings.automation_enabled` and `writes_enabled` stay false.

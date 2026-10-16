@@ -622,9 +622,15 @@ export function decideRecord(state, input) {
       if (!(box.flags && box.flags[input.sku] === true)) return {ok: false, reason: "product disabled"};
     } else if (mode !== "manual") return {ok: false, reason: "bad mode"};
     else {
-      const reviews = decisions.filter(row => row.sku === input.sku && (row.status === "approved" || row.status === "rejected"));
-      const latest = reviews[reviews.length - 1];
+      let latestIndex = -1;
+      for (let i = 0; i < decisions.length; i++) {
+        const row = decisions[i];
+        if (row.sku === input.sku && (row.status === "approved" || row.status === "rejected")) latestIndex = i;
+      }
+      const latest = latestIndex >= 0 ? decisions[latestIndex] : null;
       if (!latest || latest.status !== "approved" || Number(latest.target_price) !== Number(input.target)) return {ok: false, reason: "not approved"};
+      const used = decisions.slice(latestIndex + 1).some(row => row.sku === input.sku && (row.status === "applied" || row.status === "restored"));
+      if (used) return {ok: false, reason: "not approved: approval already used"};
     }
   }
   const row = {

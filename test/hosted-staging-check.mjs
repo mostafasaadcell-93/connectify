@@ -132,10 +132,12 @@ export async function main() {
   if (direct.status < 400 && !(Array.isArray(direct.body) && direct.body.length === 0)) throw new Error("direct decision insert was allowed");
   check("direct decision insert blocked");
 
+  const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const refused = body => /not approved/.test(String(messageOf(body)));
   const early = await rpc(base, anon, staff, "market_decide", {
-    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: "stage-early", p_proposal: {}, p_mode: "manual"
+    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: "stage-early-" + stamp, p_proposal: {}, p_mode: "manual"
   });
-  if (!String(messageOf(early.body)).includes("not approved")) throw new Error("apply without approval returned " + messageOf(early.body));
+  if (!refused(early.body)) throw new Error("apply without approval returned " + messageOf(early.body));
   const automatic = await rpc(base, anon, staff, "market_decide", {
     p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: "stage-auto", p_proposal: {}, p_mode: "automatic"
   });
@@ -168,14 +170,19 @@ export async function main() {
   if (Number(other.p) !== 910 || Number(other.qty) !== 1) throw new Error("the other variant changed");
   check("fresh read-back kept the concurrent quantity");
 
+  const applyKey = "stage-apply-" + stamp;
   const applied = await rpc(base, anon, staff, "market_decide", {
-    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: "stage-apply-890", p_proposal: {}, p_mode: "manual"
+    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: applyKey, p_proposal: {}, p_mode: "manual"
   });
   if (applied.status >= 400) throw new Error("apply audit failed: " + messageOf(applied.body));
   const duplicate = await rpc(base, anon, staff, "market_decide", {
-    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: "stage-apply-890", p_proposal: {}, p_mode: "manual"
+    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: applyKey, p_proposal: {}, p_mode: "manual"
   });
   if (!String(messageOf(duplicate.body)).includes("already applied")) throw new Error("duplicate apply returned " + messageOf(duplicate.body));
+  const otherKey = await rpc(base, anon, staff, "market_decide", {
+    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: "stage-other-" + stamp, p_proposal: {}, p_mode: "manual"
+  });
+  if (!refused(otherKey.body)) throw new Error("changed apply key returned " + messageOf(otherKey.body));
   check("retry does not apply twice");
 
   const quote = await rest(base, anon, staff, "POST", "/rest/v1/market_observations", {
@@ -195,6 +202,19 @@ export async function main() {
     p_sku: "unit:u-stage-1", p_status: "restored", p_target: 900, p_previous: 890, p_apply_key: null, p_proposal: {}, p_mode: "manual"
   });
   if (restoreAudit.status >= 400) throw new Error("restore audit failed: " + messageOf(restoreAudit.body));
+  const stale = await rpc(base, anon, staff, "market_decide", {
+    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: "stage-stale-" + stamp, p_proposal: {}, p_mode: "manual"
+  });
+  if (!refused(stale.body)) throw new Error("stale approval returned " + messageOf(stale.body));
+  const reapproved = await rpc(base, anon, staff, "market_decide", {
+    p_sku: "unit:u-stage-1", p_status: "approved", p_target: 890, p_previous: 900, p_apply_key: null, p_proposal: {}, p_mode: "manual"
+  });
+  if (reapproved.status >= 400) throw new Error("fresh approval failed: " + messageOf(reapproved.body));
+  const reapplied = await rpc(base, anon, staff, "market_decide", {
+    p_sku: "unit:u-stage-1", p_status: "applied", p_target: 890, p_previous: 900, p_apply_key: "stage-fresh-" + stamp, p_proposal: {}, p_mode: "manual"
+  });
+  if (reapplied.status >= 400) throw new Error("fresh apply audit failed: " + messageOf(reapplied.body));
+  if (Number(unit(await readUnits(base, anon, staff), "u-stage-1").p) !== 900) throw new Error("fresh apply audit changed the restored price");
   const order = await rest(base, anon, staff, "GET", "/rest/v1/orders?code=eq.C-STAGE-CONF&select=status,stock_applied,items");
   const row = Array.isArray(order.body) ? order.body[0] : null;
   if (!row || row.status !== "confirmed" || row.stock_applied !== true) throw new Error("confirmed order changed");

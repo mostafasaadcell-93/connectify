@@ -88,6 +88,47 @@ begin
   exception when others then
     if sqlerrm not like '%already applied%' then raise exception 'duplicate apply returned %', sqlerrm; end if;
   end;
+  begin
+    perform public.market_decide('unit:u12', 'applied', 1511.97, 1542, 'k-other', '{}'::jsonb, 'manual');
+    raise exception 'changed apply key was allowed';
+  exception when others then
+    if sqlerrm not like '%not approved%' then raise exception 'changed apply key returned %', sqlerrm; end if;
+  end;
+  perform public.market_decide('unit:u12', 'restored', 1542, 1511.97, null, '{}'::jsonb, 'manual');
+  begin
+    perform public.market_decide('unit:u12', 'applied', 1511.97, 1542, 'k-stale', '{}'::jsonb, 'manual');
+    raise exception 'stale approval was allowed';
+  exception when others then
+    if sqlerrm not like '%not approved%' then raise exception 'stale approval returned %', sqlerrm; end if;
+  end;
+  perform public.market_decide('unit:u12', 'rejected', 1511.97, 1542, null, '{}'::jsonb, 'manual');
+  begin
+    perform public.market_decide('unit:u12', 'applied', 1511.97, 1542, 'k-reject', '{}'::jsonb, 'manual');
+    raise exception 'rejected approval was allowed';
+  exception when others then
+    if sqlerrm not like '%not approved%' then raise exception 'rejected approval returned %', sqlerrm; end if;
+  end;
+  perform public.market_decide('unit:u12', 'approved', 1511.97, 1542, null, '{"sku":"unit:u12"}'::jsonb, 'manual');
+  perform public.market_decide('unit:u12', 'applied', 1511.97, 1542, 'k-again', '{}'::jsonb, 'manual');
+  begin
+    perform public.market_decide('unit:u12', 'applied', 1511.97, 1542, 'k-again-2', '{}'::jsonb, 'manual');
+    raise exception 'reused fresh approval was allowed';
+  exception when others then
+    if sqlerrm not like '%not approved%' then raise exception 'reused fresh approval returned %', sqlerrm; end if;
+  end;
+  -- A second pass keeps the history and still refuses the old approval.
+  begin
+    perform public.market_decide('unit:u12', 'applied', 1511.97, 1542, 'k-second-pass', '{}'::jsonb, 'manual');
+    raise exception 'second pass reused an approval';
+  exception when others then
+    if sqlerrm not like '%not approved%' then raise exception 'second pass returned %', sqlerrm; end if;
+  end;
+  if (select count(*) from public.market_decisions where sku = 'unit:u12' and status = 'approved') < 2 then
+    raise exception 'approval history was removed';
+  end if;
+  if (select count(*) from public.market_decisions where sku = 'unit:u12' and status = 'applied') <> 2 then
+    raise exception 'apply history was removed or duplicated';
+  end if;
   insert into public.market_sku_facts (sku, warranty_years, region, sim, condition, verified)
   values ('unit:u12', 2, 'uk', 'psim', 'new', true);
   select verified into flag from public.market_sku_facts where sku = 'unit:u12';

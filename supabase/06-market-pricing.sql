@@ -116,6 +116,9 @@ begin
     if p_apply_key is null or char_length(p_apply_key) < 3 then
       raise exception 'missing apply key';
     end if;
+    if exists (select 1 from public.market_decisions where status = 'applied' and apply_key = p_apply_key) then
+      raise exception 'already applied';
+    end if;
     if p_mode = 'automatic' then
       if settings.automation_enabled is not true or settings.writes_enabled is not true then
         raise exception 'automation disabled';
@@ -131,10 +134,19 @@ begin
       if latest.id is null or latest.status <> 'approved' or latest.target_price is distinct from p_target then
         raise exception 'not approved';
       end if;
+      -- An apply or a restore after that approval consumes it. A new apply key does not revive it.
+      if exists (
+        select 1 from public.market_decisions later
+        where later.sku = p_sku
+          and later.status in ('applied','restored')
+          and later.created_at > latest.created_at
+      ) then
+        raise exception 'not approved: approval already used';
+      end if;
     end if;
   end if;
-  insert into public.market_decisions (sku, status, target_price, previous_price, apply_key, proposal)
-  values (p_sku, p_status, p_target, p_previous, case when p_status = 'applied' then p_apply_key else null end, coalesce(p_proposal, '{}'::jsonb))
+  insert into public.market_decisions (sku, status, target_price, previous_price, apply_key, proposal, created_at)
+  values (p_sku, p_status, p_target, p_previous, case when p_status = 'applied' then p_apply_key else null end, coalesce(p_proposal, '{}'::jsonb), clock_timestamp())
   returning id into new_id;
   return new_id;
 exception when unique_violation then

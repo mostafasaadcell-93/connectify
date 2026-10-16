@@ -102,6 +102,7 @@ test("the synthetic seed refuses production-like data and restores only staging 
   `]);
   const ready = sql(db, ["-f", "/workspace/test/staging-seed-run.sql"]);
   assert.match(ready, /staging seed ready/);
+  assert.match(sql(db, ["-f", "/workspace/supabase/staging/08-single-use-approval.sql"]), /CREATE FUNCTION/);
   const state = sql(db, ["-tAc", "select (unit->>'p') || ',' || (unit->>'qty') || ',' || status || ',' || enabled::text || ',' || automation_enabled::text from public.store_state, lateral jsonb_array_elements(data) unit, public.orders, public.market_query_config, public.market_settings where store_state.key = 'units' and unit->>'id' = 'u-stage-1' and orders.code = 'C-STAGE-CONF' and market_query_config.id = 1 and market_settings.id = 1"]).trim();
   assert.equal(state, "900,2,confirmed,false,false");
   sql(db, ["-f", "/workspace/test/staging-seed-run.sql"]);
@@ -110,6 +111,10 @@ test("the synthetic seed refuses production-like data and restores only staging 
 
   sql(db, ["-c", "insert into public.orders (code, type, name, phone, status) values ('C-LIVE-2', 'order', 'Live Buyer', '70123456', 'confirmed')"]);
   expectRefusal(/not staging orders/);
+  assert.throws(() => sql(db, ["-f", "/workspace/supabase/staging/08-single-use-approval.sql"]), error => {
+    assert.match(String(error.stderr || error.message), /not staging orders/);
+    return true;
+  });
   assert.equal(sql(db, ["-tAc", "select (unit->>'p') from public.store_state, lateral jsonb_array_elements(data) unit where key = 'units' and unit->>'id' = 'u-stage-1'"]).trim(), "900");
   sql("postgres", ["-c", "drop database " + db]);
 });
