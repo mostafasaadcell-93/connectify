@@ -11686,6 +11686,19 @@ function statedCondition(variant,desc,name){const v=condScan(variant);if(v)retur
 const knownBits=list=>(list||[]).map(s=>String(s||"").trim()).filter(Boolean);
 const joinAsk=parts=>parts.filter(Boolean).join(", ");
 const availText=parts=>`Hello Connectify! I'd like to ask about availability for: ${joinAsk(parts)}. Could you please confirm availability and price?`;
+function availInquiry(parts, item){
+  const text=availText(parts);
+  let url="";
+  try{if(typeof cxProductURL==="function")url=cxProductURL(item)||""}catch(e){url=""}
+  if(!/^https:\/\/connectifystore\.vercel\.app\/\?p=(?:phone|ph|acc)&/.test(url)||/\s/.test(url))return text;
+  return text+"\n\nProduct link: "+url;
+}
+function phoneAskItem(){
+  const m=pvs.m;if(!m)return null;
+  const key=variantKey();
+  const unit=(DB.units||[]).find(u=>u.m==m.id&&u.c==pvs.color&&String(u.st)===String(pvs.st)&&u.cond==pvs.cond&&u.sim==pvs.sim);
+  return {kind:"phone",id:m.id,key,unit:unit&&unit.id||""};
+}
 const photoText=parts=>`Hello Connectify! I'd like real photos of: ${joinAsk(parts)}. Could you please send photos of this exact one?`;
 function withCond(parts,cond){const lab=cond&&CONDS[cond]&&CONDS[cond].label;if(!lab)return parts;
   if(parts.join(" ").toLowerCase().includes(lab.toLowerCase()))return parts;return parts.concat(lab)}
@@ -11696,7 +11709,7 @@ function showPhoneRealPhotos(m,s){if(!m||!PHOTO_CONDS[s.cond])return false;
   return (DB.units||[]).some(u=>u.m==m.id&&u.c==s.color&&u.st==s.st&&u.cond==s.cond&&u.sim==s.sim&&u.qty>0)}
 function phoneActsHTML(){const m=pvs.m;if(!m)return"";
   const ok=comboOK(m,pvs),parts=phoneAskParts(m,pvs),inCart=cartHas(variantKey()),photos=showPhoneRealPhotos(m,pvs);
-  return `${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${inCart?"disabled":""}>${inCart?"In your cart":"Add to cart"}</button>`:""}${ok?"":`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availText(parts))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}`}
+  return `${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${inCart?"disabled":""}>${inCart?"In your cart":"Add to cart"}</button>`:""}${ok?"":`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availInquiry(parts,phoneAskItem()))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}`}
 function bindPhoneAdd(){const a=$("pvAdd");if(!a)return;a.onclick=()=>{
   const m=pvs.m;if(!m||!comboOK(m,pvs)){renderPV();return}
   const unit=bestUnit(m,pvs);if(!unit||!(unit.qty>0)){renderPV();return}
@@ -11768,7 +11781,7 @@ function openAcc(id){PV_KIND="acc";
   <div class="spec">${esc(a.spec)}</div>
   ${badgeOf(a.id)?`<div class="pvbdg">${badgeHTML(a.id)}</div>`:""}
   <div class="specs"><div><span>Condition</span><b>${CONDS[a.cond].label}</b></div>${fitsLabel(a)?`<div><span>Compatibility</span><b>${esc(fitsLabel(a).replace(/^Fits /,""))}${a.fits&&a.fits.length>2?"":""}</b></div>`:""}${a.note?`<div><span>Note</span><b>${esc(a.note)}</b></div>`:""}<div><span>Delivery</span><b>Beirut: ${esc(DB.content.info.beirut)}. Other areas: ${esc(DB.content.info.other)}</b></div><div><span>Payment</span><b>${esc(payList().join(", "))}</b></div>${ok?`<div><span>Price</span><b>Ask on WhatsApp</b></div>`:""}</div>
-  <div class="pvacts">${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${cartHas("acc:"+id)?"disabled":""}>${cartHas("acc:"+id)?"In your cart":"Add to cart"}</button>`:`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availText(parts))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}</div>`;
+  <div class="pvacts">${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${cartHas("acc:"+id)?"disabled":""}>${cartHas("acc:"+id)?"In your cart":"Add to cart"}</button>`:`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availInquiry(parts,{kind:"acc",id,key:"acc:"+id}))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}</div>`;
   $("pvClose").onclick=closeModals;
   const b=$("pvAdd");if(b)b.onclick=()=>{if(!accOK(accById(id))){openAcc(id);return}addAcc(id);closeModals()};
   showMedia();openModal("pvModal");
@@ -12195,7 +12208,7 @@ function renderPH(resetPhoto){const p=pvp.p,vi=Math.max(0,phVarIdx(p,pvp.sel)),v
   ${ok?`<div class="pvprice">${v.p==null?`<b class="askp">Price on WhatsApp</b>`:`<b>${money(v.p)}</b>`}${off?`<s>${money(v.cp)}</s><span class="offb">-${off}%</span>`:""}</div>`:""}
   ${colHTML}${chips}
   ${ok&&(window.PH_COLORASK||[]).includes(p.id.slice(2))?`<p class="tip">Colors change fast: confirm yours on WhatsApp.</p>`:""}
-  <div class="pvacts">${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${cartHas(key)?"disabled":""}>${cartHas(key)?"In your cart":(v.p==null?"Add to cart":`Add to cart · ${money(v.p)}`)}</button>`:`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availText(parts))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}</div>
+  <div class="pvacts">${ok?`<button type="button" class="btn btn-main" id="pvAdd" ${cartHas(key)?"disabled":""}>${cartHas(key)?"In your cart":(v.p==null?"Add to cart":`Add to cart · ${money(v.p)}`)}</button>`:`<a class="btn btn-wa" id="pvAsk" target="_blank" rel="noopener" href="${waURL(availInquiry(parts,{kind:"ph",id:p.id,vi,key}))}">${WA_SVG}Ask for availability</a>`}${photos?`<a class="btn btn-wa" id="pvPhotos" target="_blank" rel="noopener" href="${waURL(photoText(parts))}">${WA_SVG}Ask for real photos</a>`:""}</div>
   ${p.fits.length?`<div class="specs"><div><span>Fits</span><b>${esc(p.fits.map(id=>(modelById(id)||{}).name).filter(Boolean).join(", "))}</b></div></div>`:""}
   ${(()=>{const d=(phO(p.id)||{}).desc??p.desc;return d?`<div class="specs-title">About this product</div><p class="pdesc">${esc(d)}${d===p.desc&&d.length>=318?"…":""}</p>`:""})()}
   ${infoBlocks("new",false)}`;

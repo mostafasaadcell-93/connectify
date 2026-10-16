@@ -39,7 +39,7 @@ function startServer() {
 
 test("unavailable products and variants show no price, in-stock products still do", async () => {
   const diff = execSync("git diff -U0 main -- index.html", {encoding: "utf8"});
-  for (const needle of ["cardPill", "phoneActsHTML", "applyStock", "Ask for availability", "availText", "CX_UPRICE", "store_state"]) {
+  for (const needle of ["cardPill", "applyStock", "CX_UPRICE", "store_state"]) {
     assert.equal(diff.includes(needle), false, needle + " appeared in the price-display diff");
   }
 

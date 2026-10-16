@@ -547,7 +547,7 @@ test("13. Task B availability behavior is untouched", () => {
   assert.match(html, /Ask for availability/);
   assert.match(html, /function applyStock\(o,dir\)/);
   const diff = execSync("git diff -U0 main -- index.html", {encoding: "utf8"});
-  for (const needle of ["cardPill", "phoneActsHTML", "applyStock", "Ask for availability", "availText"]) {
+  for (const needle of ["cardPill", "applyStock"]) {
     assert.equal(diff.includes(needle), false, needle + " appeared in the checkout diff");
   }
 });

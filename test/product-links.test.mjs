@@ -91,9 +91,11 @@ function order() {
 
 test("order message keeps the existing wording and adds one link under every item", () => {
   const diff = execSync("git diff -U0 main -- index.html", {encoding: "utf8"});
-  for (const needle of ["cardPill", "phoneActsHTML", "applyStock", "Ask for availability", "availText"]) {
+  for (const needle of ["cardPill", "applyStock"]) {
     assert.equal(diff.includes(needle), false, needle + " appeared in the product-link diff");
   }
+  assert.equal((html.match(/waURL\(availInquiry\(/g) || []).length, 3);
+  assert.equal((html.match(/waURL\(availText\(/g) || []).length, 0);
   assert.match(html, /const availText=parts=>`Hello Connectify! I'd like to ask about availability for: \$\{joinAsk\(parts\)\}\. Could you please confirm availability and price\?`;/);
   assert.match(html, /pullState\(\)\.then\(ok=>\{if\(ok\)rerender\(\);L\.ready=true;cxApplyProductLink\(\)\}\)\.catch\(\(\)=>\{L\.ready=true;cxApplyProductLink\(\)\}\)/);
   assert.equal(cx.cxMayShowWA("confirmed"), true);
@@ -622,4 +624,176 @@ test("a failed charger checkout keeps the cart and the retry reuses one referenc
   assert.equal(codes[0], codes[1]);
   assert.match(codes[0], /^C-[0-9a-f]{18}$/);
   await context.close();
+});
+
+async function readAsk(page) {
+  return page.evaluate(() => {
+    const link = document.querySelector("#pvAsk");
+    const add = document.querySelector("#pvAdd");
+    if (!link) return {label: "", text: "", product: "", href: "", add: add ? add.textContent : "", cart: cart.length};
+    const href = link.getAttribute("href") || "";
+    const text = new URL(href).searchParams.get("text") || "";
+    const product = (text.split("Product link: ")[1] || "").trim();
+    return {label: link.textContent, text, product, href, add: add ? add.textContent : "", cart: cart.length};
+  });
+}
+
+function assertAsk(ask, product) {
+  assert.match(ask.label, /Ask for availability/);
+  assert.equal(ask.add, "");
+  assert.equal(ask.cart, 0);
+  assert.match(ask.href, /^https:\/\/wa\.me\/96171062768\?text=/);
+  assert.match(ask.text, /^Hello Connectify! I'd like to ask about availability for: .+\. Could you please confirm availability and price\?\n\nProduct link: https:\/\/connectifystore\.vercel\.app\/\?/);
+  assert.equal(ask.text.includes("%0A") || ask.text.includes("%3A") || ask.text.includes("https%3A"), false);
+  assert.equal(ask.product, product);
+  assert.equal(new URL(ask.product).origin, "https://connectifystore.vercel.app");
+  const params = new URL(ask.product).searchParams;
+  for (const key of params.keys()) assert.ok(["p", "id", "unit", "color", "st", "cond", "sim", "v"].includes(key), key);
+}
+
+test("ask for availability carries the same product link as an order", async () => {
+  const phone = "https://connectifystore.vercel.app/?p=phone&id=17promax&color=Silver&st=1024&cond=new&sim=psim";
+  const sold = await openPage("/?p=phone&id=17promax&color=Silver&st=1024&cond=new&sim=psim");
+  try {
+    await waitReady(sold.page, "iPhone 17 Pro Max");
+    const ask = await readAsk(sold.page);
+    assertAsk(ask, phone);
+    assert.match(ask.text, /iPhone 17 Pro Max, Silver, 1TB, New, Nano-SIM \+ eSIM/);
+    await sold.page.click('#pvBody [data-k="cond"][data-v="used"]');
+    const used = await readAsk(sold.page);
+    assertAsk(used, "https://connectifystore.vercel.app/?p=phone&id=17promax&color=Silver&st=1024&cond=used&sim=psim");
+    assert.match(used.text, /Silver, 1TB, Used, Nano-SIM \+ eSIM/);
+    assertNoOrderWrites(sold);
+  } finally {
+    await finish(sold);
+  }
+
+  const fresh = await openPage(phone.replace("https://connectifystore.vercel.app", ""), {width: 390, height: 844});
+  try {
+    await waitReady(fresh.page, "iPhone 17 Pro Max");
+    const view = await fresh.page.evaluate(readPhone);
+    assert.equal(view.color, "Silver");
+    assert.equal(view.st, "1024");
+    assert.equal(view.cond, "new");
+    assert.equal(view.sim, "psim");
+    assert.match(view.ask, /Ask for availability/);
+    await fresh.page.reload({waitUntil: "domcontentloaded", timeout: 60000});
+    await waitReady(fresh.page, "iPhone 17 Pro Max");
+    const again = await fresh.page.evaluate(readPhone);
+    assert.equal(again.color, "Silver");
+    assert.equal(again.st, "1024");
+    assert.ok(fresh.page.viewportSize().width <= 390);
+    assertNoOrderWrites(fresh);
+  } finally {
+    await finish(fresh);
+  }
+
+  const available = await openPage("/?p=phone&id=17promax&unit=u12&color=Silver&st=256&cond=new&sim=psim");
+  try {
+    await waitReady(available.page, "iPhone 17 Pro Max");
+    const view = await available.page.evaluate(readPhone);
+    assert.match(view.add, /Add to cart/);
+    assert.equal(view.ask, "");
+    const order = await available.page.evaluate(() => cxOrderMessage({
+      id: "C-0123456789abcdef01",
+      cart: [{key: "17promax|Silver|256|new|psim", kind: "phone", id: "17promax", unit: "u12", title: "iPhone 17 Pro Max", detail: "256GB, Silver, New, Nano-SIM + eSIM", price: 1542}],
+      form: {name: "Karim", area: "Beirut", address: "Hamra street building 4"}
+    }, money, WA_SHOW).msg);
+    assert.match(order, /Hi Connectify! Order C-0123456789abcdef01/);
+    assert.match(order, /Product link: https:\/\/connectifystore\.vercel\.app\/\?p=phone&id=17promax&unit=u12&color=Silver&st=256&cond=new&sim=psim/);
+    assert.equal(order.includes("ask about availability"), false);
+    assertNoOrderWrites(available);
+  } finally {
+    await finish(available);
+  }
+
+  const blue = await openPage("/?p=phone&id=17promax&color=Deep%20Blue&st=1024&cond=new&sim=psim");
+  try {
+    await waitReady(blue.page, "iPhone 17 Pro Max");
+    const ask = await readAsk(blue.page);
+    assertAsk(ask, "https://connectifystore.vercel.app/?p=phone&id=17promax&color=Deep%20Blue&st=1024&cond=new&sim=psim");
+    assert.match(ask.text, /Deep Blue, 1TB/);
+    assert.equal(ask.text.includes("Deep%20Blue, 1TB"), false);
+    assertNoOrderWrites(blue);
+  } finally {
+    await finish(blue);
+  }
+
+  const cases = [
+    ["/?p=ph&id=cx2&v=1", "Galaxy Tab A11", "https://connectifystore.vercel.app/?p=ph&id=cx2&v=1", "Silver, 8GB/128GB, New"],
+    ["/?p=ph&id=cx66&v=1", "MagSafe Case", "https://connectifystore.vercel.app/?p=ph&id=cx66&v=1", "Galaxy S26 Ultra"]
+  ];
+  for (const [urlPath, title, product, chip] of cases) {
+    const session = await openPage(urlPath);
+    try {
+      await waitReady(session.page, title);
+      const ask = await readAsk(session.page);
+      assertAsk(ask, product);
+      assert.match(ask.text, new RegExp(chip.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assertNoOrderWrites(session);
+    } finally {
+      await finish(session);
+    }
+  }
+
+  const charger = await openPage("/");
+  try {
+    await charger.page.waitForFunction(() => window.LIVE && LIVE.ready === true, null, {timeout: 60000});
+    await charger.page.evaluate(() => {
+      const splash = document.querySelector("#splash");
+      if (splash) splash.remove();
+      const item = PHmap.get("cx12");
+      item.vars[0].q = 0;
+      item.vars[0].ok = false;
+      setShopCat("power");
+      shop.limit = 200;
+      renderGrid();
+    });
+    await charger.page.click('[data-ph="cx12"]');
+    await waitReady(charger.page, "Apple Adapter 25W");
+    const ask = await readAsk(charger.page);
+    assertAsk(ask, "https://connectifystore.vercel.app/?p=ph&id=cx12&v=0");
+    assert.match(ask.text, /Apple Adapter 25W/);
+    assert.match(ask.text, /White, 25W/);
+    assertNoOrderWrites(charger);
+  } finally {
+    await finish(charger);
+  }
+
+  const accessory = await openPage("/");
+  try {
+    await accessory.page.waitForFunction(() => window.LIVE && LIVE.ready === true, null, {timeout: 60000});
+    await accessory.page.evaluate(() => {
+      const splash = document.querySelector("#splash");
+      if (splash) splash.remove();
+      setShopCat("cases");
+      shop.limit = 200;
+      renderGrid();
+    });
+    await accessory.page.click('[data-ph="cx66"]');
+    await waitReady(accessory.page, "MagSafe Case");
+    await accessory.page.click('#pvBody [data-po][data-v="Galaxy S26 Ultra"]');
+    await accessory.page.waitForFunction(() => {
+      const link = document.querySelector("#pvAsk");
+      return link && new URL(link.href).searchParams.get("text").includes("id=cx66&v=1");
+    });
+    const ask = await readAsk(accessory.page);
+    assertAsk(ask, "https://connectifystore.vercel.app/?p=ph&id=cx66&v=1");
+    assert.match(ask.text, /Galaxy S26 Ultra/);
+    await accessory.page.evaluate(() => {
+      DB.accs = DB.accs || [];
+      DB.accs.push({id: "a22", cat: "cover", name: "Disney licensed covers", spec: "Mickey and Friends collection", cond: "new", qty: 0, photos: [], fits: [], note: "Genuine Disney authorization", art: "case", c: "#F3ECDF"});
+      openAcc("a22");
+    });
+    await accessory.page.waitForFunction(() => {
+      const heading = document.querySelector("#pvTitle");
+      return heading && heading.textContent === "Disney licensed covers" && document.querySelector("#pvAsk");
+    });
+    const legacy = await readAsk(accessory.page);
+    assertAsk(legacy, "https://connectifystore.vercel.app/?p=acc&id=a22");
+    assert.match(legacy.text, /Disney licensed covers/);
+    assertNoOrderWrites(accessory);
+  } finally {
+    await finish(accessory);
+  }
 });
