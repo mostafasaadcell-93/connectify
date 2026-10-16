@@ -1,6 +1,6 @@
 /* Rate-limited public catalog reads. No prices are written here. */
 import {
-  coverageUrl, observationsFromShopifyJs, observationsFromShopifySuggest, observationsFromWoo
+  coverageUrl, listingKind, observationsFromShopifyJs, observationsFromShopifySuggest, observationsFromWoo
 } from "./market-engine.mjs";
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -53,6 +53,7 @@ export async function runCoverage(options) {
           }
         });
         const type = String(response.headers.get("content-type") || "").toLowerCase();
+        if (response.status === 401 || response.status === 403 || response.status === 429) throw new Error("unavailable HTTP " + response.status);
         if (response.status >= 300 && response.status < 400) throw new Error("blocked");
         if (!response.ok || (!type.includes("json") && !type.includes("javascript"))) throw new Error(response.status === 202 ? "blocked" : "HTTP " + response.status);
         const body = await response.json();
@@ -66,6 +67,25 @@ export async function runCoverage(options) {
       }
     }
     return {error: last};
+  }
+
+  function phoneQuery(query) {
+    if (!query || query.kind === "accessory" || listingKind(query.text) === "accessory") return false;
+    return query.kind === "phone" || listingKind(query.text) === "phone";
+  }
+
+  function take(source, query, rows) {
+    if (!rows || !rows.length) return;
+    if (!phoneQuery(query)) {
+      observations.push(...rows);
+      return;
+    }
+    let accessories = 0;
+    for (const row of rows) {
+      if (row && row.specs && row.specs.listing === "accessory") accessories += 1;
+      else observations.push(row);
+    }
+    if (accessories) skipped.push({store: source.name, storeId: source.id, query: query.text, reason: "accessory", count: accessories});
   }
 
   const work = [];
@@ -119,7 +139,7 @@ export async function runCoverage(options) {
         pagesSeen = result.pages || pagesSeen;
         lastPage = page;
         const products = Array.isArray(result.body) ? result.body : [];
-        observations.push(...products.flatMap(product => observationsFromWoo(source, product, checkedAt)));
+        take(source, query, products.flatMap(product => observationsFromWoo(source, product, checkedAt)));
         if (products.length < perPage) break;
         if (result.pages && page >= result.pages) break;
       }
@@ -136,21 +156,21 @@ export async function runCoverage(options) {
       checked.push({store: source.name, storeId: source.id, query: query.text, pages: 1});
       const found = observationsFromShopifySuggest(source, result.body, checkedAt);
       const ranged = found.filter(row => row.error === "variant_price_range" && row.handle).slice(0, 4);
-      observations.push(...found.filter(row => row.error !== "variant_price_range"));
+      take(source, query, found.filter(row => row.error !== "variant_price_range"));
       for (const product of ranged) {
         if (requests >= maxRequests) {
-          observations.push(product);
+          take(source, query, [product]);
           skipped.push({store: source.name, storeId: source.id, query: product.handle, reason: "request_cap"});
           continue;
         }
         const js = await one(source.origin + "/products/" + product.handle + ".js");
         await pause(delayMs);
         if (!js || js.error) {
-          observations.push(product);
+          take(source, query, [product]);
           errors.push({store: source.name, query: product.handle, error: js ? js.error : "failed"});
           continue;
         }
-        observations.push(...observationsFromShopifyJs(source, js.body, checkedAt));
+        take(source, query, observationsFromShopifyJs(source, js.body, checkedAt));
       }
     }
   }

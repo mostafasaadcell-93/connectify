@@ -35,8 +35,10 @@ test("price tiers use one band and never invent a missing price", () => {
   assert.equal(undercut(500.01).rate, 0.005);
   assert.equal(undercut(1000).rate, 0.005);
   assert.equal(undercut(1000).target, 995);
+  assert.equal(undercut(99.99).rate, 0.02);
   assert.equal(undercut(1542).rate, 0.002);
   assert.equal(undercut(1542).target, 1538.92);
+  assert.equal(undercut(1000.01).rate, 0.002);
   assert.equal(undercut(0).ok, false);
   assert.equal(undercut(null).ok, false);
   assert.equal(DEFAULT_SETTINGS.automationEnabled, false);
@@ -90,6 +92,23 @@ test("names are parsed without treating a different variant as the same phone", 
   const esim = parseSpecs("iPhone 17 Pro Max 256GB eSIM only");
   assert.equal(esim.sim, "esim");
   assert.equal(parseSpecs("iPhone 17 Pro Max Clear Case").model, null);
+  assert.equal(parseSpecs("iPhone 17 Pro Max Clear Case").listing, "accessory");
+  assert.equal(parseSpecs("Privacy glass for iPhone 17 Pro Max").listing, "accessory");
+  assert.equal(parseSpecs("iPhone 17 Pro Max 256GB (Sim + Esim) Silver").sim, "psim");
+  assert.equal(parseSpecs("iPhone 17 Pro Max 256GB eSIM only Silver").sim, "esim");
+  assert.equal(parseSpecs("Apple iPhone 17 Pro Max 256GB 1SIM / E-SIM").sim, "psim");
+  const unstated = parseSpecs("iPhone 17 Pro Max 256GB Silver 1 SIM");
+  assert.equal(unstated.condition, null);
+  assert.equal(matchPair(phone, {name: "iPhone 17 Pro Max 256GB Silver 1 SIM", specs: unstated}).level, "review");
+  assert.equal(matchPair(phone, {name: "iPhone 17 Pro Max 256GB Silver 1 SIM", specs: unstated}).reasons.includes("missing_condition"), true);
+  const active = parseSpecs("iPhone 17 Pro Max 256GB Silver eSIM Active");
+  assert.equal(active.condition, null);
+  assert.equal(active.activation, "active");
+  assert.equal(active.sim, "esim");
+  assert.equal(parseSpecs("iPhone 17 Pro Max 256GB Silver Not Active").activation, "inactive");
+  assert.notEqual(parseSpecs("iPhone 17 Pro Max 256GB Silver Not Active").condition, "new");
+  const accessory = parseSpecs("Clear Case for iPhone 17 Pro Max");
+  assert.equal(matchPair(phone, {name: "Clear Case for iPhone 17 Pro Max", specs: accessory}).reasons[0], "accessory");
   assert.equal(parseSpecs("Samsung 25W USB-C Charger").model, null);
   assert.equal(parseSpecs("10-in-1 Protection Kit for iPhone 17 Pro Max").model, null);
 });
@@ -119,8 +138,21 @@ test("missing cost, a thin margin, a jump, or a currency without a rate blocks t
   const row = quote({price: 1515});
   const noCost = evaluate([Object.assign({}, phone, {cost: null})], [row], {minMarginPct: 5}, []);
   assert.equal(noCost.proposals[0].block, "missing_cost");
-  const tight = evaluate([Object.assign({}, phone, {cost: 1520})], [row], {minMarginPct: 5}, []);
+  const tight = evaluate([Object.assign({}, phone, {cost: 1490})], [row], {minMarginPct: 5}, []);
   assert.equal(tight.proposals[0].block, "below_margin");
+  assert.equal(tight.proposals[0].explanation.includes("minimum margin"), true);
+  const loss = evaluate([Object.assign({}, phone, {cost: 1600})], [row], {minMarginPct: 2}, []);
+  assert.equal(loss.proposals[0].block, "negative_profit");
+  assert.equal(loss.proposals[0].target > 0, true);
+  const caseQuote = quote({name: "Clear Case for iPhone 17 Pro Max", price: 25, url: "https://gadgetlb.com/case", specs: parseSpecs("Clear Case for iPhone 17 Pro Max")});
+  const ignored = evaluate([phone], [caseQuote], {minMarginPct: 2}, []);
+  assert.equal(ignored.proposals[0].confidence, "none");
+  assert.equal(ignored.proposals[0].target, null);
+  const reviewOnly = evaluate([phone], [quote({specs: {condition: null}})], {minMarginPct: 2}, []);
+  assert.equal(reviewOnly.proposals[0].confidence, "review");
+  assert.equal(reviewOnly.proposals[0].target, null);
+  assert.equal(reviewOnly.proposals[0].reviewPrice, 1515);
+  assert.equal(reviewOnly.proposals[0].reasons.includes("missing_condition"), true);
   const sudden = evaluate([phone], [row], {minMarginPct: 2}, [{store: row.store, url: row.url, currency: "USD", price: 1000, checkedAt: "2026-10-14T09:00:00Z"}]);
   assert.equal(sudden.proposals[0].block, "no_verified_price");
   assert.equal(sudden.proposals[0].notes.includes("sudden_change"), true);
@@ -289,6 +321,44 @@ test("targeted coverage pages through search results and stops at the request ca
   assert.equal(result.skipped.some(row => row.reason === "brand_not_sold" && row.storeId === "bms"), true);
   assert.equal(result.checked.some(row => row.query === "iPhone 17 Pro Max"), true);
   assert.equal(result.requests <= 3, true);
+});
+
+test("phone searches drop accessories, keep a second page, and continue after a 403", async () => {
+  const calls = [];
+  const headers = (map) => ({get: name => map[String(name).toLowerCase()] || null});
+  const fetchImpl = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes("najemstarcall.com")) return {ok: false, status: 403, headers: headers({"content-type": "application/json"}), json: async () => ({})};
+    const page = Number(new URL(url).searchParams.get("page") || "1");
+    const products = page === 1 ? [
+      {name: "Clear Case for iPhone 17 Pro Max", type: "simple", permalink: "https://classcellulars.com/case", is_in_stock: true, prices: {price: "2500", currency_code: "USD", currency_minor_unit: 2}},
+      {name: "iPhone 17 Pro Max 256GB Silver 1 SIM New", type: "simple", permalink: "https://classcellulars.com/phone", is_in_stock: true, prices: {price: "151500", currency_code: "USD", currency_minor_unit: 2}}
+    ] : [
+      {name: "iPhone 17 Pro Max 256GB Silver 1 SIM New", type: "simple", permalink: "https://classcellulars.com/phone-2", is_in_stock: true, prices: {price: "150000", currency_code: "USD", currency_minor_unit: 2}}
+    ];
+    return {ok: true, status: 200, headers: headers({"content-type": "application/json", "x-wp-totalpages": "2"}), json: async () => products};
+  };
+  const result = await runCoverage({
+    fetchImpl, sleep: async () => {}, delayMs: 0, retries: 0, maxPages: 2, perPage: 2, maxRequests: 6,
+    queries: [{text: "iPhone 17 Pro Max", brand: "apple", kind: "phone"}],
+    sources: [
+      {id: "najem", name: "Najem Starcall", kind: "woo", origin: "https://najemstarcall.com", endpoint: "https://najemstarcall.com/wp-json/wc/store/v1/products", currency: "USD"},
+      {id: "class", name: "Class Cellulars", kind: "woo", origin: "https://classcellulars.com", endpoint: "https://classcellulars.com/wp-json/wc/store/v1/products", currency: "USD"}
+    ]
+  });
+  assert.equal(result.errors.some(row => row.store === "Najem Starcall" && row.error === "unavailable HTTP 403"), true);
+  assert.equal(result.observations.some(row => /case/i.test(row.name)), false);
+  assert.equal(result.observations.some(row => row.price === 1515), true);
+  assert.equal(result.observations.some(row => row.price === 1500), true);
+  assert.equal(result.skipped.some(row => row.reason === "accessory" && row.count === 1), true);
+  assert.equal(calls.some(url => url.includes("page=2")), true);
+  const kept = await runCoverage({
+    fetchImpl: async () => ({ok: true, status: 200, headers: headers({"content-type": "application/json", "x-wp-totalpages": "1"}), json: async () => [{name: "Clear Case for iPhone 17 Pro Max", type: "simple", permalink: "https://classcellulars.com/case", is_in_stock: true, prices: {price: "2500", currency_code: "USD", currency_minor_unit: 2}}]}),
+    sleep: async () => {}, delayMs: 0, retries: 0, maxPages: 1, perPage: 20, maxRequests: 2,
+    queries: [{text: "Clear Case", kind: "accessory"}],
+    sources: [{id: "class", name: "Class Cellulars", kind: "woo", origin: "https://classcellulars.com", endpoint: "https://classcellulars.com/wp-json/wc/store/v1/products", currency: "USD"}]
+  });
+  assert.equal(kept.observations.some(row => row.specs.listing === "accessory"), true);
 });
 
 test("a fresh read confirms the exact variant and a disabled scheduler cannot start", () => {

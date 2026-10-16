@@ -18,7 +18,7 @@ const SOURCES = [
 
 function normalizeQueries(input: unknown, limit: number) {
   return (Array.isArray(input) ? input : [])
-    .map(item => ({text: String(item && (item as {text?: string}).text || "").slice(0, 80), brand: item && (item as {brand?: string}).brand ? String((item as {brand?: string}).brand) : null}))
+    .map(item => ({text: String(item && (item as {text?: string}).text || "").slice(0, 80), brand: item && (item as {brand?: string}).brand ? String((item as {brand?: string}).brand) : null, kind: item && (item as {kind?: string}).kind ? String((item as {kind?: string}).kind) : null}))
     .filter(item => item.text)
     .slice(0, limit);
 }
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     return new Response(String(error.message || error), {status: 502});
   }
   try {
-    const result = await runCoverage({sources: SOURCES, queries, pairs, perPage: 20, maxPages: 1, delayMs: 1000, timeoutMs: 12000, retries: 1, maxRequests});
+    const result = await runCoverage({sources: SOURCES, queries, pairs, perPage: 20, maxPages: 2, delayMs: 1000, timeoutMs: 12000, retries: 1, maxRequests});
     if (result.observations.length) {
       const {error} = await supabase.from("market_observations").insert(result.observations.map(row => ({
         run_id: run.id, store: row.store, name: row.name, price: row.price, currency: row.currency,

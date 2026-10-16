@@ -17,6 +17,8 @@ export function round2(n) {
 export function undercut(competitorUsd) {
   const price = Number(competitorUsd);
   if (!Number.isFinite(price) || price <= 0) return {ok: false, reason: "missing_price"};
+  // The upper edge stays in the lower band: $100 is 2%, $500 is 1%, $1000 is 0.5%.
+  // The next cent starts the next band. Above $1000 is 0.2%.
   let rate;
   if (price <= 100) rate = 0.02;
   else if (price <= 500) rate = 0.01;
@@ -43,7 +45,16 @@ function clean(text) {
 }
 
 function isAccessory(text) {
-  return /\b(cases?|covers?|chargers?|cables?|protectors?|protection|tempered|magsafe|holders?|earbuds?|earphones?|headphones?|adapters?|power\s*banks?|screen\s*guards?|films?|lenses|lens|mounts?|kits?|skins?|bumpers?|pouches|straps?)\b/i.test(text);
+  return /\b(cases?|covers?|chargers?|cables?|protectors?|protection|tempered|magsafe|holders?|earbuds?|earphones?|headphones?|adapters?|power\s*banks?|screen\s*guards?|films?|lenses|lens|mounts?|kits?|skins?|bumpers?|pouches|straps?|glass|stands?|sleeves?|wallets?|folios?|holsters?|grips?|shields?)\b/i.test(text)
+    || /\bfor\s+(the\s+)?(apple\s+|samsung\s+)?(iphone|ipad|galaxy)\b/i.test(text);
+}
+
+export function listingKind(text) {
+  const s = clean(text);
+  if (!s) return "other";
+  if (isAccessory(s)) return "accessory";
+  if (modelFrom(s).model) return "phone";
+  return "other";
 }
 
 const COLOR_PHRASES = [
@@ -122,9 +133,19 @@ export function simFromText(text) {
   const s = clean(text);
   if (!s) return null;
   if (/e-?\s*sim\s*only/i.test(s)) return "esim";
+  if (/(nano|physical|1|single)?\s*-?\s*sim\s*(\+|\/|,|and)\s*e-?\s*sim/i.test(s)) return "psim";
+  if (/e-?\s*sim\s*(\+|\/|,|and)\s*(nano|physical|1|single)?\s*-?\s*sim/i.test(s)) return "psim";
   if (/\bdual\b/i.test(s)) return "dual";
-  if (/nano|physical|1\s*sim|single\s*sim/i.test(s)) return "psim";
+  if (/nano|physical|1\s*sim|single\s*sim|\b1sim\b/i.test(s)) return "psim";
   if (/\besim\b|e-sim/i.test(s)) return "esim";
+  return null;
+}
+
+export function activationFromText(text) {
+  const s = clean(text);
+  if (!s) return null;
+  if (/\b(not|non|un)[-\s]*activ/i.test(s)) return "inactive";
+  if (/\bactivat(?:ed|ion)\b/i.test(s) || /\bactive\b/i.test(s)) return "active";
   return null;
 }
 
@@ -217,7 +238,9 @@ export function parseSpecs(text, hints) {
     sim: extra.sim || sim,
     color: extra.color ? (colorFromText(extra.color) || String(extra.color).toLowerCase()) : colorFromText(s),
     warrantyYears: extra.warrantyYears != null && extra.warrantyYears !== "" ? Number(extra.warrantyYears) : (warranty ? Number(warranty[1]) : null),
-    region: extra.region || region
+    region: extra.region || region,
+    activation: extra.activation || activationFromText(s),
+    listing: isAccessory(s) ? "accessory" : (identity.model || extra.model ? "phone" : "other")
   };
   return specs;
 }
@@ -414,7 +437,7 @@ export function coverageQueries(catalog) {
     const key = sku.title.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    queries.push({text: sku.title, brand: (sku.specs && sku.specs.brand) || null});
+    queries.push({text: sku.title, brand: (sku.specs && sku.specs.brand) || null, kind: "phone"});
   }
   return queries;
 }
@@ -674,11 +697,15 @@ function same(a, b) {
 export function matchPair(sku, obs) {
   const a = sku.specs || {};
   const b = (obs && obs.specs) || {};
+  const observedKind = b.listing || listingKind((obs && obs.name) || "");
+  if ((sku.kind === "phone" && observedKind === "accessory") || (sku.kind === "accessory" && observedKind === "phone")) {
+    return {level: "reject", reasons: ["accessory"]};
+  }
   if (!a.brand || !b.brand || !same(a.brand, b.brand)) return {level: "reject", reasons: ["brand"]};
   if (!a.model || !b.model || !same(a.model, b.model)) return {level: "reject", reasons: ["model"]};
   const reasons = [];
   let uncertain = false;
-  for (const field of ["storage", "ram", "condition", "sim", "color", "warrantyYears", "region"]) {
+  for (const field of ["storage", "ram", "condition", "sim", "color", "warrantyYears", "region", "activation"]) {
     const left = a[field];
     const right = b[field];
     const leftMissing = left == null || left === "";
@@ -689,7 +716,11 @@ export function matchPair(sku, obs) {
   }
   if (sku.kind === "phone") {
     for (const field of ["storage", "condition", "sim"]) {
-      if (a[field] == null || b[field] == null) uncertain = true;
+      if (a[field] == null || a[field] === "" || b[field] == null || b[field] === "") {
+        uncertain = true;
+        const reason = "missing_" + field;
+        if (!reasons.includes(reason)) reasons.push(reason);
+      }
     }
   }
   if (uncertain) return {level: "review", reasons};
@@ -756,14 +787,20 @@ export function evaluate(catalog, observations, settings, history) {
     }
     usable.sort((a, b) => a.usd - b.usd);
     const best = usable[0] || null;
+    const reviews = related.filter(match => match.level === "review" && match.obs && match.obs.price > 0)
+      .sort((a, b) => (a.reasons || []).length - (b.reasons || []).length);
+    const closest = reviews[0] || null;
     const cut = best ? undercut(best.usd) : {ok: false};
     let block = null;
     if (!best || !cut.ok) block = "no_verified_price";
     else if (cfg.minMarginPct == null || cfg.minMarginPct === "") block = "margin_not_configured";
     else if (!(Number(sku.cost) > 0)) block = "missing_cost";
+    else if (cut.target < Number(sku.cost)) block = "negative_profit";
     else if (cut.target < round2(Number(sku.cost) * (1 + Number(cfg.minMarginPct) / 100))) block = "below_margin";
     else if (sku.price > 0 && (Math.abs(cut.target - sku.price) / sku.price > 0.15 || Math.abs(cut.target - sku.price) > 150)) block = "unusual_change";
     const target = cut.ok ? cut.target : null;
+    const reasons = best ? [] : (closest ? closest.reasons : []);
+    const confidence = best ? "high" : (closest ? "review" : "none");
     return {
       sku: sku.sku,
       kind: sku.kind,
@@ -776,7 +813,13 @@ export function evaluate(catalog, observations, settings, history) {
       store: best ? best.match.obs.store : "",
       url: best ? best.match.obs.url : "",
       checkedAt: best ? best.match.obs.checkedAt : "",
-      confidence: best ? "high" : (related.some(m => m.level === "review") ? "review" : "none"),
+      confidence,
+      reviewStore: !best && closest ? closest.obs.store : "",
+      reviewPrice: !best && closest ? closest.obs.price : null,
+      reviewUrl: !best && closest ? closest.obs.url : "",
+      reviewCheckedAt: !best && closest ? closest.obs.checkedAt : "",
+      reasons,
+      explanation: proposalExplanation(block, reasons, confidence),
       rate: cut.ok ? cut.rate : null,
       target,
       profit: target != null && Number(sku.cost) > 0 ? round2(target - Number(sku.cost)) : null,
@@ -788,6 +831,18 @@ export function evaluate(catalog, observations, settings, history) {
     };
   });
   return {matches, proposals};
+}
+
+function proposalExplanation(block, reasons, confidence) {
+  if (confidence === "high" && !block) return "Verified in-stock offer. The recommendation undercuts it and stays above the recorded cost and minimum margin.";
+  if (block === "negative_profit") return "Blocked: the undercut is below the recorded purchase cost.";
+  if (block === "below_margin") return "Blocked: the undercut misses the minimum margin.";
+  if (block === "missing_cost") return "Blocked: no purchase cost is recorded, so profit cannot be checked.";
+  if (block === "margin_not_configured") return "Blocked: no minimum margin is configured.";
+  if (block === "unusual_change") return "Blocked: the change is larger than the safety limit.";
+  if (block === "no_verified_price" && reasons.length) return "Needs review: " + reasons.join(", ") + ". Missing details are not assumed.";
+  if (block === "no_verified_price") return "No verified in-stock offer.";
+  return block || "";
 }
 
 export function applyKey(proposal) {

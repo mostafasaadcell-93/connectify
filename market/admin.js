@@ -11,6 +11,7 @@ const state = {
   settings: Object.assign({}, DEFAULT_SETTINGS, {productAuto: {}, appliedKeys: []}),
   quiet: false,
   loaded: false,
+  collection: {errors: [], checked: [], skipped: [], requests: null, run: null},
   note: "Scheduled automatic updates are off. You can approve and apply one verified price at a time. Nothing changes until a fresh database read confirms that exact variant."
 };
 
@@ -60,7 +61,11 @@ function renderMarket() {
   const kept = $("marketQ") && document.activeElement === $("marketQ") ? $("marketQ").value : ($("marketQ") && $("marketQ").value || "");
   const result = state.observations.length ? evaluate(catalog(), state.observations, state.settings, state.observations) : {matches: [], proposals: []};
   const query = kept.trim().toLowerCase();
-  const rows = result.proposals.filter(row => row.confidence !== "none" && (!query || (row.title + " " + row.detail).toLowerCase().includes(query))).slice(0, 80);
+  const rank = row => row.confidence === "high" && !row.block ? 0 : row.confidence === "high" ? 1 : row.confidence === "review" ? 2 : 3;
+  const rows = result.proposals.filter(row => !query || (row.title + " " + row.detail).toLowerCase().includes(query)).sort((a, b) => rank(a) - rank(b)).slice(0, 80);
+  const failures = state.collection.errors || [];
+  const accessorySkips = (state.collection.skipped || []).filter(row => row.reason === "accessory");
+  const otherSkips = (state.collection.skipped || []).filter(row => row.reason !== "accessory");
   root.innerHTML = `<div class="stockbar">
       <button class="btn btn-main" type="button" id="marketRefresh">Refresh quotes</button>
       <button class="abtn" type="button" id="marketApprove">Approve selected</button>
@@ -88,21 +93,37 @@ function renderMarket() {
     <textarea id="marketCsv" rows="4" placeholder="store,name,price,currency,url,available,storage,condition,sim,color,warranty,region"></textarea>
     <button class="abtn" type="button" id="marketImport">Import manager prices</button>
     <input id="marketQ" placeholder="Filter shown matches" value="${esc(kept)}">
-    <table class="mktable"><thead><tr><th></th><th>Product</th><th>Our price</th><th>Lowest verified</th><th>Recommended</th><th>Profit</th><th>Source</th><th>Checked</th><th>Confidence</th><th>Status</th><th></th></tr></thead><tbody>
-    ${rows.map(row => `<tr>
+    <div class="mkstatus">
+      <p>Automatic pricing ${state.settings.automationEnabled && state.settings.writesEnabled ? "on" : "off"}</p>
+      <p>Scheduler off</p>
+      ${state.collection.requests == null ? "" : `<p>${esc(String(state.collection.requests))} catalog requests</p>`}
+      ${failures.map(row => `<p>${esc(row.store || "Source")}: ${esc(row.error || "failed")}</p>`).join("")}
+      ${accessorySkips.length ? `<p>Accessories left out of phone comparison: ${accessorySkips.reduce((sum, row) => sum + (Number(row.count) || 1), 0)}</p>` : ""}
+      ${otherSkips.slice(0, 6).map(row => `<p>${esc(row.store || "Source")} skipped: ${esc(row.reason || "")}</p>`).join("")}
+      ${state.collection.run ? `<p>Last run ${esc(state.collection.run.status || "")}${state.collection.run.error ? " · " + esc(String(state.collection.run.error).slice(0, 180)) : ""}</p>` : ""}
+    </div>
+    <div class="mkwrap"><table class="mktable"><thead><tr><th></th><th>Product</th><th>Our price</th><th>Competitor</th><th>Recommended</th><th>Profit</th><th>Source</th><th>Checked</th><th>Confidence</th><th>Status</th><th></th></tr></thead><tbody>
+    ${rows.map(row => {
+      const recommended = row.confidence === "high" && !row.block && row.target > 0;
+      const offerUrl = row.url || row.reviewUrl || "";
+      const offerStore = row.store || row.reviewStore || "";
+      const offerWhen = row.checkedAt || row.reviewCheckedAt || "";
+      const offerPrice = row.competitor != null ? row.competitor : row.reviewPrice;
+      return `<tr>
       <td><input type="checkbox" data-sku="${esc(row.sku)}" ${state.selected.has(row.sku) ? "checked" : ""}></td>
       <td><b>${esc(row.title)}</b><br><span class="mktnote">${esc(row.detail)}</span></td>
       <td>${money(row.current)}</td>
-      <td>${money(row.competitor)}</td>
-      <td>${money(row.target)}</td>
-      <td>${row.profit == null ? "—" : money(row.profit) + " (" + row.margin + "%)"}</td>
-      <td>${row.url ? `<a href="${esc(row.url)}" target="_blank" rel="noopener">${esc(row.store)}</a>` : esc(row.store || "—")}</td>
-      <td>${esc(row.checkedAt || "—")}</td>
+      <td>${offerPrice == null ? "—" : money(offerPrice) + (row.competitor == null && row.reviewPrice != null ? " review" : "")}</td>
+      <td>${recommended ? money(row.target) : "—"}</td>
+      <td>${recommended && row.profit != null ? money(row.profit) + " (" + row.margin + "%)" : "—"}</td>
+      <td>${offerUrl ? `<a href="${esc(offerUrl)}" target="_blank" rel="noopener">${esc(offerStore || "Listing")}</a>` : esc(offerStore || "—")}</td>
+      <td>${esc(offerWhen || "—")}</td>
       <td>${esc(row.confidence)}</td>
-      <td>${esc(state.decisions[row.sku] || row.status)}${row.block ? " · " + esc(row.block) : ""}</td>
+      <td>${esc(state.decisions[row.sku] || row.status)}${row.explanation ? "<br><span class='mktnote'>" + esc(row.explanation) + "</span>" : ""}</td>
       <td><label class="mktnote"><input type="checkbox" data-auto="${esc(row.sku)}" ${state.settings.productAuto[row.sku] ? "checked" : ""}> Auto</label></td>
-    </tr>`).join("") || `<tr><td colspan="11">No verified match yet. Out-of-stock, incomplete, and uncertain quotes stay off this list.</td></tr>`}
-    </tbody></table>
+    </tr>`;
+    }).join("") || `<tr><td colspan="11">No catalog rows to review.</td></tr>`}
+    </tbody></table></div>
     <h3>Recent decisions</h3>
     <div class="olist">${state.ledger.slice(0, 12).map(item => `<div class="drow"><span class="grow"><b>${esc(item.sku)}</b><small>${esc(item.status)} ${item.price == null ? "" : "$" + item.price}</small></span>${item.status === "applied" ? `<button class="abtn" type="button" data-restore="${esc(item.key || "")}">Restore previous</button>` : ""}</div>`).join("") || "<p class='mktnote'>No price has been changed from this screen.</p>"}</div>`;
   $("marketRefresh").onclick = refreshQuotes;
@@ -283,6 +304,8 @@ async function loadAudit() {
       });
     }
   });
+  const runs = await LIVE.sb.from("market_runs").select("status,error,started_at,finished_at").order("started_at", {ascending: false}).limit(1);
+  if (!runs.error && Array.isArray(runs.data) && runs.data[0]) state.collection.run = runs.data[0];
   const facts = await LIVE.sb.from("market_sku_facts").select("sku,warranty_years,region,sim,condition,verified");
   if (!facts.error && facts.data) {
     state.facts = {};
@@ -312,16 +335,21 @@ async function refreshQuotes() {
   catalog().forEach(item => {
     if (item.kind !== "phone" || seen.has(item.title)) return;
     seen.add(item.title);
-    queries.push({text: item.title, brand: item.specs.brand || null});
+    queries.push({text: item.title, brand: item.specs.brand || null, kind: "phone"});
   });
   const {data, error} = await LIVE.sb.functions.invoke("market-check", {body: {queries: queries.slice(0, 12)}});
   if (error) { state.note = "Quote refresh is not deployed yet. Use manager import. " + (error.message || ""); renderMarket(); return; }
   const {data: stored, error: readError} = await LIVE.sb.from("market_observations").select("store,name,price,currency,url,available,checked_at,specs,status,error").order("checked_at", {ascending: false}).limit(1000);
   if (readError) { state.note = readError.message; renderMarket(); return; }
   state.observations = (stored || []).map(observationFromRow);
-  const checked = data && Array.isArray(data.checked) ? data.checked.length : 0;
-  const skipped = data && Array.isArray(data.skipped) ? data.skipped.length : 0;
-  state.note = "Loaded " + state.observations.length + " stored quotes" + (checked || skipped ? ". Checked " + checked + ", skipped " + skipped : "") + (data && data.errors && data.errors.length ? ". Some stores failed." : ".") + " Selling prices were not changed.";
+  state.collection.errors = data && Array.isArray(data.errors) ? data.errors : [];
+  state.collection.checked = data && Array.isArray(data.checked) ? data.checked : [];
+  state.collection.skipped = data && Array.isArray(data.skipped) ? data.skipped : [];
+  state.collection.requests = data && data.requests != null ? data.requests : null;
+  const checked = state.collection.checked.length;
+  const skipped = state.collection.skipped.length;
+  const failedStores = state.collection.errors.map(row => row.store).filter(Boolean);
+  state.note = "Loaded " + state.observations.length + " stored quotes" + (checked || skipped ? ". Checked " + checked + ", skipped " + skipped : "") + (failedStores.length ? ". Unavailable or failed: " + failedStores.join(", ") + "." : ".") + " Selling prices were not changed.";
   renderMarket();
 }
 
