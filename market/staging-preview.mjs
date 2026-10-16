@@ -51,22 +51,124 @@ export function parseEnvFile(text) {
   return env;
 }
 
+function skipWs(text, index) {
+  let i = index;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch !== " " && ch !== "\t" && ch !== "\n" && ch !== "\r") break;
+    i++;
+  }
+  return i;
+}
+
+function isIdentChar(ch) {
+  return !!ch && ((ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9") || ch === "_" || ch === "$");
+}
+
+function expectForward(text, index, token) {
+  const i = skipWs(text, index);
+  if (text.slice(i, i + token.length) !== token) return -1;
+  if (isIdentChar(token[0]) && isIdentChar(text[i - 1])) return -1;
+  if (isIdentChar(token[token.length - 1]) && isIdentChar(text[i + token.length])) return -1;
+  return i + token.length;
+}
+
+function expectBackward(text, end, token) {
+  let i = end;
+  while (i > 0 && (text[i - 1] === " " || text[i - 1] === "\t" || text[i - 1] === "\n" || text[i - 1] === "\r")) i--;
+  const start = i - token.length;
+  if (start < 0 || text.slice(start, i) !== token) return -1;
+  if (isIdentChar(token[0]) && isIdentChar(text[start - 1])) return -1;
+  if (isIdentChar(token[token.length - 1]) && isIdentChar(text[i])) return -1;
+  return start;
+}
+
+function matchForward(text, index, tokens) {
+  let i = index;
+  for (const token of tokens) {
+    if (token === ";?") {
+      const semi = expectForward(text, i, ";");
+      if (semi >= 0) i = semi;
+      continue;
+    }
+    const next = expectForward(text, i, token);
+    if (next < 0) return -1;
+    i = next;
+  }
+  return i;
+}
+
+function matchBackward(text, end, tokens) {
+  let i = end;
+  for (const token of tokens) {
+    const start = expectBackward(text, i, token);
+    if (start < 0) return -1;
+    i = start;
+  }
+  return i;
+}
+
+function readQuotedString(text, index) {
+  if (text[index] !== '"') return null;
+  let value = "";
+  for (let i = index + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "\\" || ch === "\n" || ch === "\r") return null;
+    if (ch === '"') return {value, end: i + 1};
+    value += ch;
+  }
+  return null;
+}
+
 export function readProductionClient(html) {
-  const needle = 'supabase.createClient("';
-  const at = String(html).indexOf(needle);
-  if (at < 0 || String(html).indexOf(needle, at + needle.length) >= 0) {
+  const source = String(html);
+  const needle = "supabase.createClient(";
+  const positions = [];
+  let from = 0;
+  while (from < source.length) {
+    const at = source.indexOf(needle, from);
+    if (at < 0) break;
+    positions.push(at);
+    from = at + needle.length;
+  }
+  if (positions.length !== 1) {
     throw fail("Refusing to build a preview because the store page does not have exactly one Supabase client.");
   }
-  const urlStart = at + needle.length;
-  const urlEnd = html.indexOf('","', urlStart);
-  const keyEnd = urlEnd < 0 ? -1 : html.indexOf('"', urlEnd + 3);
-  if (urlEnd < 0 || keyEnd < 0) throw fail("Refusing to build a preview because the Supabase client could not be read.");
-  const url = html.slice(urlStart, urlEnd);
-  const key = html.slice(urlEnd + 3, keyEnd);
+  const at = positions[0];
+  const url = readQuotedString(source, skipWs(source, at + needle.length));
+  if (!url) throw fail("Refusing to build a preview because the Supabase client could not be read.");
+  const comma = expectForward(source, url.end, ",");
+  if (comma < 0) throw fail("Refusing to build a preview because the Supabase client could not be read.");
+  const key = readQuotedString(source, skipWs(source, comma));
+  if (!key) throw fail("Refusing to build a preview because the Supabase client could not be read.");
   let host = "";
-  try { host = new URL(url).hostname; } catch { host = ""; }
+  try { host = new URL(url.value).hostname; } catch { host = ""; }
   if (host !== PRODUCTION_HOST) throw fail("Refusing to build a preview because index.html is not the production store page.");
-  return {url, key, marker: html.slice(at, keyEnd + 1)};
+  return {url: url.value, key: key.value, at, keyEnd: key.end, marker: source.slice(at, key.end)};
+}
+
+const CLIENT_PREFIX = ["return", "{", "try", "{", "=>", ")", "(", "(", "=", "sb", "const"];
+const CLIENT_SUFFIX = [
+  ",", "{", "auth", ":", "{",
+  "persistSession", ":", "true", ",",
+  "autoRefreshToken", ":", "true", ",",
+  "storageKey", ":", '"connectify-auth"',
+  "}", "}", ")",
+  "}", "catch", "(", "e", ")", "{",
+  "console", ".", "warn", "(", "e", ")", ";",
+  "return", "null", ";?",
+  "}", "}", ")", "(", ")", ";"
+];
+
+function locateProductionClient(html, known) {
+  const start = matchBackward(html, known.at, CLIENT_PREFIX);
+  const end = start < 0 ? -1 : matchForward(html, known.keyEnd, CLIENT_SUFFIX);
+  if (start < 0 || end < 0) throw fail("Could not patch the store page (supabase client).");
+  const statement = html.slice(start, end);
+  if (statement.indexOf(known.url) !== statement.lastIndexOf(known.url) || statement.indexOf(known.key) !== statement.lastIndexOf(known.key)) {
+    throw fail("Could not patch the store page (supabase client).");
+  }
+  return {start, end};
 }
 
 export function assertPreviewTarget(url, key, production = {}) {
@@ -142,13 +244,14 @@ function cxPreviewOpenMarket(){if(!window.CX_STAGING_PREVIEW||!window.LIVE||!LIV
 
 export function renderPreviewPage(html, target, production) {
   const source = String(html);
-  const known = production || readProductionClient(source);
+  const known = readProductionClient(source);
+  if (production && (production.url !== known.url || production.key !== known.key)) {
+    throw fail("Refusing to build a preview because index.html is not the production store page.");
+  }
   const allowed = assertPreviewTarget(target.url, target.key, known);
   if (!source.includes(PRODUCTION_HOST) || source.indexOf(PRODUCTION_HOST) !== source.lastIndexOf(PRODUCTION_HOST)) {
     throw fail("Refusing to build a preview because the production project id is not present exactly once.");
   }
-  const clientFrom = `const sb=(()=>{try{return supabase.createClient("${known.url}","${known.key}",
-  {auth:{persistSession:true,autoRefreshToken:true,storageKey:"connectify-auth"}})}catch(e){console.warn(e);return null}})();`;
   const clientTo = `${guardSource()}
 window.CX_STAGING_PREVIEW={host:${JSON.stringify(STAGING_HOST)},writes:false};
 const sb=(()=>{try{
@@ -157,7 +260,8 @@ const sb=(()=>{try{
   {auth:{persistSession:true,autoRefreshToken:true,storageKey:"connectify-staging-preview"}});
   return cxPreviewReadOnly(client);
 }catch(e){console.warn(e);return null}})();`;
-  let out = replaceOnce(source, clientFrom, clientTo, "supabase client");
+  const located = locateProductionClient(source, known);
+  let out = source.slice(0, located.start) + clientTo + source.slice(located.end);
   out = replaceOnce(out, "async function push(){pushT=null;if(!L.staff||busy){if(busy)schedulePush();return}busy=true;",
     "async function push(){pushT=null;if(window.CX_STAGING_PREVIEW)return false;if(!L.staff||busy){if(busy)schedulePush();return}busy=true;", "push");
   out = replaceOnce(out, ':"Live: changes save to the store\'s database and show to customers right away."',
@@ -165,8 +269,13 @@ const sb=(()=>{try{
   out = replaceOnce(out, 'toast("Signed in")};', 'toast("Signed in");cxPreviewOpenMarket()};', "sign-in");
   out = replaceOnce(out, "checkStaff().then(s=>{if(s)refreshStaff().then(()=>{if(ADMIN_ON)showAdmin();if(window.reviewsRefresh)reviewsRefresh()})});",
     "checkStaff().then(s=>{if(s)refreshStaff().then(()=>{if(ADMIN_ON){showAdmin();cxPreviewOpenMarket()}if(window.reviewsRefresh)reviewsRefresh()})});", "session");
-  if (out.includes(PRODUCTION_HOST) || out.includes(known.key) || out.includes("connectify-auth")) {
+  const hosts = out.match(/[a-z0-9-]+\.supabase\.co/g) || [];
+  const clientCalls = [...out.matchAll(/supabase\.createClient\s*\(/g)];
+  if (out.includes(PRODUCTION_HOST) || out.includes(known.key) || out.includes("connectify-auth") || hosts.some(host => host !== STAGING_HOST) || new Set(hosts).size !== 1) {
     throw fail("Refusing to write the preview because the production client was still present.");
+  }
+  if (clientCalls.length !== 1 || !/supabase\.createClient\(\s*cxPreviewOrigin\s*,/.test(out.slice(clientCalls[0].index, clientCalls[0].index + 60))) {
+    throw fail("Refusing to write the preview because the staging client was not the only Supabase client.");
   }
   if (!out.includes(STAGING_HOST) || !out.includes("cxPreviewGuard(") || !out.includes("if(window.CX_STAGING_PREVIEW)return false")) {
     throw fail("Refusing to write the preview because the staging guard was not installed.");

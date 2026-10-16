@@ -8,7 +8,7 @@ import vm from "node:vm";
 import {createRequire} from "node:module";
 import {
   STAGING_HOST, STAGING_ORIGIN, PRODUCTION_HOST, assertPreviewTarget, assertPreviewEnv, parseEnvFile,
-  readProductionClient, renderPreviewPage, createPreviewServer
+  readProductionClient, renderPreviewPage, createPreviewServer, startPreview
 } from "../market/staging-preview.mjs";
 
 const root = "/workspace";
@@ -188,6 +188,90 @@ test("a configured preview process prints the loopback address and not the key",
     assert.equal((await page.text()).includes(PRODUCTION_HOST), false);
   } finally {
     child.kill();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+function assertStagingClient(html) {
+  const hosts = html.match(/[a-z0-9-]+\.supabase\.co/g) || [];
+  assert.deepEqual([...new Set(hosts)], [STAGING_HOST]);
+  assert.equal(html.includes(PRODUCTION_HOST), false);
+  assert.equal(html.includes(production.key), false);
+  assert.equal(html.includes("connectify-auth"), false);
+  assert.equal([...html.matchAll(/supabase\.createClient\s*\(/g)].length, 1);
+  assert.match(html, /supabase\.createClient\(\s*cxPreviewOrigin\s*,/);
+  assert.doesNotMatch(html, /supabase\.createClient\(\s*"https:/);
+  assert.match(html, /cxPreviewReadOnly\(client\)/);
+  assert.match(html, /if\(window\.CX_STAGING_PREVIEW\)return false/);
+  assert.match(html, /toast\("Signed in"\);cxPreviewOpenMarket\(\)/);
+}
+
+test("the real store page patches when the production client has Windows newlines or different spacing", () => {
+  const raw = storePage.toString("utf8");
+  const windows = renderPreviewPage(raw.replace(/\n/g, "\r\n"), {url: STAGING_ORIGIN, key: previewKey}, production);
+  assertStagingClient(windows);
+  const marker = 'const sb=(()=>{try{return supabase.createClient("';
+  const at = raw.indexOf(marker);
+  const end = raw.indexOf("}})();", at);
+  assert.equal(raw.indexOf("}})();", end + 1), -1);
+  const pretty = [
+    "const sb = (",
+    "  ( ) => {",
+    "    try {",
+    "      return supabase.createClient(",
+    '        "' + production.url + '" ,',
+    '        "' + production.key + '" ,',
+    '        { auth : { persistSession : true , autoRefreshToken : true , storageKey : "connectify-auth" } }',
+    "      )",
+    "    } catch ( e ) {",
+    "      console . warn ( e ) ;",
+    "      return null ;",
+    "    }",
+    "  }",
+    ") ( ) ;"
+  ].join("\r\n");
+  const spaced = raw.slice(0, at) + pretty + raw.slice(end + "}})();".length);
+  assertStagingClient(renderPreviewPage(spaced, {url: STAGING_ORIGIN, key: previewKey}, production));
+  const changed = raw.replace('storageKey:"connectify-auth"', 'storageKey:"other-auth"');
+  assert.throws(() => renderPreviewPage(changed, {url: STAGING_ORIGIN, key: previewKey}, production), error => {
+    return error.code === "STAGING_PREVIEW" && error.message === "Could not patch the store page (supabase client).";
+  });
+});
+
+test("an unknown or production Supabase host is refused before a preview client is written", () => {
+  const raw = storePage.toString("utf8");
+  const unknown = raw.replaceAll(PRODUCTION_HOST, "otherexampleproject.supabase.co");
+  assert.throws(() => readProductionClient(unknown), error => error.message.includes("not the production store page"));
+  assert.throws(() => renderPreviewPage(unknown, {url: STAGING_ORIGIN, key: previewKey}), error => error.code === "STAGING_PREVIEW");
+  assert.throws(() => renderPreviewPage(raw, {url: "https://" + PRODUCTION_HOST, key: previewKey}, production), error => {
+    return error.message.includes("Refusing the production Supabase project.");
+  });
+  assert.throws(() => renderPreviewPage(raw, {url: "https://otherexampleproject.supabase.co", key: previewKey}, production), error => {
+    return error.message.includes("https://akgilfixljswqljmedmg.supabase.co");
+  });
+  assert.equal(raw.includes(PRODUCTION_HOST), true);
+});
+
+test("startup reads the checked-in store page, including the Windows bytes that failed before", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "connectify-preview-start-"));
+  const envFile = path.join(dir, "preview.env");
+  const windowsFile = path.join(dir, "index.windows.html");
+  writeFileSync(envFile, "STAGING_SUPABASE_URL=" + STAGING_ORIGIN + "\nSTAGING_SUPABASE_PUBLISHABLE_KEY=" + previewKey + "\n");
+  writeFileSync(windowsFile, storePage.toString("utf8").replace(/\n/g, "\r\n"));
+  const servers = [];
+  try {
+    const real = await startPreview({envFile, port: 0});
+    servers.push(real.server);
+    assert.equal(real.host, "127.0.0.1");
+    const realPage = await fetch("http://127.0.0.1:" + real.port + "/");
+    assertStagingClient(await realPage.text());
+    const windows = await startPreview({envFile, htmlFile: windowsFile, port: 0});
+    servers.push(windows.server);
+    const windowsPage = await fetch("http://127.0.0.1:" + windows.port + "/");
+    assertStagingClient(await windowsPage.text());
+    assert.deepEqual(readFileSync(path.join(root, "index.html")), storePage);
+  } finally {
+    await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve))));
     rmSync(dir, {recursive: true, force: true});
   }
 });
