@@ -13709,15 +13709,29 @@ function cxOrderMessage(p,money,waShow){
   const area=form.area||p.area||"";
   const address=form.address||p.address||"";
   const name=form.name||p.name||"";
-  const lines=cart.map(i=>{
-    const row="• "+i.title+", "+i.detail+(i.price!=null?" ("+money(i.price)+")":"");
+  const items=cart.map((i,n)=>{
+    const lines=[i.title?"*"+(n+1)+". "+i.title+"*":"*"+(n+1)+".*"];
+    if(i.detail)lines.push(String(i.detail));
+    if(i.qty!=null&&i.qty!=="")lines.push("Qty: "+i.qty);
+    if(i.price!=null)lines.push("Price: "+money(i.price));
     const url=cxProductURL(i);
-    return url?row+"\n\nProduct link: "+url+"\n":row;
-  }).join("\n");
+    if(url)lines.push(url);
+    return lines.join("\n");
+  }).join("\n\n");
   const priced=cart.filter(i=>i.price!=null);
-  const sub=priced.length?"\nSubtotal: "+money(priced.reduce((s,i)=>s+(Number(i.price)||0),0))+" + delivery":"";
+  const summary=[];
+  if(priced.length)summary.push("Subtotal: "+money(priced.reduce((s,i)=>s+(Number(i.price)||0),0))+" + delivery");
+  summary.push(area?"Delivery to "+area+", cash on delivery":"Cash on delivery");
+  const customer=[];
+  if(name)customer.push("Name: "+name);
+  if(area)customer.push("Area: "+area);
+  if(address)customer.push("Address: "+address);
+  const parts=["*CONNECTIFY — NEW ORDER*","Order: "+(p.id||"")];
+  if(customer.length)parts.push("","*CUSTOMER DETAILS*",customer.join("\n"));
+  parts.push("","*ORDER ITEMS*",items?"\n"+items:"");
+  parts.push("","*ORDER SUMMARY*",summary.join("\n"),"","Can you confirm the prices and send me real photos?");
   return {
-    msg:"Hi Connectify! Order "+p.id+"\n"+lines+sub+"\nDelivery to "+area+", cash on delivery\nAddress: "+address+"\nName: "+name+"\nCan you confirm the prices and send me real photos?",
+    msg:parts.join("\n"),
     title:"Order "+p.id+" saved",
     lead:"Last step: send it to us on WhatsApp ("+waShow+"). We reply with prices and real photos."
   };

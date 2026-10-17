@@ -113,7 +113,7 @@ test("1. successful checkout confirms once, opens WhatsApp, then clears the cart
   assert.equal(h.wa.length, 1);
   assert.match(h.wa[0].title, savedTitle);
   assert.match(h.wa[0].title, new RegExp(result.id));
-  assert.match(h.wa[0].msg, new RegExp("Hi Connectify! Order " + result.id));
+  assert.match(h.wa[0].msg, new RegExp("\\*CONNECTIFY — NEW ORDER\\*\\nOrder: " + result.id));
   assert.match(h.wa[0].msg, /Hamra street building 4/);
   assert.match(h.wa[0].lead, /WhatsApp \(\+961 71 062 768\)/);
   assert.equal(h.cart.length, 0);

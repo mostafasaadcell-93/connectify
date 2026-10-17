@@ -89,7 +89,7 @@ function order() {
   };
 }
 
-test("order message keeps the existing wording and adds one link under every item", () => {
+test("order message is a receipt with one exact link under every item", () => {
   const diff = execSync("git diff -U0 main -- index.html", {encoding: "utf8"});
   for (const needle of ["cardPill", "applyStock"]) {
     assert.equal(diff.includes(needle), false, needle + " appeared in the product-link diff");
@@ -105,7 +105,10 @@ test("order message keeps the existing wording and adds one link under every ite
 
   const money = n => "$" + n;
   const pending = order();
-  const msg = cx.cxOrderMessage(pending, money, "+961 71 062 768").msg;
+  const built = cx.cxOrderMessage(pending, money, "+961 71 062 768");
+  const msg = built.msg;
+  assert.equal(built.title, "Order C-0123456789abcdef01 saved");
+  assert.equal(built.lead, "Last step: send it to us on WhatsApp (+961 71 062 768). We reply with prices and real photos.");
   const urls = [
     PHONE,
     PHONE_BLUE,
@@ -118,34 +121,79 @@ test("order message keeps the existing wording and adds one link under every ite
     "https://connectifystore.vercel.app/?p=ph&id=cx14&v=1",
     "https://connectifystore.vercel.app/?p=acc&id=a18"
   ];
-  const lines = [
-    "Hi Connectify! Order C-0123456789abcdef01",
-    "• iPhone 17 Pro Max, 256GB, Silver, New, Nano-SIM + eSIM ($1542)\n\nProduct link: " + PHONE,
-    "• iPhone 17 Pro Max, 256GB, Deep Blue, New, Nano-SIM + eSIM ($1542)\n\nProduct link: " + PHONE_BLUE,
-    "• Galaxy S26 Ultra, 256GB, Black, New, Nano-SIM + eSIM ($1356)",
-    "• Silicone Case, iPhone 16 ($14.5)\n\nProduct link: " + CASE_A,
-    "• Silicone Case, Galaxy S24 Ultra ($14.5)\n\nProduct link: " + CASE_B,
-    "• Galaxy Tab A11, Gray, 8GB/128GB, New ($197)\n\nProduct link: " + TABLET,
-    "• Galaxy Tab A11, Silver, 8GB/128GB, New ($197)\n\nProduct link: " + TABLET_OUT,
-    "• Tempered Glass Screen Protector, iPhone 12 Pro Max ($7.5)",
-    "• Samsung Adapter 25W, Black 25W ($17.5)",
-    "• Karl Lagerfeld silicone cover, iPhone 16 Pro Max, pink or black\n\nProduct link: " + urls.at(-1),
+  const expected = [
+    "*CONNECTIFY — NEW ORDER*",
+    "Order: C-0123456789abcdef01",
+    "",
+    "*CUSTOMER DETAILS*",
+    "Name: Karim",
+    "Area: Beirut",
+    "Address: Hamra street building 4",
+    "",
+    "*ORDER ITEMS*",
+    "",
+    "*1. iPhone 17 Pro Max*",
+    "256GB, Silver, New, Nano-SIM + eSIM",
+    "Price: $1542",
+    urls[0],
+    "",
+    "*2. iPhone 17 Pro Max*",
+    "256GB, Deep Blue, New, Nano-SIM + eSIM",
+    "Price: $1542",
+    urls[1],
+    "",
+    "*3. Galaxy S26 Ultra*",
+    "256GB, Black, New, Nano-SIM + eSIM",
+    "Price: $1356",
+    urls[2],
+    "",
+    "*4. Silicone Case*",
+    "iPhone 16",
+    "Price: $14.5",
+    urls[3],
+    "",
+    "*5. Silicone Case*",
+    "Galaxy S24 Ultra",
+    "Price: $14.5",
+    urls[4],
+    "",
+    "*6. Galaxy Tab A11*",
+    "Gray, 8GB/128GB, New",
+    "Price: $197",
+    urls[5],
+    "",
+    "*7. Galaxy Tab A11*",
+    "Silver, 8GB/128GB, New",
+    "Price: $197",
+    urls[6],
+    "",
+    "*8. Tempered Glass Screen Protector*",
+    "iPhone 12 Pro Max",
+    "Price: $7.5",
+    urls[7],
+    "",
+    "*9. Samsung Adapter 25W*",
+    "Black 25W",
+    "Price: $17.5",
+    urls[8],
+    "",
+    "*10. Karl Lagerfeld silicone cover*",
+    "iPhone 16 Pro Max, pink or black",
+    urls[9],
+    "",
+    "*ORDER SUMMARY*",
     "Subtotal: $4888 + delivery",
     "Delivery to Beirut, cash on delivery",
-    "Address: Hamra street building 4",
-    "Name: Karim",
+    "",
     "Can you confirm the prices and send me real photos?"
-  ];
-  let at = 0;
-  for (const line of lines) {
-    const i = msg.indexOf(line, at);
-    assert.ok(i >= at, "missing or out of order: " + line + "\n\n" + msg);
-    at = i + line.length;
-  }
-  assert.equal((msg.match(/Product link: /g) || []).length, pending.cart.length);
+  ].join("\n");
+  assert.equal(msg, expected);
+  assert.equal(msg.split("\n").filter(line => line.startsWith("https://")).length, pending.cart.length);
+  assert.equal(msg.includes("Qty:"), false);
   for (const url of urls) {
-    assert.equal(msg.includes(url), true, url);
+    assert.equal(msg.split("\n").includes(url), true, url);
     assert.equal(/\s/.test(url), false, url);
+    assert.equal(url.includes("%25"), false, url);
     const params = new URL(url).searchParams;
     for (const key of params.keys()) assert.ok(["p", "id", "unit", "color", "st", "cond", "sim", "v"].includes(key), key);
   }
@@ -153,16 +201,17 @@ test("order message keeps the existing wording and adds one link under every ite
   assert.equal(msg.includes("70 123 456"), false);
   const wa = new URL("https://wa.me/96171062768?text=" + encodeURIComponent(msg));
   assert.equal(wa.searchParams.get("text"), msg);
+  assert.equal(wa.pathname, "/96171062768");
 
   const bare = cx.cxOrderMessage({
     id: "C-aaaaaaaaaaaaaaaaaa",
     cart: [{key: "phone:14pro", kind: "phone", id: "14pro", unit: "u1", title: "iPhone 14 Pro", detail: "256GB, Space Black", price: 500}],
     form: {name: "Karim", area: "Beirut", address: "Hamra street building 4"}
   }, money, "+961 71 062 768").msg;
-  assert.match(bare, /Hi Connectify! Order C-aaaaaaaaaaaaaaaaaa/);
-  assert.match(bare, /• iPhone 14 Pro, 256GB, Space Black \(\$500\)/);
-  assert.match(bare, /Product link: https:\/\/connectifystore\.vercel\.app\/\?p=phone&id=14pro&unit=u1\n/);
+  assert.match(bare, /\*CONNECTIFY — NEW ORDER\*\nOrder: C-aaaaaaaaaaaaaaaaaa/);
+  assert.match(bare, /\*1\. iPhone 14 Pro\*\n256GB, Space Black\nPrice: \$500\nhttps:\/\/connectifystore\.vercel\.app\/\?p=phone&id=14pro&unit=u1\n/);
   assert.doesNotMatch(bare, /color=/);
+  assert.equal((bare.match(/^\*\d+\. /gm) || []).length, 1);
 
   const trade = cx.cxTradeMessage({id: "T-aaaaaaaaaaaaaaaaaa", form: {modelName: "iPhone 14 Pro", detail: "256GB", est: "$400", name: "Karim"}}, "+961").msg;
   assert.match(trade, /Hi Connectify! Trade-in request T-aaaaaaaaaaaaaaaaaa/);
@@ -178,10 +227,111 @@ test("order message keeps the existing wording and adds one link under every ite
     items: [{kind: "ph", id: "cx12", vi: 0, title: "Apple Adapter 25W", detail: "White, 25W", price: 38}],
     form: {name: "Karim", area: "Beirut", address: "Hamra street building 4"}
   }, money, "+961 71 062 768").msg;
-  assert.match(stored, /• Apple Adapter 25W, White, 25W \(\$38\)\n\nProduct link: https:\/\/connectifystore\.vercel\.app\/\?p=ph&id=cx12&v=0/);
+  assert.match(stored, /\*1\. Apple Adapter 25W\*\nWhite, 25W\nPrice: \$38\nhttps:\/\/connectifystore\.vercel\.app\/\?p=ph&id=cx12&v=0\n/);
   assert.match(stored, /Can you confirm the prices and send me real photos\?/);
+  const sparse = cx.cxOrderMessage({
+    id: "C-cccccccccccccccccc",
+    cart: [{key: "acc:a18", kind: "acc", id: "a18", title: "Karl Lagerfeld silicone cover", detail: "", price: null}],
+    form: {}
+  }, money, "+961 71 062 768").msg;
+  assert.equal(sparse.includes("*CUSTOMER DETAILS*"), false);
+  assert.equal(sparse.includes("Name:"), false);
+  assert.equal(sparse.includes("Address:"), false);
+  assert.equal(sparse.includes("Delivery to"), false);
+  assert.equal(sparse.includes("Subtotal:"), false);
+  assert.equal(sparse.includes("Price:"), false);
+  assert.match(sparse, /\*1\. Karl Lagerfeld silicone cover\*\nhttps:\/\/connectifystore\.vercel\.app\/\?p=acc&id=a18\n/);
+  assert.match(sparse, /\*ORDER SUMMARY\*\nCash on delivery\n\nCan you confirm the prices and send me real photos\?/);
+  const counted = cx.cxOrderMessage({
+    id: "C-dddddddddddddddddd",
+    cart: [
+      {key: "ph:cx14:0", kind: "ph", id: "cx14", vi: 0, title: "Samsung Adapter 25W", detail: "White 25W", price: 10, qty: 3},
+      {key: "ph:cx2:0", kind: "ph", id: "cx2", vi: 0, title: "Galaxy Tab A11", detail: "Gray", price: 5}
+    ],
+    form: {name: "Karim", area: "Beirut", address: "Hamra street building 4"}
+  }, money, "+961 71 062 768").msg;
+  assert.match(counted, /Qty: 3/);
+  assert.equal(counted.includes("Qty: 5"), false);
+  assert.match(counted, /Subtotal: \$15 \+ delivery/);
   assert.match(html, /window\.cxOrderMessage\(\{id,cart:snap/);
   assert.equal(html.includes("cart.map(i=>`• ${i.title}"), false);
+});
+
+test("a phone-width order receipt stays readable for phones, chargers, and a tablet", async () => {
+  await boot;
+  const context = await browser.newContext({viewport: {width: 390, height: 844}, locale: "en-US"});
+  const page = await context.newPage();
+  const orderPosts = [];
+  await page.route("**/*supabase.co/**", route => {
+    const method = route.request().method();
+    const url = route.request().url();
+    if (method === "POST" && url.includes("/rest/v1/orders")) {
+      orderPosts.push(route.request().postData());
+      return route.fulfill({status: 201, contentType: "application/json", body: "[]"});
+    }
+    return route.abort();
+  });
+  await page.goto(origin + "/", {waitUntil: "domcontentloaded", timeout: 60000});
+  await page.waitForFunction(() => window.LIVE && LIVE.ready && typeof addPH === "function" && typeof CX_CHECKOUT === "function", null, {timeout: 60000});
+  await page.evaluate(() => {
+    openPhone("17promax", "Silver");
+    document.querySelector("#pvAdd").click();
+    addPH(PHmap.get("cx14"), 0);
+    addPH(PHmap.get("cx14"), 1);
+    addPH(PHmap.get("cx2"), 0);
+    addPH(PHmap.get("cx11"), 0);
+    openCart(true);
+    document.querySelector("#oName").value = "Karim";
+    document.querySelector("#oPhone").value = "70 123 456";
+    const area = document.querySelector("#oArea");
+    if (![...area.options].some(option => option.value === "Beirut")) area.innerHTML = '<option value="Beirut">Beirut</option>';
+    area.value = "Beirut";
+    document.querySelector("#oAddr").value = "Hamra street building 4";
+  });
+  await page.click("#checkout");
+  await page.waitForFunction(() => document.querySelector("#waModal").classList.contains("on"), null, {timeout: 20000});
+  const bubble = await page.evaluate(() => document.querySelector("#bubble").textContent);
+  const layout = await page.evaluate(() => {
+    const box = document.querySelector("#waModal .mbox");
+    const text = document.querySelector("#bubble").textContent;
+    return {
+      whiteSpace: getComputedStyle(document.querySelector("#bubble")).whiteSpace,
+      scrolls: getComputedStyle(box).overflowY,
+      wider: box.getBoundingClientRect().width > window.innerWidth + 1,
+      urls: text.split("\n").filter(line => line.startsWith("https://"))
+    };
+  });
+  await page.locator("#waModal .mbox").screenshot({path: path.join(shots, "order-receipt-mobile.png")});
+  assert.equal(layout.whiteSpace, "pre-line");
+  assert.match(layout.scrolls, /auto|scroll/);
+  assert.equal(layout.wider, false);
+  assert.equal(layout.urls.length, 5);
+  assert.ok(layout.urls.every(url => !/\s/.test(url) && !url.includes("%25")));
+  assert.match(bubble, /\*CONNECTIFY — NEW ORDER\*/);
+  assert.match(bubble, /\*1\. iPhone 17 Pro Max\*/);
+  assert.match(bubble, /256GB, Silver/);
+  assert.ok(layout.urls.some(url => url.includes("p=phone&id=17promax") && url.includes("color=Silver")));
+  assert.ok(layout.urls.some(url => url.includes("id=cx14&v=0")));
+  assert.ok(layout.urls.some(url => url.includes("id=cx14&v=1")));
+  assert.ok(layout.urls.some(url => url.includes("id=cx2&v=0")));
+  assert.ok(layout.urls.some(url => url.includes("id=cx11&v=0")));
+  assert.match(bubble, /Name: Karim/);
+  assert.match(bubble, /Area: Beirut/);
+  assert.match(bubble, /Address: Hamra street building 4/);
+  assert.match(bubble, /Subtotal: \$/);
+  assert.match(bubble, /Delivery to Beirut, cash on delivery/);
+  assert.match(bubble, /Can you confirm the prices and send me real photos\?/);
+  assert.equal(bubble.includes("70123456"), false);
+  assert.equal(orderPosts.length, 1);
+  const posted = JSON.parse(orderPosts[0]);
+  assert.equal(posted.name, "Karim");
+  assert.equal(posted.area, "Beirut");
+  assert.equal(posted.address, "Hamra street building 4");
+  assert.equal(posted.pay, "Cash on delivery");
+  assert.equal(posted.items.length, 5);
+  const href = await page.evaluate(() => document.querySelector("#waGo").getAttribute("href"));
+  assert.equal(new URL(href).searchParams.get("text"), bubble);
+  await context.close();
 });
 
 async function openPage(urlPath, viewport = {width: 1280, height: 900}, prepare) {
@@ -489,17 +639,26 @@ test("every orderable category gets its own link through checkout, including a c
   await page.click("#checkout");
   await page.waitForFunction(() => document.querySelector("#waModal").classList.contains("on"), null, {timeout: 20000});
   const bubble = await page.evaluate(() => document.querySelector("#bubble").textContent);
+  await page.locator("#waModal .mbox").screenshot({path: path.join(shots, "order-receipt-many.png")});
   const lines = bubble.split("\n");
-  const bullets = lines.filter(line => line.startsWith("• "));
   const pairs = [];
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].startsWith("• ")) continue;
-    let j = i + 1;
-    while (j < lines.length && lines[j] === "") j++;
-    assert.match(lines[j] || "", /^Product link: https:\/\/connectifystore\.vercel\.app\/\?/, "missing link under " + lines[i]);
-    pairs.push({item: lines[i], url: lines[j].slice("Product link: ".length)});
+    if (!/^\*\d+\. /.test(lines[i])) continue;
+    const chunk = [lines[i]];
+    let url = "";
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^\*\d+\. /.test(lines[j]) || lines[j] === "*ORDER SUMMARY*") break;
+      if (lines[j].startsWith("https://")) {
+        assert.equal(url, "", "extra link in " + lines[i]);
+        url = lines[j];
+      } else if (lines[j] !== "") chunk.push(lines[j]);
+    }
+    assert.match(url, /^https:\/\/connectifystore\.vercel\.app\/\?/, "missing link under " + lines[i]);
+    assert.equal(/\s/.test(url), false, url);
+    assert.equal(url.includes("%25"), false, url);
+    pairs.push({item: chunk.join("\n"), url});
   }
-  assert.equal(pairs.length, bullets.length);
+  assert.equal(pairs.length, (bubble.match(/^\*\d+\. /gm) || []).length);
   assert.ok(pairs.some(pair => pair.item.includes("Apple Adapter 25W") && pair.url.includes("id=cx12&v=0")));
   assert.ok(pairs.some(pair => pair.item.includes("Samsung Cable") && pair.url.includes("id=cx16")));
   assert.ok(pairs.some(pair => pair.item.includes("Lightning") && pair.url.includes("id=cx20&v=0")));
@@ -519,12 +678,21 @@ test("every orderable category gets its own link through checkout, including a c
   assert.ok(pairs.some(pair => pair.item.includes("Galaxy S26 Ultra") && pair.url.includes("p=phone&id=s26ultra")));
   assert.ok(pairs.some(pair => pair.url.includes("v=0") && pair.item.includes("Samsung Adapter")) && pairs.some(pair => pair.url.includes("id=cx14&v=1")));
   if (added.shared) assert.ok(pairs.some(pair => pair.url.includes("id=" + added.shared.id)));
-  assert.match(bubble, /Hi Connectify! Order C-/);
-  assert.match(bubble, /Delivery to Beirut, cash on delivery/);
-  assert.match(bubble, /Address: Hamra street building 4/);
+  assert.match(bubble, /\*CONNECTIFY — NEW ORDER\*\nOrder: C-/);
+  assert.match(bubble, /\*CUSTOMER DETAILS\*/);
   assert.match(bubble, /Name: Karim/);
+  assert.match(bubble, /Area: Beirut/);
+  assert.match(bubble, /Address: Hamra street building 4/);
+  assert.match(bubble, /\*ORDER SUMMARY\*/);
+  assert.match(bubble, /Subtotal: \$/);
+  assert.match(bubble, /Delivery to Beirut, cash on delivery/);
   assert.match(bubble, /Can you confirm the prices and send me real photos\?/);
   assert.equal(bubble.includes("70123456"), false);
+  const href = await page.evaluate(() => document.querySelector("#waGo").getAttribute("href"));
+  const wa = new URL(href);
+  assert.equal(wa.hostname, "wa.me");
+  assert.equal(wa.pathname, "/96171062768");
+  assert.equal(wa.searchParams.get("text"), bubble);
   assert.equal(orderPosts.length, 1);
   const storeSnapshot = await page.evaluate(() => localStorage.getItem("connectify-demo-v7"));
   assert.match(storeSnapshot, /nptestone/);
@@ -619,7 +787,7 @@ test("a failed charger checkout keeps the cart and the retry reuses one referenc
   await page.click("#checkout");
   await page.waitForFunction(() => document.querySelector("#waModal").classList.contains("on"), null, {timeout: 20000});
   const bubble = await page.evaluate(() => document.querySelector("#bubble").textContent);
-  assert.match(bubble, /Apple Adapter 25W, White, 25W \(\$38\)\n\nProduct link: https:\/\/connectifystore\.vercel\.app\/\?p=ph&id=cx12&v=0/);
+  assert.match(bubble, /\*1\. Apple Adapter 25W\*\nWhite, 25W\nPrice: \$38\nhttps:\/\/connectifystore\.vercel\.app\/\?p=ph&id=cx12&v=0/);
   assert.equal(codes.length, 2);
   assert.equal(codes[0], codes[1]);
   assert.match(codes[0], /^C-[0-9a-f]{18}$/);
@@ -699,8 +867,8 @@ test("ask for availability carries the same product link as an order", async () 
       cart: [{key: "17promax|Silver|256|new|psim", kind: "phone", id: "17promax", unit: "u12", title: "iPhone 17 Pro Max", detail: "256GB, Silver, New, Nano-SIM + eSIM", price: 1542}],
       form: {name: "Karim", area: "Beirut", address: "Hamra street building 4"}
     }, money, WA_SHOW).msg);
-    assert.match(order, /Hi Connectify! Order C-0123456789abcdef01/);
-    assert.match(order, /Product link: https:\/\/connectifystore\.vercel\.app\/\?p=phone&id=17promax&unit=u12&color=Silver&st=256&cond=new&sim=psim/);
+    assert.match(order, /\*CONNECTIFY — NEW ORDER\*\nOrder: C-0123456789abcdef01/);
+    assert.match(order, /^https:\/\/connectifystore\.vercel\.app\/\?p=phone&id=17promax&unit=u12&color=Silver&st=256&cond=new&sim=psim$/m);
     assert.equal(order.includes("ask about availability"), false);
     assertNoOrderWrites(available);
   } finally {
