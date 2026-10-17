@@ -5,8 +5,8 @@ import {once} from "node:events";
 import {readFileSync} from "node:fs";
 import {PRODUCTION_HOST} from "./hosted-staging-check.mjs";
 import {
-  BLUE, PHONE, PRODUCTION_REF, RECOVERY_TEXT, SILVER, STAGING_HOST, STAGING_ORIGIN, WRITE_OPT_IN,
-  assertCompatibilitySpec, assertPhone, assertPublishableKey, assertReadyTarget, readinessConfig, runReadiness
+  BLUE, COMMIT_PROBE, PHONE, PRODUCTION_REF, RECOVERY_TEXT, SILVER, STAGING_HOST, STAGING_ORIGIN, WRITE_OPT_IN,
+  assertCommitProbe, assertPhone, assertPublishableKey, assertReadyTarget, readinessConfig, runReadiness
 } from "./hosted-migration-readiness.mjs";
 
 const root = "/workspace";
@@ -51,7 +51,7 @@ function fixture(options = {}) {
     signInStatus: options.signInStatus || 200,
     staff: options.staff !== false,
     anonStaff: options.anonStaff === true,
-    spec: options.spec !== false,
+    commit: options.commit || "ready",
     revisionColumn: options.revisionColumn !== false,
     commitStores: options.commitStores !== false,
     commitAudits: options.commitAudits !== false,
@@ -70,7 +70,8 @@ function fixture(options = {}) {
       method,
       path: parsed.pathname,
       audience: staffToken ? "staff" : "anonymous",
-      key: parsed.searchParams.get("key") || ""
+      key: parsed.searchParams.get("key") || "",
+      action: body && body.p_action ? body.p_action : ""
     });
     if (parsed.pathname === "/rest/v1/store_state" && method === "GET") {
       const key = parsed.searchParams.get("key");
@@ -102,11 +103,7 @@ function fixture(options = {}) {
     if (parsed.pathname === "/rest/v1/market_settings") return json(200, staffToken ? JSON.parse(JSON.stringify(state.settings)) : []);
     if (parsed.pathname === "/rest/v1/market_query_config") return json(200, staffToken ? JSON.parse(JSON.stringify(state.config)) : []);
     if (parsed.pathname === "/rest/v1/") {
-      if (!staffToken || !state.spec) return json(200, {paths: {}, definitions: {}});
-      return json(200, {
-        paths: {"/rpc/market_commit_price": {post: {}}},
-        definitions: {store_state: {properties: {key: {}, data: {}, revision: {}}}}
-      });
+      return json(403, {message: "Invalid API key. Only the service_role API key can be used for this endpoint."});
     }
     if (parsed.pathname === "/auth/v1/token") {
       if (state.signInStatus !== 200) return json(state.signInStatus, {error_description: body && body.password});
@@ -133,6 +130,23 @@ function fixture(options = {}) {
       return json(200, id);
     }
     if (parsed.pathname === "/rest/v1/rpc/market_commit_price") {
+      if (!staffToken || state.commit === "forbidden") {
+        return json(401, {code: "42501", message: "permission denied for function market_commit_price"});
+      }
+      if (body && body.p_action === "probe") {
+        if (state.commit === "missing") {
+          return json(404, {code: "PGRST202", message: "Could not find the function public.market_commit_price in the schema cache"});
+        }
+        if (state.commit === "unexpected") return json(200, "00000000-0000-4000-8000-000000000099");
+        if (state.commit === "stale") return json(400, {code: "P0001", message: "stale price"});
+        if (state.commit === "docs") {
+          return json(403, {message: "Invalid API key. Only the service_role API key can be used for this endpoint."});
+        }
+        return json(400, {code: "P0001", message: "manual only", details: null, hint: null});
+      }
+      if (state.commit === "missing") {
+        return json(404, {code: "PGRST202", message: "Could not find the function public.market_commit_price in the schema cache"});
+      }
       if (!state.commitStores) return json(200, nextId(state));
       if (body.p_action === "apply") {
         const existing = state.decisions.find(row => row.status === "applied" && row.apply_key === body.p_apply_key);
@@ -174,7 +188,11 @@ function nextId(state) {
 }
 
 function wrote(state) {
-  return state.calls.some(call => /market_commit_price|market_decide|PATCH/.test(call));
+  return state.trace.some(call => {
+    if (call.method === "PATCH") return true;
+    if (call.path === "/rest/v1/rpc/market_decide") return true;
+    return call.path === "/rest/v1/rpc/market_commit_price" && call.action !== "probe";
+  });
 }
 
 const STAFF_ONLY = new Set([
@@ -182,7 +200,8 @@ const STAFF_ONLY = new Set([
   "/rest/v1/market_settings",
   "/rest/v1/market_query_config",
   "/rest/v1/market_decisions",
-  "/rest/v1/"
+  "/rest/v1/rpc/market_commit_price",
+  "/rest/v1/rpc/market_decide"
 ]);
 
 function assertStaffReadsAfterAuthentication(trace) {
@@ -265,7 +284,21 @@ test("bad hosts, keys, and write flags are refused before network activity", asy
   assert.equal(assertPublishableKey(anon), anon);
   assert.equal(readinessConfig(env()).write, false);
   assert.equal(readinessConfig(env({STAGING_SYNTHETIC_WRITE_CHECK: WRITE_OPT_IN})).write, true);
-  assert.throws(() => assertCompatibilitySpec({paths: {}, definitions: {}}), /market_commit_price is not installed/);
+  assert.doesNotThrow(() => assertCommitProbe({status: 400, body: {code: "P0001", message: "manual only"}}));
+  const rejected = [
+    [{status: 404, body: {code: "PGRST202", message: "Could not find the function public.market_commit_price in the schema cache"}}, /not installed/],
+    [{status: 401, body: {code: "42501", message: "permission denied for function market_commit_price"}}, /not executable/],
+    [{status: 403, body: {code: "42501", message: "permission denied for function market_commit_price"}}, /not executable/],
+    [{status: 403, body: {message: "Invalid API key. Only the service_role API key can be used for this endpoint."}}, /not executable/],
+    [{status: 403, body: {code: "P0001", message: "manual only"}}, /not executable/],
+    [{status: 200, body: "00000000-0000-4000-8000-000000000099"}, /changed data/],
+    [{status: 400, body: {code: "P0001", message: "stale price"}}, /not the pre-lock rejection/],
+    [{status: 400, body: {code: "P0001", message: "already applied"}}, /not the pre-lock rejection/],
+    [{status: 400, body: {message: "manual only"}}, /not the pre-lock rejection/],
+    [{status: 200, body: {paths: {"/rpc/market_commit_price": {post: {}}}}}, /not the pre-lock rejection/],
+    [{status: 500, body: null}, /not the pre-lock rejection/]
+  ];
+  for (const [result, pattern] of rejected) assert.throws(() => assertCommitProbe(result), pattern);
 });
 
 test("authorization failures are rejected before a price write", async () => {
@@ -290,7 +323,7 @@ test("staff authentication happens before every staff-only read", async () => {
   assert.equal(result.writes, false);
   assertStaffReadsAfterAuthentication(ready.trace);
 
-  const missing = fixture({revisionColumn: false, spec: false});
+  const missing = fixture({revisionColumn: false, commit: "missing"});
   await assert.rejects(() => runReadiness({
     env: env({STAGING_SYNTHETIC_WRITE_CHECK: WRITE_OPT_IN}),
     fetchImpl: missing.fetchImpl
@@ -311,7 +344,7 @@ test("read-only preflight passes without a write and reports a missing migration
   assert.equal(wrote(ready), false);
   assert.equal(ready.units.find(item => item.id === "u-stage-1").p, 900);
 
-  const missing = fixture({revisionColumn: false, spec: false});
+  const missing = fixture({revisionColumn: false, commit: "missing"});
   await assert.rejects(() => runReadiness({env: env({STAGING_SYNTHETIC_WRITE_CHECK: WRITE_OPT_IN}), fetchImpl: missing.fetchImpl}), /expected blocker before migrations 10 and 11 are installed[\s\S]*pass synthetic orders[\s\S]*fail migration compatibility/);
   assert.equal(wrote(missing), false);
   assert.equal(missing.units.find(item => item.id === "u-stage-1").p, 900);
@@ -363,7 +396,9 @@ test("opt-in write checks verify apply, retry, stale rejection, and restore from
   assert.equal(server.decisions.filter(row => row.status === "restored").length, 1);
   assert.equal(server.orders[0].status, "confirmed");
   assert.equal(server.calls.some(call => call.startsWith("DELETE")), false);
-  assert.equal(server.calls.filter(call => call === "POST /rest/v1/rpc/market_commit_price").length, 4);
+  const commits = server.trace.filter(call => call.path === "/rest/v1/rpc/market_commit_price");
+  assert.equal(commits.filter(call => call.action === "probe").length, 1);
+  assert.equal(commits.filter(call => call.action === "apply" || call.action === "restore").length, 4);
 
   const accepted = fixture({staleStatus: 200});
   await assert.rejects(() => runReadiness({
@@ -433,5 +468,51 @@ test("the readiness CLI refuses production before a request", async () => {
   const readiness = readFileSync(root + "/test/hosted-migration-readiness.mjs", "utf8");
   assert.equal(readiness.includes("\"DELETE\""), false);
   assert.equal(readiness.includes("STAGING_SERVICE_ROLE"), false);
+  assert.equal(readiness.includes("application/openapi+json"), false);
   assert.equal(readiness.includes("market_observations"), false);
+});
+
+test("a documentation 403 does not prove or replace the price-function probe", async () => {
+  const ready = fixture();
+  const result = await runReadiness({env: env(), fetchImpl: ready.fetchImpl});
+  assert.equal(result.ok, true);
+  assert.equal(result.writes, false);
+  assert.equal(ready.calls.includes("GET /rest/v1/"), false);
+  const probe = ready.trace.filter(call => call.action === "probe");
+  assert.equal(probe.length, 1);
+  assert.equal(probe[0].audience, "staff");
+  assert.equal(probe[0].path, "/rest/v1/rpc/market_commit_price");
+  assert.deepEqual(COMMIT_PROBE, {
+    p_sku: null, p_action: "probe", p_target: null, p_previous: null,
+    p_apply_key: null, p_identity: null, p_proposal: null
+  });
+  assert.equal(ready.units.find(item => item.id === "u-stage-1").p, 900);
+  assert.equal(wrote(ready), false);
+
+  for (const commit of ["missing", "forbidden", "unexpected", "stale", "docs"]) {
+    const server = fixture({commit});
+    await assert.rejects(() => runReadiness({
+      env: env({STAGING_SYNTHETIC_WRITE_CHECK: WRITE_OPT_IN}),
+      fetchImpl: server.fetchImpl
+    }));
+    assert.equal(wrote(server), false);
+    assert.equal(server.units.find(item => item.id === "u-stage-1").p, 900);
+    assert.equal(server.decisions.length, 0);
+    assert.equal(server.calls.includes("GET /rest/v1/"), false);
+  }
+
+  const absent = fixture({commit: "missing"});
+  await assert.rejects(() => runReadiness({env: env(), fetchImpl: absent.fetchImpl}), /expected blocker before migrations 10 and 11 are installed[\s\S]*fail migration compatibility: market_commit_price is not installed/);
+  const denied = fixture({commit: "forbidden"});
+  await assert.rejects(() => runReadiness({env: env(), fetchImpl: denied.fetchImpl}), error => {
+    assert.match(error.message, /market_commit_price is not executable by staging staff/);
+    assert.equal(error.message.includes("expected blocker"), false);
+    return true;
+  });
+  const stale = fixture({commit: "stale"});
+  await assert.rejects(() => runReadiness({env: env(), fetchImpl: stale.fetchImpl}), error => {
+    assert.match(error.message, /probe was not the pre-lock rejection/);
+    assert.equal(error.message.includes("expected blocker"), false);
+    return true;
+  });
 });

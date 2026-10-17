@@ -8,7 +8,9 @@
    The default run is read-only. Anonymous requests read only the public
    inventory and check that private costs and staff permission stay closed.
    Staging staff is authenticated, and is_staff must be true, before orders,
-   market settings, the scheduler, or the price-function listing are read.
+   market settings, the scheduler, or the price-function probe are called.
+   GET /rest/v1/ is not used: Supabase allows that OpenAPI listing only with
+   the service-role key. A 403 from it is not evidence about the function.
 
    Stored rows are read again after every write. An HTTP status is not proof.
    Write checks run only when STAGING_SYNTHETIC_WRITE_CHECK is exactly
@@ -56,7 +58,6 @@ export const SILVER_IDENTITY = {color: "Silver", storage: "256", sim: "psim", co
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const READ_ONLY = new Set([
-  "GET /rest/v1/",
   "GET /rest/v1/store_state",
   "GET /rest/v1/orders",
   "GET /rest/v1/market_settings",
@@ -153,17 +154,44 @@ function unit(data, id) {
   return (Array.isArray(data) ? data : []).find(item => item && item.id === id) || null;
 }
 
-export function assertCompatibilitySpec(body) {
-  if (!body || typeof body !== "object") throw fail("market_commit_price is not installed");
-  const paths = body.paths || {};
-  const found = Object.keys(paths).some(path => path.replace(/\/$/, "") === "/rpc/market_commit_price");
-  if (!found) throw fail("market_commit_price is not installed");
-  const schemas = Object.assign({}, body.definitions, body.components && body.components.schemas);
-  const visible = Object.values(schemas).some(schema => {
-    const properties = schema && schema.properties;
-    return properties && properties.key && properties.data && properties.revision;
-  });
-  if (!visible) throw fail("store_state.revision is not installed");
+// Migrations 10 and 11 both reject this before any lock or write.
+// is_staff() is a select. The next statement raises 'manual only' unless
+// p_action is apply or restore. The sku lock insert is after that raise,
+// after the null-target check, and after the unknown-sku check.
+export const COMMIT_PROBE = {
+  p_sku: null,
+  p_action: "probe",
+  p_target: null,
+  p_previous: null,
+  p_apply_key: null,
+  p_identity: null,
+  p_proposal: null
+};
+
+export function isCommitProbe(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const keys = Object.keys(body).sort().join();
+  return keys === "p_action,p_apply_key,p_identity,p_previous,p_proposal,p_sku,p_target"
+    && body.p_action === "probe"
+    && body.p_sku === null
+    && body.p_target === null
+    && body.p_previous === null
+    && body.p_apply_key === null
+    && body.p_identity === null
+    && body.p_proposal === null;
+}
+
+export function assertCommitProbe(result) {
+  const body = result && result.body;
+  const message = messageOf(body).trim();
+  const code = body && typeof body === "object" && !Array.isArray(body) ? String(body.code || "") : "";
+  if (decisionId(typeof body === "string" ? body : "")) throw fail("market_commit_price probe changed data");
+  if (result && result.status === 400 && code === "P0001" && message === "manual only") return;
+  if (result && (result.status === 404 || code === "PGRST202")) throw fail("market_commit_price is not installed");
+  if (result && (result.status === 401 || result.status === 403 || code === "42501")) {
+    throw fail("market_commit_price is not executable by staging staff");
+  }
+  throw fail("market_commit_price probe was not the pre-lock rejection");
 }
 
 function messageOf(body) {
@@ -186,6 +214,7 @@ function assertAllowed(ctx, method, url, body) {
   try { parsed = new URL(url); } catch { throw fail("refusing a request that is not the hosted staging project"); }
   if (parsed.protocol !== "https:" || parsed.host !== STAGING_HOST) throw fail("refusing a request that is not the hosted staging project");
   const key = String(method || "GET").toUpperCase() + " " + parsed.pathname;
+  if (key === "POST /rest/v1/rpc/market_commit_price" && isCommitProbe(body)) return;
   if (!READ_ONLY.has(key) && !ctx.writesArmed) throw fail("refusing " + key + " before the write opt-in");
   if (!READ_ONLY.has(key)) {
     if (key === "POST /rest/v1/rpc/market_decide") {
@@ -303,12 +332,15 @@ function revisionOf(row) {
   return value;
 }
 
+function expectedInstallBlocker(item) {
+  if (item.name === "revisions") return true;
+  return item.name === "migration compatibility" && item.message === "market_commit_price is not installed";
+}
+
 function finishPreflight(checks) {
   const failed = checks.filter(item => !item.ok);
   if (!failed.length) return;
-  const blockers = new Set(["revisions", "migration compatibility"]);
-  const onlyBlockers = failed.every(item => blockers.has(item.name));
-  const prefix = onlyBlockers ? "expected blocker before migrations 10 and 11 are installed; " : "";
+  const prefix = failed.every(expectedInstallBlocker) ? "expected blocker before migrations 10 and 11 are installed; " : "";
   throw fail(prefix + summaryOf(checks));
 }
 
@@ -382,9 +414,8 @@ async function readOnlyPreflight(ctx) {
     return {units: revisionOf(unitsRow), ph: revisionOf(phoneRow)};
   });
   await check(checks, "migration compatibility", async () => {
-    const result = await request(ctx, "GET", "/rest/v1/", null, {accept: "application/openapi+json"}, "staff");
-    if (result.status !== 200) throw fail("market_commit_price is not installed");
-    assertCompatibilitySpec(result.body);
+    const result = await request(ctx, "POST", "/rest/v1/rpc/market_commit_price", COMMIT_PROBE, null, "staff");
+    assertCommitProbe(result);
   });
   await check(checks, "anonymous session stays anonymous", async () => {
     await assertPrivateCostsHidden(ctx);
