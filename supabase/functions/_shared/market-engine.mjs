@@ -149,6 +149,53 @@ export function activationFromText(text) {
   return null;
 }
 
+export function warrantyProviderFromText(text) {
+  const s = clean(text).toLowerCase();
+  if (!s) return null;
+  if (/apple\s*care|\bapple\s+warrant/.test(s)) return "apple";
+  if (/\bsamsung\s+warrant/.test(s)) return "samsung";
+  if (/\b(seller|shop|store|dealer)\s+warrant/.test(s)) return "seller";
+  if (/\binternational\s+warrant/.test(s)) return "international";
+  if (/\blocal\s+warrant/.test(s)) return "local";
+  return null;
+}
+
+export const PROPOSED_QUOTE_MAX_AGE_HOURS = 72;
+
+export function safeListingUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    if (url.protocol !== "https:" && url.protocol !== "http:") return "";
+    if (url.username || url.password) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+export function quoteAgeHours(checkedAt, now) {
+  const at = Date.parse(checkedAt || "");
+  const clock = Date.parse(now || "");
+  if (!Number.isFinite(at) || !Number.isFinite(clock)) return null;
+  return (clock - at) / 36e5;
+}
+
+export function listingEvidence(obs) {
+  if (!obs) return {ok: false, reason: "missing_quote"};
+  if (clean(obs.store).length < 2) return {ok: false, reason: "missing_store"};
+  const rawUrl = String(obs.url || "").trim();
+  if (!rawUrl) return {ok: false, reason: "missing_url"};
+  if (!safeListingUrl(rawUrl)) return {ok: false, reason: "unsafe_url"};
+  if (!(Number(obs.price) > 0)) return {ok: false, reason: "missing_price"};
+  const code = String(obs.currency || "").toUpperCase();
+  if (code !== "USD" && code !== "LBP") return {ok: false, reason: "unsupported_currency"};
+  if (obs.status === "failed") return {ok: false, reason: obs.error || "failed"};
+  if (obs.status === "out_of_stock" || obs.available === false) return {ok: false, reason: "out_of_stock"};
+  if (obs.status === "incomplete" || obs.status === "unverified_stock" || obs.available !== true) return {ok: false, reason: obs.error || "unverified_stock"};
+  if (!Number.isFinite(Date.parse(obs.checkedAt || ""))) return {ok: false, reason: "missing_checked_at"};
+  return {ok: true};
+}
+
 function modelFrom(text) {
   const s = clean(text);
   const rules = [
@@ -238,6 +285,7 @@ export function parseSpecs(text, hints) {
     sim: extra.sim || sim,
     color: extra.color ? (colorFromText(extra.color) || String(extra.color).toLowerCase()) : colorFromText(s),
     warrantyYears: extra.warrantyYears != null && extra.warrantyYears !== "" ? Number(extra.warrantyYears) : (warranty ? Number(warranty[1]) : null),
+    warrantyProvider: extra.warrantyProvider || warrantyProviderFromText(s),
     region: extra.region || region,
     activation: extra.activation || activationFromText(s),
     listing: isAccessory(s) ? "accessory" : (identity.model || extra.model ? "phone" : "other")
@@ -484,7 +532,7 @@ export function matchReport(catalog, observations, settings) {
   return {relevant: phones.length, high: high.length, review: review.length, unmatched: unmatched.length, highSkus: high, reviewSkus: review, unmatchedSkus: unmatched};
 }
 
-const FACT_FIELDS = ["warrantyYears", "region", "sim", "condition"];
+const FACT_FIELDS = ["warrantyYears", "warrantyProvider", "region", "sim", "condition", "activation"];
 
 export function applyVerifiedFacts(sku, facts) {
   if (!sku || !facts || facts.verified !== true) return sku;
@@ -652,7 +700,9 @@ export function parseManualCsv(text, checkedAt) {
       sim: get("sim") || null,
       color: get("color") || null,
       warrantyYears: get("warranty") || null,
-      region: get("region") || null
+      region: get("region") || null,
+      activation: get("activation") || null,
+      warrantyProvider: get("warranty_provider") || get("warrantyprovider") || null
     });
     let status = "ok";
     let error = "";
@@ -679,6 +729,8 @@ function same(a, b) {
   return String(a).toLowerCase() === String(b).toLowerCase();
 }
 
+const PHONE_MUST_STATE = new Set(["storage", "color", "condition", "sim", "warrantyYears", "warrantyProvider", "region", "activation"]);
+
 export function matchPair(sku, obs) {
   const a = sku.specs || {};
   const b = (obs && obs.specs) || {};
@@ -690,23 +742,20 @@ export function matchPair(sku, obs) {
   if (!a.model || !b.model || !same(a.model, b.model)) return {level: "reject", reasons: ["model"]};
   const reasons = [];
   let uncertain = false;
-  for (const field of ["storage", "ram", "condition", "sim", "color", "warrantyYears", "region", "activation"]) {
+  for (const field of ["storage", "ram", "condition", "sim", "color", "warrantyYears", "warrantyProvider", "region", "activation"]) {
     const left = a[field];
     const right = b[field];
     const leftMissing = left == null || left === "";
     const rightMissing = right == null || right === "";
-    if (leftMissing && rightMissing) continue;
+    if (leftMissing && rightMissing) {
+      if (sku.kind === "phone" && PHONE_MUST_STATE.has(field)) {
+        uncertain = true;
+        reasons.push("missing_" + field);
+      }
+      continue;
+    }
     if (leftMissing || rightMissing) { uncertain = true; reasons.push("missing_" + field); continue; }
     if (!same(left, right)) return {level: "reject", reasons: ["conflict_" + field]};
-  }
-  if (sku.kind === "phone") {
-    for (const field of ["storage", "condition", "sim"]) {
-      if (a[field] == null || a[field] === "" || b[field] == null || b[field] === "") {
-        uncertain = true;
-        const reason = "missing_" + field;
-        if (!reasons.includes(reason)) reasons.push(reason);
-      }
-    }
   }
   if (uncertain) return {level: "review", reasons};
   return {level: "high", reasons: []};
@@ -754,6 +803,13 @@ export function evaluate(catalog, observations, settings, history) {
     for (const sku of catalog || []) {
       const result = matchPair(sku, obs);
       if (result.level === "reject") { rejectReasons = result.reasons; continue; }
+      if (result.level === "high") {
+        const evidence = listingEvidence(obs);
+        if (!evidence.ok) {
+          hits.push({obs, sku, level: "review", reasons: [evidence.reason]});
+          continue;
+        }
+      }
       hits.push({obs, sku, level: result.level, reasons: result.reasons});
     }
     if (!hits.length) matches.push({obs, sku: null, level: "reject", reasons: rejectReasons});
@@ -851,4 +907,103 @@ export function canApply(proposal, settings, decision, mode) {
 export function canRestore(entry) {
   if (!entry || !(entry.previous > 0) || !entry.sku) return {ok: false, reason: "no_previous_price"};
   return {ok: true, price: entry.previous, sku: entry.sku, ref: entry.ref, kind: entry.kind};
+}
+
+function simulationEligibility(proposal, now) {
+  const notes = proposal.notes || [];
+  const reasons = proposal.reasons || [];
+  const age = quoteAgeHours(proposal.checkedAt, now);
+  if (proposal.confidence === "high" && proposal.checkedAt && now && age != null && age < 0) {
+    return {eligibility: "Needs verification", reason: "quote_in_future", eligible: false};
+  }
+  if (proposal.confidence === "high" && proposal.checkedAt && now && age != null && age > PROPOSED_QUOTE_MAX_AGE_HOURS) {
+    return {eligibility: "Stale quote", reason: "quote_older_than_" + PROPOSED_QUOTE_MAX_AGE_HOURS + "h", eligible: false};
+  }
+  if (proposal.confidence !== "high") {
+    if (notes.includes("unsupported_currency") || notes.includes("unverified_exchange_rate") || notes.includes("sudden_change")) {
+      return {eligibility: "Needs verification", reason: notes.find(note => note === "unsupported_currency" || note === "unverified_exchange_rate" || note === "sudden_change"), eligible: false};
+    }
+    if (reasons.some(reason => String(reason).startsWith("missing_") || reason === "unsafe_url" || reason === "missing_url" || reason === "missing_store" || reason === "missing_checked_at" || reason === "unverified_stock")) {
+      return {eligibility: reasons.some(reason => String(reason).startsWith("missing_") && !["missing_url", "missing_store", "missing_checked_at", "missing_price"].includes(reason)) ? "Insufficient product specifications" : "Needs verification", reason: reasons.join(", "), eligible: false};
+    }
+    if (proposal.confidence === "review") return {eligibility: "Needs verification", reason: reasons.join(", ") || proposal.block || "needs_review", eligible: false};
+    return {eligibility: "No reliable competitor match", reason: proposal.block || "no_verified_price", eligible: false};
+  }
+  if (proposal.block === "below_margin" || proposal.block === "negative_profit") {
+    return {eligibility: "Blocked by margin", reason: proposal.block, eligible: false};
+  }
+  if (proposal.block) return {eligibility: "Needs verification", reason: proposal.block, eligible: false};
+  if (!now) return {eligibility: "Needs verification", reason: "quote_age_not_checked", eligible: false};
+  return {eligibility: "Eligible for review", reason: "ready_for_manual_review", eligible: true};
+}
+
+function quoteProblem(sku, observations) {
+  let failed = false;
+  for (const obs of observations || []) {
+    if (!obs) continue;
+    if (obs.status === "failed") { failed = true; continue; }
+    if (obs.available === false || obs.status === "out_of_stock") {
+      const pair = matchPair(sku, obs);
+      if (pair.level !== "reject") return "out_of_stock";
+    }
+    if (obs.status === "unverified_stock" || obs.status === "incomplete" || obs.available == null) {
+      const pair = matchPair(sku, obs);
+      if (pair.level !== "reject") return obs.error || obs.status || "unverified_stock";
+    }
+  }
+  return failed ? "failed_collector" : "";
+}
+
+export function simulatePrices(input) {
+  const source = input || {};
+  const settings = Object.assign({}, DEFAULT_SETTINGS, source.settings || {});
+  const facts = source.facts || {};
+  const catalog = (source.catalog || []).map(sku => applyVerifiedFacts(sku, facts[sku.sku]));
+  const observations = source.observations || [];
+  const result = evaluate(catalog, observations, settings, source.history || []);
+  const now = source.now || null;
+  const bySku = new Map(catalog.map(sku => [sku.sku, sku]));
+  const rows = result.proposals.map(proposal => {
+    const decision = simulationEligibility(proposal, now);
+    const problem = quoteProblem(bySku.get(proposal.sku), observations);
+    if (!decision.eligible && decision.eligibility === "No reliable competitor match" && problem) {
+      decision.eligibility = problem === "out_of_stock" ? "Needs verification" : "No reliable competitor match";
+      decision.reason = problem;
+    }
+    const observed = proposal.competitor;
+    const calculatedTarget = proposal.target;
+    const target = decision.eligible ? calculatedTarget : null;
+    const current = proposal.current;
+    return {
+      sku: proposal.sku,
+      title: proposal.title,
+      detail: proposal.detail || "",
+      current,
+      store: decision.eligible || proposal.confidence === "high" ? proposal.store : "",
+      url: safeListingUrl(proposal.url),
+      observed: proposal.confidence === "high" ? observed : null,
+      target,
+      calculatedTarget: proposal.confidence === "high" ? calculatedTarget : null,
+      difference: target != null && current > 0 ? round2(target - current) : null,
+      margin: decision.eligible ? proposal.margin : null,
+      profit: decision.eligible ? proposal.profit : null,
+      confidence: proposal.confidence,
+      ageHours: quoteAgeHours(proposal.checkedAt, now),
+      eligibility: decision.eligibility,
+      eligible: decision.eligible,
+      reason: decision.reason,
+      block: proposal.block
+    };
+  });
+  return {
+    mode: "simulation",
+    written: false,
+    pricesChanged: false,
+    approved: false,
+    automationEnabled: false,
+    writesEnabled: false,
+    schedulerEnabled: false,
+    proposedMaxAgeHours: PROPOSED_QUOTE_MAX_AGE_HOURS,
+    rows
+  };
 }

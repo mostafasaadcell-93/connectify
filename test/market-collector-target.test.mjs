@@ -53,10 +53,10 @@ test("a collection summary keeps exact matches separate from review rows", () =>
   const observations = [{
     store: "Class Cellulars", name: "iPhone 17 Pro Max 256GB Silver new nano-SIM", price: 880, currency: "USD",
     url: "https://classcellulars.com/example", available: true, checkedAt: "2026-10-15T00:00:00.000Z", status: "ok",
-    specs: {brand: "apple", model: "17promax", storage: 256, condition: "new", sim: "psim", color: "silver", warrantyYears: null, region: null}
+    specs: {brand: "apple", model: "17promax", storage: 256, condition: "new", sim: "psim", color: "silver", warrantyYears: 1, warrantyProvider: "apple", region: "us", activation: "inactive"}
   }];
   const summary = collectionSummary({observations, checked: [{store: "Class Cellulars"}], errors: [], skipped: [], requests: 1, checkedAt: observations[0].checkedAt}, [
-    {id: "u-stage-1", m: "17promax", c: "Silver", st: 256, cond: "new", sim: "psim", p: 900, qty: 2}
+    {id: "u-stage-1", m: "17promax", c: "Silver", st: 256, cond: "new", sim: "psim", p: 900, qty: 2, warrantyYears: 1, warrantyProvider: "apple", region: "us", activation: "inactive"}
   ], [], []);
   assert.equal(summary.exactMatches, 1);
   assert.equal(summary.pricesChanged, 0);

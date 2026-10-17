@@ -5,7 +5,7 @@ import {
   DEFAULT_SETTINGS, undercut, toUsd, parseSpecs, observationsFromWoo, observationsFromShopify,
   observationsFromShopifySuggest, observationsFromShopifyJs, coverageQueries, coverageUrl,
   decideRecord, parseManualCsv, matchPair, evaluate, canApply, canRestore, applyVerifiedFacts,
-  inspectStored, confirmReadback, schedulerDecision, selectCoverageBatch
+  inspectStored, confirmReadback, schedulerDecision, selectCoverageBatch, simulatePrices
 } from "../market/engine.mjs";
 import {runCoverage} from "../market/coverage.mjs";
 
@@ -24,6 +24,14 @@ function quote(overrides) {
     url: "https://najemstarcall.com/product/iphone-17-pro-max", available: true, checkedAt: "2026-10-15T09:00:00Z",
     status: "ok", error: "", specs
   }, overrides, {specs});
+}
+
+const identity = {warrantyYears: 1, warrantyProvider: "apple", region: "us", activation: "inactive"};
+function withIdentity(item, extra = {}) {
+  return Object.assign({}, item, extra, {specs: Object.assign({}, item.specs, identity, extra.specs || {})});
+}
+function readyQuote(overrides = {}) {
+  return quote(Object.assign({}, overrides, {specs: Object.assign({}, identity, overrides.specs || {})}));
 }
 
 test("price tiers use one band and never invent a missing price", () => {
@@ -56,16 +64,24 @@ test("an eSIM-only listing does not match a physical SIM unit", () => {
   const missingSim = quote({specs: {sim: null}});
   assert.equal(matchPair(phone, missingSim).level, "review");
   const exact = quote({});
-  assert.equal(matchPair(phone, exact).level, "high");
+  assert.equal(matchPair(phone, exact).level, "review");
+  assert.equal(matchPair(phone, exact).reasons.includes("missing_warrantyYears"), true);
+  assert.equal(matchPair(phone, exact).reasons.includes("missing_region"), true);
+  assert.equal(matchPair(phone, exact).reasons.includes("missing_activation"), true);
+  const ready = quote({specs: {warrantyYears: 1, warrantyProvider: "apple", region: "us", activation: "inactive"}});
+  const readyPhone = Object.assign({}, phone, {specs: Object.assign({}, phone.specs, ready.specs)});
+  assert.equal(matchPair(readyPhone, ready).level, "high");
 });
 
 test("names are parsed without treating a different variant as the same phone", () => {
-  const parsed = parseSpecs("Apple iPhone 17 Pro Max 256GB 1 SIM UK (2 Years Warranty) Silver New");
+  const parsed = parseSpecs("Apple iPhone 17 Pro Max 256GB 1 SIM UK Apple warranty (2 Years Warranty) Silver New Not Active");
   assert.equal(parsed.model, "17promax");
   assert.equal(parsed.storage, 256);
   assert.equal(parsed.sim, "psim");
   assert.equal(parsed.region, "uk");
   assert.equal(parsed.warrantyYears, 2);
+  assert.equal(parsed.warrantyProvider, "apple");
+  assert.equal(parsed.activation, "inactive");
   assert.equal(parsed.condition, "new");
   assert.equal(parsed.color, "silver");
   assert.equal(parseSpecs("iPhone 17 Pro Max 256GB Space Black").color, "space black");
@@ -75,11 +91,12 @@ test("names are parsed without treating a different variant as the same phone", 
   assert.equal(matchPair(phone, {specs: parsed}).reasons.includes("missing_region"), true);
   assert.equal(matchPair(phone, {specs: parsed}).reasons.includes("missing_warrantyYears"), true);
   const stated = parseSpecs("iPhone 17 Pro Max 256GB Silver 1 SIM New");
-  assert.equal(matchPair(phone, {specs: stated}).level, "high");
+  assert.equal(matchPair(phone, {specs: stated}).level, "review");
+  assert.equal(matchPair(phone, {specs: stated}).reasons.includes("missing_warrantyYears"), true);
   const unverified = applyVerifiedFacts(phone, {verified: false, warrantyYears: 2, region: "uk"});
   assert.equal(unverified.specs.warrantyYears, null);
   assert.equal(unverified.price, 1542);
-  const verified = applyVerifiedFacts(phone, {verified: true, warrantyYears: 2, region: "uk", sim: "esim"});
+  const verified = applyVerifiedFacts(phone, {verified: true, warrantyYears: 2, warrantyProvider: "apple", region: "uk", activation: "inactive", sim: "esim"});
   assert.equal(verified.specs.warrantyYears, 2);
   assert.equal(verified.specs.region, "uk");
   assert.equal(verified.specs.sim, "psim");
@@ -114,12 +131,12 @@ test("names are parsed without treating a different variant as the same phone", 
 });
 
 test("the lowest verified in-stock quote sets the recommendation", () => {
-  const high = quote({store: "Class Cellulars", price: 1600, url: "https://classcellulars.com/p/1"});
-  const lower = quote({store: "Gadgetlb", price: 1500, url: "https://gadgetlb.com/p/1"});
-  const soldOut = quote({store: "Phonefinity", price: 1400, url: "https://phonefinity.net/p/1", available: false, status: "out_of_stock"});
-  const ambiguous = quote({store: "Abed Tahan", price: 1300, url: "https://abedtahan.com/p/1", specs: {sim: null}});
+  const high = readyQuote({store: "Class Cellulars", price: 1600, url: "https://classcellulars.com/p/1"});
+  const lower = readyQuote({store: "Gadgetlb", price: 1500, url: "https://gadgetlb.com/p/1"});
+  const soldOut = readyQuote({store: "Phonefinity", price: 1400, url: "https://phonefinity.net/p/1", available: false, status: "out_of_stock"});
+  const ambiguous = readyQuote({store: "Abed Tahan", price: 1300, url: "https://abedtahan.com/p/1", specs: {sim: null}});
   const failed = {store: "BMS", name: "Galaxy", price: null, currency: "USD", url: "", available: null, status: "failed", error: "timeout", specs: {}};
-  const result = evaluate([phone], [high, lower, soldOut, ambiguous, failed], {minMarginPct: 2}, []);
+  const result = evaluate([withIdentity(phone)], [high, lower, soldOut, ambiguous, failed], {minMarginPct: 2}, []);
   const proposal = result.proposals[0];
   assert.equal(proposal.competitor, 1500);
   assert.equal(proposal.store, "Gadgetlb");
@@ -129,19 +146,19 @@ test("the lowest verified in-stock quote sets the recommendation", () => {
   assert.equal(proposal.sources.some(source => source.price === 1400), false);
   assert.equal(result.matches.some(match => match.level === "exclude" && match.reasons.includes("out_of_stock")), true);
   assert.equal(result.matches.some(match => match.obs.store === "Abed Tahan" && match.level === "review"), true);
-  const twin = Object.assign({}, phone, {sku: "unit:u13", ref: {unit: "u13"}});
-  const both = evaluate([phone, twin], [quote({price: 1515})], {minMarginPct: 2}, []);
+  const twin = withIdentity(phone, {sku: "unit:u13", ref: {unit: "u13"}});
+  const both = evaluate([withIdentity(phone), twin], [readyQuote({price: 1515})], {minMarginPct: 2}, []);
   assert.equal(both.proposals.every(row => row.competitor === 1515 && row.target === 1511.97), true);
 });
 
 test("missing cost, a thin margin, a jump, or a currency without a rate blocks the change", () => {
-  const row = quote({price: 1515});
-  const noCost = evaluate([Object.assign({}, phone, {cost: null})], [row], {minMarginPct: 5}, []);
+  const row = readyQuote({price: 1515});
+  const noCost = evaluate([withIdentity(phone, {cost: null})], [row], {minMarginPct: 5}, []);
   assert.equal(noCost.proposals[0].block, "missing_cost");
-  const tight = evaluate([Object.assign({}, phone, {cost: 1490})], [row], {minMarginPct: 5}, []);
+  const tight = evaluate([withIdentity(phone, {cost: 1490})], [row], {minMarginPct: 5}, []);
   assert.equal(tight.proposals[0].block, "below_margin");
   assert.equal(tight.proposals[0].explanation.includes("minimum margin"), true);
-  const loss = evaluate([Object.assign({}, phone, {cost: 1600})], [row], {minMarginPct: 2}, []);
+  const loss = evaluate([withIdentity(phone, {cost: 1600})], [row], {minMarginPct: 2}, []);
   assert.equal(loss.proposals[0].block, "negative_profit");
   assert.equal(loss.proposals[0].target > 0, true);
   const caseQuote = quote({name: "Clear Case for iPhone 17 Pro Max", price: 25, url: "https://gadgetlb.com/case", specs: parseSpecs("Clear Case for iPhone 17 Pro Max")});
@@ -153,23 +170,23 @@ test("missing cost, a thin margin, a jump, or a currency without a rate blocks t
   assert.equal(reviewOnly.proposals[0].target, null);
   assert.equal(reviewOnly.proposals[0].reviewPrice, 1515);
   assert.equal(reviewOnly.proposals[0].reasons.includes("missing_condition"), true);
-  const sudden = evaluate([phone], [row], {minMarginPct: 2}, [{store: row.store, url: row.url, currency: "USD", price: 1000, checkedAt: "2026-10-14T09:00:00Z"}]);
+  const sudden = evaluate([withIdentity(phone)], [row], {minMarginPct: 2}, [{store: row.store, url: row.url, currency: "USD", price: 1000, checkedAt: "2026-10-14T09:00:00Z"}]);
   assert.equal(sudden.proposals[0].block, "no_verified_price");
   assert.equal(sudden.proposals[0].notes.includes("sudden_change"), true);
-  const older = quote({price: 1000, checkedAt: "2026-10-14T09:00:00Z"});
-  const newer = quote({price: 1515, checkedAt: "2026-10-15T09:00:00Z"});
-  const stale = evaluate([phone], [older, newer], {minMarginPct: 2}, [older, newer]);
+  const older = readyQuote({price: 1000, checkedAt: "2026-10-14T09:00:00Z"});
+  const newer = readyQuote({price: 1515, checkedAt: "2026-10-15T09:00:00Z"});
+  const stale = evaluate([withIdentity(phone)], [older, newer], {minMarginPct: 2}, [older, newer]);
   assert.equal(stale.proposals[0].block, "no_verified_price");
   assert.equal(stale.proposals[0].competitor, null);
-  const lbp = quote({price: 135000000, currency: "LBP"});
-  assert.equal(evaluate([phone], [lbp], {minMarginPct: 2}, []).proposals[0].block, "no_verified_price");
-  const converted = evaluate([phone], [lbp], {minMarginPct: 2, lbpPerUsd: 90000, lbpRateVerified: true}, []);
+  const lbp = readyQuote({price: 135000000, currency: "LBP"});
+  assert.equal(evaluate([withIdentity(phone)], [lbp], {minMarginPct: 2}, []).proposals[0].block, "no_verified_price");
+  const converted = evaluate([withIdentity(phone)], [lbp], {minMarginPct: 2, lbpPerUsd: 90000, lbpRateVerified: true}, []);
   assert.equal(converted.proposals[0].competitor, 1500);
   assert.equal(toUsd(100, "EUR", {}).reason, "unsupported_currency");
 });
 
 test("manual approval does not require scheduled automation, and automatic updates stay off", () => {
-  const proposal = evaluate([phone], [quote({price: 1515})], {minMarginPct: 2}, []).proposals[0];
+  const proposal = evaluate([withIdentity(phone)], [readyQuote({price: 1515})], {minMarginPct: 2}, []).proposals[0];
   const manual = canApply(proposal, DEFAULT_SETTINGS, "approved", "manual");
   assert.equal(manual.ok, true);
   assert.equal(manual.mode, "manual");

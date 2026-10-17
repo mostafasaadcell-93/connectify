@@ -58,8 +58,10 @@ export function catalogFromUnits(units) {
       condition: unit.cond,
       sim: unit.sim,
       color: String(unit.c || "").toLowerCase(),
-      warrantyYears: null,
-      region: null
+      warrantyYears: unit.warrantyYears == null || unit.warrantyYears === "" ? null : Number(unit.warrantyYears),
+      warrantyProvider: unit.warrantyProvider || null,
+      region: unit.region || null,
+      activation: unit.activation || null
     }
   }));
 }

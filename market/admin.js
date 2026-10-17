@@ -1,5 +1,5 @@
 import {
-  DEFAULT_SETTINGS, parseManualCsv, parseSpecs, evaluate, canApply, canRestore, applyVerifiedFacts, inspectStored, confirmReadback
+  DEFAULT_SETTINGS, parseManualCsv, parseSpecs, evaluate, canApply, canRestore, applyVerifiedFacts, inspectStored, confirmReadback, simulatePrices
 } from "./engine.mjs";
 import {
   AUDIT_LIMIT, auditLabel, collectionSummary, explainCollectionError, priceGap, safeHttpUrl, summarizeAudit, verificationLabel
@@ -74,7 +74,11 @@ function catalog() {
       price: unit.p > 0 ? unit.p : null, cost: cost > 0 ? cost : null,
       specs: {
         brand: String(brandOf(model) || "").toLowerCase(), model: unit.m, storage: unit.st, ram: null,
-        condition: unit.cond, sim: unit.sim, color: String(unit.c || "").toLowerCase(), warrantyYears: null, region: null
+        condition: unit.cond, sim: unit.sim, color: String(unit.c || "").toLowerCase(),
+        warrantyYears: unit.warrantyYears == null || unit.warrantyYears === "" ? null : Number(unit.warrantyYears),
+        warrantyProvider: unit.warrantyProvider || null,
+        region: unit.region || null,
+        activation: unit.activation || null
       }
     });
     items[items.length - 1] = applyVerifiedFacts(items[items.length - 1], state.facts[items[items.length - 1].sku]);
@@ -182,6 +186,7 @@ function renderMarket() {
     </tr>`;
     }).join("") || `<tr><td colspan="12">No catalog rows to review.</td></tr>`}
     </tbody></table></div>
+    ${simulationHtml()}
     <h3>Recent decisions</h3>
     <div class="olist">${state.ledger.slice(0, 12).map(item => {
       const restorable = state.actionsOpen && item.status === "applied" && item.key && state.restoreKey[item.sku] === item.key;
@@ -205,6 +210,35 @@ function renderMarket() {
   });
   root.querySelectorAll("[data-restore]").forEach(button => button.onclick = () => restore(button.dataset.restore));
   showFacts();
+}
+
+function simulationHtml() {
+  const report = simulatePrices({
+    catalog: catalog(),
+    observations: state.observations,
+    settings: state.settings,
+    facts: state.facts,
+    history: state.observations,
+    now: new Date().toISOString()
+  });
+  const ranked = report.rows.filter(row => row.eligibility !== "No reliable competitor match");
+  const shown = (ranked.length ? ranked : report.rows).slice(0, 12);
+  const body = shown.map(row => `<tr>
+      <td><b>${esc(row.title)}</b><br><span class="mktnote">${esc(row.detail)}</span></td>
+      <td>${money(row.current)}</td>
+      <td>${row.store ? esc(row.store) : "—"}</td>
+      <td>${row.observed == null ? "—" : money(row.observed)}</td>
+      <td>${row.target == null ? "—" : money(row.target)}</td>
+      <td>${row.difference == null ? "—" : (row.difference > 0 ? "+" : "−") + "$" + Math.abs(row.difference)}</td>
+      <td>${row.margin == null ? "—" : row.margin + "%"}</td>
+      <td>${esc(row.confidence)}</td>
+      <td>${row.ageHours == null ? "—" : Math.round(row.ageHours) + "h"}</td>
+      <td>${esc(row.eligibility)}</td>
+      <td>${esc(row.reason)}</td>
+    </tr>`).join("") || `<tr><td colspan="11">No simulated price changes.</td></tr>`;
+  return `<h3>SIMULATION — NO PRICES CHANGED</h3>
+    <p class="mktnote">Read-only preview of quotes that would be eligible for a later review. It does not approve, apply, restore, or write a price. Automatic pricing and the scheduler stay off.</p>
+    <div class="mkwrap"><table class="mktable"><thead><tr><th>Product</th><th>Our price</th><th>Competitor</th><th>Observed</th><th>Target</th><th>Difference</th><th>Margin</th><th>Confidence</th><th>Age</th><th>Status</th><th>Reason</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 function automationOn() {

@@ -154,6 +154,10 @@ async function install(page) {
       }
     };
     const unit = DB.units.find(item => item.m === "17promax" && item.c === "Silver" && item.st === 256 && item.cond === "new" && item.sim === "psim");
+    unit.warrantyYears = 1;
+    unit.warrantyProvider = "apple";
+    unit.region = "us";
+    unit.activation = "inactive";
     DB.priv = DB.priv || {};
     DB.priv.u = DB.priv.u || {};
     DB.priv.u[unit.id] = {cost: 1400};
@@ -165,7 +169,7 @@ async function install(page) {
   });
 }
 
-const quote = "store,name,price,currency,url,available,storage,condition,sim,color,warranty,region\nNajem Starcall,iPhone 17 Pro Max,1515,USD,https://najemstarcall.com/product/iphone-17-pro-max,in_stock,256,new,psim,Silver,,\n";
+const quote = "store,name,price,currency,url,available,storage,condition,sim,color,warranty,region\nNajem Starcall,iPhone 17 Pro Max US Apple warranty 1 year Not Active,1515,USD,https://najemstarcall.com/product/iphone-17-pro-max,in_stock,256,new,psim,Silver,,\n";
 
 test("market admin status, collector copy, and preview writes stay accurate", async () => {
   const server = await startServer();
@@ -344,7 +348,7 @@ test("market admin status, collector copy, and preview writes stay accurate", as
     assert.equal(raw.includes("secret-token"), false);
     assert.equal(await page.locator(".mkdiag").innerText().then(text => text.includes("secret-token")), false);
 
-    await page.locator("#marketCsv").fill("store,name,price,currency,url,available,storage,condition,sim,color\nNajem Starcall,iPhone 17 Pro Max,1600,USD," + longUrl + ",in_stock,256,new,psim,Silver");
+    await page.locator("#marketCsv").fill("store,name,price,currency,url,available,storage,condition,sim,color\nNajem Starcall,iPhone 17 Pro Max US Apple warranty 1 year Not Active,1600,USD," + longUrl + ",in_stock,256,new,psim,Silver");
     await page.locator("#marketImport").click();
     await page.waitForSelector(".mkurl");
     await page.setViewportSize({width: 390, height: 844});
