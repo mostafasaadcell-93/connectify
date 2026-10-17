@@ -85,21 +85,21 @@ async function install(page) {
     window.LIVE.sb = {
       from: chain,
       functions: {invoke: async () => ({data: null, error: {message: "not deployed"}})},
-      rpc: async (_name, args) => {
+      rpc: async (name, args) => {
         if (!window.LIVE.staff) return {data: null, error: {message: "staff only"}};
         const box = load();
-        const status = args.p_status;
-        const sku = args.p_sku;
-        const target = args.p_target == null ? null : Number(args.p_target);
-        const mode = args.p_mode || "manual";
-        if (!["approved", "rejected", "applied", "restored"].includes(status)) return {data: null, error: {message: "bad status"}};
-        if (status === "applied") {
-          if (!(target > 0) || !args.p_apply_key) return {data: null, error: {message: "missing target"}};
-          if (box.decisions.some(row => row.status === "applied" && row.apply_key === args.p_apply_key)) return {data: null, error: {message: "already applied"}};
-          if (mode === "automatic") {
-            if (box.settings.automation_enabled !== true || box.settings.writes_enabled !== true) return {data: null, error: {message: "automation disabled"}};
-            if (box.flags[sku] !== true) return {data: null, error: {message: "product disabled"}};
-          } else {
+        if (name === "market_commit_price") {
+          if (window.__failCommit) {
+            window.__failCommit = false;
+            return {data: null, error: {message: "stale price"}};
+          }
+          const sku = args.p_sku;
+          const target = args.p_target == null ? null : Number(args.p_target);
+          const previous = args.p_previous == null ? null : Number(args.p_previous);
+          const unit = (window.__dbUnits || []).find(item => sku === "unit:" + item.id);
+          if (!unit || Number(unit.p) !== previous) return {data: null, error: {message: "stale price"}};
+          if (args.p_action === "apply") {
+            if (box.decisions.some(row => row.status === "applied" && row.apply_key === args.p_apply_key)) return {data: null, error: {message: "already applied"}};
             let latest = null;
             box.decisions.forEach(row => {
               if (row.sku === sku && (row.status === "approved" || row.status === "rejected")) latest = row;
@@ -109,9 +109,27 @@ async function install(page) {
             if (box.decisions.slice(latestAt + 1).some(row => row.sku === sku && (row.status === "applied" || row.status === "restored"))) {
               return {data: null, error: {message: "not approved: approval already used"}};
             }
+            const qty = unit.qty;
+            unit.p = target;
+            if (unit.qty !== qty) return {data: null, error: {message: "stock changed"}};
+            box.decisions.push({sku, status: "applied", target_price: target, previous_price: previous, apply_key: args.p_apply_key, created_at: new Date().toISOString()});
+            save(box);
+            return {data: "applied-id", error: null};
           }
+          if (args.p_action === "restore") {
+            unit.p = target;
+            box.decisions.push({sku, status: "restored", target_price: target, previous_price: previous, apply_key: null, created_at: new Date().toISOString()});
+            save(box);
+            return {data: "restored-id", error: null};
+          }
+          return {data: null, error: {message: "manual only"}};
         }
-        box.decisions.push({sku, status, target_price: target, previous_price: args.p_previous == null ? null : Number(args.p_previous), apply_key: status === "applied" ? args.p_apply_key : null, created_at: new Date().toISOString()});
+        const status = args.p_status;
+        const sku = args.p_sku;
+        const target = args.p_target == null ? null : Number(args.p_target);
+        if (status === "applied" || status === "restored") return {data: null, error: {message: "price changes use market_commit_price"}};
+        if (!["approved", "rejected"].includes(status)) return {data: null, error: {message: "bad status"}};
+        box.decisions.push({sku, status, target_price: target, previous_price: args.p_previous == null ? null : Number(args.p_previous), apply_key: null, created_at: new Date().toISOString()});
         save(box);
         return {data: "ok", error: null};
       }
@@ -122,13 +140,10 @@ async function install(page) {
     DB.priv.u[unit.id] = {cost: 1400};
     window.__unitId = unit.id;
     window.__dbUnits = JSON.parse(JSON.stringify(DB.units));
+    window.__staffSaves = 0;
     window.CX_STAFF_SAVE = async () => {
-      if (!window.LIVE.staff) return false;
-      if (window.__failSave) { window.__failSave = false; return false; }
-      window.__dbUnits = JSON.parse(JSON.stringify(DB.units));
-      const current = DB.units.find(item => item.id === window.__unitId);
-      window.__saved = {price: current.p, qty: current.qty, color: current.c, st: current.st, sim: current.sim, cond: current.cond};
-      return true;
+      window.__staffSaves += 1;
+      return false;
     };
   });
 }
@@ -179,17 +194,18 @@ test("manual approval persists, confirms the staff save, and can roll back witho
   await page.locator(".mktable input[data-sku]").first().check();
   await page.locator("#marketApprove").click();
   await page.waitForFunction(() => document.body.innerText.includes("The store price is unchanged until you apply it."));
-  await page.evaluate(() => { window.__failSave = true; });
+  await page.evaluate(() => { window.__failCommit = true; });
   await page.locator("#marketApply").click();
   await page.waitForFunction(() => document.body.innerText.includes("was not marked applied"));
   const failed = await page.evaluate(() => {
     const unit = DB.units.find(item => item.id === window.__unitId);
     const box = JSON.parse(localStorage.getItem("cx-market-audit-staging"));
-    return {price: unit.p, applied: box.decisions.some(row => row.status === "applied"), auto: box.settings.automation_enabled};
+    return {price: unit.p, applied: box.decisions.some(row => row.status === "applied"), auto: box.settings.automation_enabled, saves: window.__staffSaves};
   });
   assert.equal(failed.price, 1542);
   assert.equal(failed.applied, false);
   assert.equal(failed.auto, false);
+  assert.equal(failed.saves, 0);
   const page2 = await context.newPage({viewport: {width: 390, height: 844}});
   await guard(page2);
   await page2.goto(url, {waitUntil: "domcontentloaded"});
@@ -219,10 +235,12 @@ test("manual approval persists, confirms the staff save, and can roll back witho
       price: unit.p, qty: unit.qty, color: unit.c, st: unit.st, sim: unit.sim, cond: unit.cond,
       other: other ? other.p : null, orders: JSON.stringify(DB.orders) === beforeOrders,
       appliedRows: box.decisions.filter(row => row.status === "applied").length,
-      auto: box.settings.automation_enabled
+      auto: box.settings.automation_enabled,
+      saves: window.__staffSaves
     };
   }, before.orders);
   assert.equal(applied.price, 1511.97);
+  assert.equal(applied.saves, 0);
   assert.equal(applied.qty, before.qty);
   assert.equal(applied.color, before.color);
   assert.equal(applied.st, before.st);

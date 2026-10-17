@@ -193,24 +193,17 @@ test("approved and rejected decisions survive a second session, and a manual app
   const approved = decideRecord(audit, {staff: true, status: "approved", sku: "unit:u12", target: 1511.97, previous: 1542, now: "2026-10-15T10:00:00Z"});
   assert.equal(approved.ok, true);
   const second = {settings: audit.settings, flags: audit.flags, decisions: audit.decisions};
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k1", mode: "manual"}).ok, true);
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k1", mode: "manual"}).reason, "already applied");
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k1-other", mode: "manual"}).reason, "not approved: approval already used");
-  assert.equal(decideRecord(second, {staff: true, status: "restored", sku: "unit:u12", target: 1542, previous: 1511.97, mode: "manual"}).ok, true);
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k-stale", mode: "manual"}).reason, "not approved: approval already used");
+  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k1", mode: "manual"}).reason, "price changes use market_commit_price");
+  assert.equal(decideRecord(second, {staff: true, status: "restored", sku: "unit:u12", target: 1542, previous: 1511.97, mode: "manual"}).reason, "price changes use market_commit_price");
+  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u13", target: 900, previous: 1000, applyKey: "k2", mode: "automatic"}).reason, "price changes use market_commit_price");
+  assert.equal(second.decisions.filter(row => row.status === "applied" || row.status === "restored").length, 0);
   assert.equal(decideRecord(second, {staff: true, status: "rejected", sku: "unit:u12", target: 1511.97, mode: "manual"}).ok, true);
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k-reject", mode: "manual"}).reason, "not approved");
   assert.equal(decideRecord(second, {staff: true, status: "approved", sku: "unit:u12", target: 1511.97, previous: 1542, mode: "manual"}).ok, true);
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k-fresh", mode: "manual"}).ok, true);
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u12", target: 1511.97, previous: 1542, applyKey: "k-fresh-2", mode: "manual"}).reason, "not approved: approval already used");
-  assert.equal(second.decisions.filter(row => row.status === "approved").length, 2);
-  assert.equal(second.decisions.filter(row => row.status === "applied").length, 2);
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u13", target: 900, previous: 1000, applyKey: "k2", mode: "automatic"}).reason, "automation disabled");
   const rejected = decideRecord(second, {staff: true, status: "rejected", sku: "unit:u13", target: 900, now: "2026-10-15T10:05:00Z"});
   assert.equal(rejected.ok, true);
-  assert.equal(decideRecord(second, {staff: true, status: "applied", sku: "unit:u13", target: 900, applyKey: "k3", mode: "manual"}).reason, "not approved");
   assert.equal(second.decisions.filter(row => row.status === "approved").length, 2);
   assert.equal(second.decisions.filter(row => row.status === "rejected").length, 2);
+  assert.equal(second.decisions.filter(row => row.status === "applied").length, 0);
 });
 
 test("public catalog records keep only a real variant price", () => {

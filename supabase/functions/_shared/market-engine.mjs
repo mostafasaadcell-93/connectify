@@ -611,28 +611,7 @@ export function decideRecord(state, input) {
   if (!input || input.staff !== true) return {ok: false, reason: "staff only"};
   const status = input.status;
   if (!["approved", "rejected", "applied", "restored"].includes(status)) return {ok: false, reason: "bad status"};
-  const settings = box.settings || {};
-  if (status === "applied") {
-    const mode = input.mode || "manual";
-    if (!(Number(input.target) > 0)) return {ok: false, reason: "missing target"};
-    if (!input.applyKey) return {ok: false, reason: "missing apply key"};
-    if (decisions.some(row => row.status === "applied" && row.apply_key === input.applyKey)) return {ok: false, reason: "already applied"};
-    if (mode === "automatic") {
-      if (settings.automation_enabled !== true || settings.writes_enabled !== true) return {ok: false, reason: "automation disabled"};
-      if (!(box.flags && box.flags[input.sku] === true)) return {ok: false, reason: "product disabled"};
-    } else if (mode !== "manual") return {ok: false, reason: "bad mode"};
-    else {
-      let latestIndex = -1;
-      for (let i = 0; i < decisions.length; i++) {
-        const row = decisions[i];
-        if (row.sku === input.sku && (row.status === "approved" || row.status === "rejected")) latestIndex = i;
-      }
-      const latest = latestIndex >= 0 ? decisions[latestIndex] : null;
-      if (!latest || latest.status !== "approved" || Number(latest.target_price) !== Number(input.target)) return {ok: false, reason: "not approved"};
-      const used = decisions.slice(latestIndex + 1).some(row => row.sku === input.sku && (row.status === "applied" || row.status === "restored"));
-      if (used) return {ok: false, reason: "not approved: approval already used"};
-    }
-  }
+  if (status === "applied" || status === "restored") return {ok: false, reason: "price changes use market_commit_price"};
   const row = {
     id: "d" + (decisions.length + 1),
     sku: input.sku,

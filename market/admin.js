@@ -400,48 +400,34 @@ async function decideSelected(status, rows) {
   renderMarket();
 }
 
-function readOffer(gate) {
-  if (gate.kind === "phone") {
-    const unit = (DB.units || []).find(item => item.id === gate.ref.unit);
-    if (!unit) return null;
-    return {price: unit.p, qty: unit.qty, color: unit.c, storage: unit.st, sim: unit.sim, cond: unit.cond};
-  }
-  if (gate.kind === "ph" && typeof phV === "function" && typeof PHmap !== "undefined") {
-    const product = PHmap.get(gate.ref.id);
-    if (!product) return null;
-    const live = phV(product, gate.ref.vi);
-    return {price: live.p, qty: live.q};
-  }
-  return null;
-}
-
-function stagePrice(gate) {
-  if (gate.kind === "phone") {
-    const unit = (DB.units || []).find(item => item.id === gate.ref.unit);
-    if (!unit) return false;
-    unit.p = gate.price;
-    return true;
-  }
-  if (gate.kind === "ph" && typeof phSet === "function" && typeof PHmap !== "undefined") {
-    const product = PHmap.get(gate.ref.id);
-    if (!product) return false;
-    phSet(product, gate.ref.vi, "p", gate.price);
-    return true;
-  }
-  return false;
-}
-
 function storedKey(gate) {
   if (gate.kind === "phone") return "units";
   if (gate.kind === "ph") return "ph";
   return "";
 }
 
-function expectedIdentity(gate) {
-  const local = readOffer(gate);
-  if (!local) return null;
-  if (gate.kind === "phone") return {color: local.color, storage: local.storage, sim: local.sim, cond: local.cond};
-  return {catalogPrice: null};
+function identityFromOffer(gate, offer) {
+  if (!gate || !offer) return null;
+  if (gate.kind === "phone") return {color: offer.color, storage: offer.storage, sim: offer.sim, cond: offer.cond};
+  if (gate.kind === "ph" && gate.ref) return {id: gate.ref.id, variant: String(gate.ref.vi)};
+  return null;
+}
+
+function rememberStored(key, data) {
+  try {
+    if (typeof snap === "undefined" || !snap || !key) return;
+    snap[key] = JSON.stringify(data);
+  } catch (error) {
+    /* A later whole-row staff save can still overwrite this price. */
+  }
+}
+
+function adoptDatabase(gate, record) {
+  if (!record || !gate) return;
+  const key = storedKey(gate);
+  if (key === "units" && Array.isArray(record.data)) DB.units = record.data;
+  if (key === "ph" && record.data && typeof record.data === "object") DB.ph = record.data;
+  rememberStored(key, key === "units" ? DB.units : DB.ph);
 }
 
 async function fetchStored(key) {
@@ -451,39 +437,27 @@ async function fetchStored(key) {
   return {ok: true, record: data};
 }
 
-function adoptFresh(gate, offer) {
-  if (!offer || gate.kind !== "phone") return;
-  const unit = (DB.units || []).find(item => item.id === gate.ref.unit);
-  if (!unit) return;
-  if (offer.color != null) unit.c = offer.color;
-  if (offer.storage != null) unit.st = offer.storage;
-  if (offer.sim != null) unit.sim = offer.sim;
-  if (offer.cond != null) unit.cond = offer.cond;
-  if (offer.qty != null) unit.qty = offer.qty;
+function markPrice(entry) {
+  state.ledger.unshift(entry);
 }
 
-async function revertPrice(gate, price) {
-  const fresh = await fetchStored(storedKey(gate));
-  if (!fresh.ok) return {ok: false, reason: "no_readback"};
-  const seen = inspectStored(fresh.record, gate, null);
-  if (!seen.ok) return seen;
-  adoptFresh(gate, seen.offer);
-  if (!stagePrice(Object.assign({}, gate, {price}))) return {ok: false, reason: "missing_sku"};
-  if (typeof window.CX_STAFF_SAVE !== "function") return {ok: false, reason: "save_failed"};
-  const saved = await window.CX_STAFF_SAVE();
-  if (!saved) return {ok: false, reason: "save_failed"};
+async function confirmCommitted(gate, expected, target) {
   const again = await fetchStored(storedKey(gate));
   if (!again.ok) return {ok: false, reason: "no_readback"};
-  return confirmReadback(again.record, Object.assign({}, gate, {price}), expectedIdentity(gate));
+  adoptDatabase(gate, again.record);
+  return confirmReadback(again.record, Object.assign({}, gate, {price: target}), expected);
 }
 
-async function confirmSavedPrice(gate, expected) {
-  if (typeof window.CX_STAFF_SAVE !== "function") return {ok: false, reason: "save_failed"};
-  const saved = await window.CX_STAFF_SAVE();
-  if (!saved) return {ok: false, reason: "save_failed"};
-  const fresh = await fetchStored(storedKey(gate));
-  if (!fresh.ok) return {ok: false, reason: "no_readback"};
-  return confirmReadback(fresh.record, gate, expected);
+async function commitPrice(gate, action, target, previous, applyKey, identity, proposal) {
+  return LIVE.sb.rpc("market_commit_price", {
+    p_sku: gate.sku,
+    p_action: action,
+    p_target: target,
+    p_previous: previous,
+    p_apply_key: applyKey,
+    p_identity: identity,
+    p_proposal: proposal || {}
+  });
 }
 
 async function applyApproved(rows) {
@@ -497,8 +471,8 @@ async function applyApproved(rows) {
       const gate = canApply(row, state.settings, "approved", "manual");
       if (!gate.ok) continue;
       if (!window.confirm("Update the selling price for " + row.title + " to $" + gate.price + "? Scheduled automatic updates stay off.")) continue;
-      if (!window.LIVE || !LIVE.sb || typeof window.CX_STAFF_SAVE !== "function") {
-        state.note = "Apply needs a confirmed staff save. No price was marked applied.";
+      if (!window.LIVE || !LIVE.sb) {
+        state.note = "Apply needs the store database. No price was marked applied.";
         return;
       }
       const stored = await fetchStored(storedKey(gate));
@@ -506,40 +480,33 @@ async function applyApproved(rows) {
         state.note = "The current database row could not be read, so no price was written and it was not marked applied.";
         return;
       }
-      const expected = expectedIdentity(gate);
-      const before = inspectStored(stored.record, gate, expected);
-      if (!before.ok && before.reason === "variant_changed") {
-        state.note = "The stored variant no longer matches this SKU, so no price was written and it was not marked applied.";
-        return;
-      }
+      const before = inspectStored(stored.record, gate, null);
       if (!before.ok) {
-        state.note = "The current database row could not be read, so no price was written and it was not marked applied.";
+        state.note = before.reason === "variant_changed"
+          ? "The stored variant no longer matches this SKU, so no price was written and it was not marked applied."
+          : "The current database row could not be read, so no price was written and it was not marked applied.";
         return;
       }
       const previousPrice = before.offer.price;
-      if (!before.priceMatches) {
-        if (!stagePrice(gate)) { state.note = "The product row was not found. No price was marked applied."; return; }
-        const saved = await confirmSavedPrice(gate, expected);
-        if (!saved.ok) {
-          if (previousPrice != null) stagePrice(Object.assign({}, gate, {price: previousPrice}));
-          if (saved.reason === "price_mismatch") await revertPrice(gate, previousPrice);
-          state.note = saved.reason === "variant_changed"
-            ? "The stored variant changed during the save, so no further write was made and it was not marked applied."
-            : "The staff save did not succeed, so the price was put back and was not marked applied.";
-          return;
-        }
+      const identity = identityFromOffer(gate, before.offer);
+      const {error} = await commitPrice(gate, "apply", gate.price, previousPrice, gate.key, identity, row);
+      const duplicate = error && /already applied/i.test(error.message || "");
+      if (error && !duplicate) {
+        state.note = "The price was not changed and it was not marked applied. " + error.message;
+        return;
       }
-      const {error} = await LIVE.sb.rpc("market_decide", {
-        p_sku: row.sku, p_status: "applied", p_target: gate.price, p_previous: previousPrice,
-        p_apply_key: gate.key, p_proposal: row, p_mode: "manual"
-      });
-      if (error && !/already applied|duplicate/i.test(error.message || "")) {
-        state.note = "The price save succeeded, but the audit row was not stored. Apply again to record it without writing the price a second time. " + error.message;
+      const seen = await confirmCommitted(gate, identity, gate.price);
+      if (!seen.ok && duplicate) {
+        state.note = "That price change was already recorded, and the stored price does not match it. No second write was made.";
         return;
       }
       if (!state.settings.appliedKeys.includes(gate.key)) state.settings.appliedKeys.push(gate.key);
-      state.ledger.unshift({sku: row.sku, status: "applied", price: gate.price, previous: previousPrice, key: gate.key, ref: gate.ref, kind: gate.kind});
+      markPrice({sku: row.sku, status: "applied", price: gate.price, previous: previousPrice, key: gate.key, ref: gate.ref, kind: gate.kind});
       changed++;
+      if (!seen.ok) {
+        state.note = "The price change was committed, but a later read did not match it. No second write was made.";
+        return;
+      }
     }
     state.note = changed ? "Applied " + changed + " approved price" + (changed === 1 ? "" : "s") + ". Scheduled updates stay " + (state.settings.automationEnabled ? "on" : "off") + ". Stock and past orders were left as they were." : "Nothing was applied. Approve a verified row that is inside the margin and has not already been applied.";
   } finally {
@@ -555,38 +522,38 @@ async function restore(key) {
   const gate = canRestore(entry);
   if (!gate.ok) { state.note = "No previous price is stored for that row."; renderMarket(); return; }
   if (!window.confirm("Put the previous price back for " + entry.sku + "?")) return;
-  if (!window.LIVE || !LIVE.sb || typeof window.CX_STAFF_SAVE !== "function") {
-    state.note = "Restore needs a confirmed staff save. No price was changed.";
+  if (!window.LIVE || !LIVE.sb) {
+    state.note = "Restore needs the store database. No price was changed.";
     renderMarket();
     return;
   }
   const stored = await fetchStored(storedKey(gate));
-  const expected = expectedIdentity(gate);
-  const before = stored.ok ? inspectStored(stored.record, gate, expected) : {ok: false, reason: "no_readback"};
+  const before = stored.ok ? inspectStored(stored.record, gate, null) : {ok: false, reason: "no_readback"};
   if (!before.ok) {
     state.note = before.reason === "variant_changed"
-      ? "The stored variant no longer matches this SKU, so no price was changed."
-      : "The current database row could not be read, so no price was changed.";
+      ? "The stored variant no longer matches this SKU, so no price was changed and it was not marked restored."
+      : "The current database row could not be read, so no price was changed and it was not marked restored.";
     renderMarket();
     return;
   }
-  const previousPrice = before.offer.price;
-  if (!stagePrice(gate)) { state.note = "The product row was not found. No price was changed."; renderMarket(); return; }
-  const saved = await confirmSavedPrice(gate, expected);
-  if (!saved.ok) {
-    if (previousPrice != null) stagePrice(Object.assign({}, gate, {price: previousPrice}));
-    if (saved.reason === "price_mismatch") await revertPrice(gate, previousPrice);
-    state.note = "The staff save did not succeed, so the price was put back and was not marked restored.";
+  const identity = identityFromOffer(gate, before.offer);
+  const {error} = await commitPrice(gate, "restore", gate.price, before.offer.price, null, identity, entry);
+  const duplicate = error && /already restored/i.test(error.message || "");
+  if (error && !duplicate) {
+    state.note = "The price was not changed and it was not marked restored. " + error.message;
     renderMarket();
     return;
   }
-  const {error} = await LIVE.sb.rpc("market_decide", {
-    p_sku: entry.sku, p_status: "restored", p_target: gate.price, p_previous: entry.price,
-    p_apply_key: null, p_proposal: entry, p_mode: "manual"
-  });
-  if (error) { state.note = "The previous price was saved, but the audit row was not. " + error.message; renderMarket(); return; }
-  state.ledger.unshift({sku: entry.sku, status: "restored", price: gate.price, previous: entry.price, key: ""});
-  state.note = "Previous price restored. Stock was not changed.";
+  const seen = await confirmCommitted(gate, identity, gate.price);
+  if (!seen.ok && duplicate) {
+    state.note = "That restore was already recorded, and the stored price does not match it. No second write was made.";
+    renderMarket();
+    return;
+  }
+  markPrice({sku: entry.sku, status: "restored", price: gate.price, previous: entry.price, key: ""});
+  state.note = seen.ok
+    ? "Previous price restored. Stock was not changed."
+    : "The previous price was committed, but a later read did not match it. No second write was made.";
   if (typeof renderStore === "function") renderStore();
   renderMarket();
 }
