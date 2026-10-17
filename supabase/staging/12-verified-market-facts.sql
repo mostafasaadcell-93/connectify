@@ -42,6 +42,19 @@ begin
     raise exception 'refusing to install verified facts: store revision is missing. Install migration 11 first.';
   end if;
   if not exists (
+    select 1
+    from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'store_state'
+      and t.tgname = 'store_state_revision_guard'
+      and not t.tgisinternal
+      and t.tgenabled in ('O', 'A')
+  ) then
+    raise exception 'refusing to install verified facts: store_state_revision_guard is missing or disabled. Install migration 11 first.';
+  end if;
+  if not exists (
     select 1 from public.store_state
     where key = 'units' and jsonb_typeof(data) = 'array'
   ) then
@@ -79,8 +92,7 @@ begin
   if not exists (
     select 1 from public.store_state
     where key = 'ph'
-      and jsonb_typeof(data) = 'object'
-      and (select array_agg(phone_key order by phone_key) from jsonb_object_keys(data) phone_key) = array['stage-ph']
+      and data is not distinct from '{"stage-ph":{"v":{"0":{"p":25,"q":4}}}}'::jsonb
   ) then
     raise exception 'refusing to install verified facts: unexpected or missing synthetic phone fixture';
   end if;
@@ -115,19 +127,38 @@ begin
   end if;
 
   if not exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'market_sku_facts' and c.relrowsecurity is true
+  ) then
+    raise exception 'refusing to install verified facts: row level security is not enabled on market_sku_facts';
+  end if;
+  if not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'market_sku_facts'
       and policyname = 'staff read market facts' and cmd = 'SELECT' and 'authenticated' = any(roles)
+      and coalesce(qual, '') ~* 'public\.is_staff\s*\(' and with_check is null
   ) or not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'market_sku_facts'
       and policyname = 'staff insert market facts' and cmd = 'INSERT' and 'authenticated' = any(roles)
+      and qual is null and coalesce(with_check, '') ~* 'public\.is_staff\s*\('
   ) or not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'market_sku_facts'
       and policyname = 'staff update market facts' and cmd = 'UPDATE' and 'authenticated' = any(roles)
+      and coalesce(qual, '') ~* 'public\.is_staff\s*\(' and coalesce(with_check, '') ~* 'public\.is_staff\s*\('
   ) then
-    raise exception 'refusing to install verified facts: staff-only fact policies are missing';
+    raise exception 'refusing to install verified facts: staff fact policies do not enforce is_staff()';
+  end if;
+  if exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'market_sku_facts'
+      and coalesce(qual, '') !~* 'is_staff\s*\('
+      and coalesce(with_check, '') !~* 'is_staff\s*\('
+  ) then
+    raise exception 'refusing to install verified facts: a market_sku_facts policy does not enforce is_staff()';
   end if;
   if exists (
     select 1 from pg_policies
@@ -157,6 +188,14 @@ $sql$;
       and is_nullable = 'NO'
   ) then
     raise exception 'refusing to install verified facts: new columns must stay nullable';
+  end if;
+  if exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'market_sku_facts'
+      and grantee in ('anon', 'public')
+      and privilege_type in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER')
+  ) then
+    raise exception 'refusing to install verified facts: anonymous write access is present';
   end if;
 end;
 $migration$;

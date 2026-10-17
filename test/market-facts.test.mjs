@@ -47,15 +47,30 @@ test("migration 12 adds nullable provider and activation without backfilling or 
   assert.match(sql, /yxkzjwcmmtiljakttyfh/);
   assert.match(sql, /u-stage-1/);
   assert.match(sql, /C-STAGE-CONF/);
-  assert.match(sql, /stage-ph/);
+  assert.match(sql, /\{"stage-ph":\{"v":\{"0":\{"p":25,"q":4\}\}\}\}/);
   assert.match(sql, /automation_enabled is false/);
   assert.match(sql, /enabled is false/);
+  assert.match(sql, /relrowsecurity is true/);
+  assert.match(sql, /public\\\.is_staff/);
+  assert.match(sql, /store_state_revision_guard/);
+  assert.match(sql, /tgenabled in \('O', 'A'\)/);
   assert.match(sql, /staff read market facts/);
   assert.match(sql, /staff insert market facts/);
   assert.match(sql, /staff update market facts/);
+  assert.match(sql, /staff fact policies do not enforce is_staff\(\)/);
   assert.match(sql, /anonymous write policy is present/);
+  assert.match(sql, /anonymous write access is present/);
   assert.match(sql, /revoke insert, update, delete, truncate, references, trigger on table public\.market_sku_facts from public, anon/);
   assert.match(sql, /new columns must stay nullable/);
+  const alterAt = sql.indexOf("add column if not exists warranty_provider");
+  for (const needle of ["relrowsecurity is true", "store_state_revision_guard", "tgenabled in ('O', 'A')", '{"stage-ph":{"v":{"0":{"p":25,"q":4}}}}', "staff fact policies do not enforce is_staff()"]) {
+    assert.equal(sql.indexOf(needle) < alterAt, true, needle);
+  }
+  assert.equal(sql.indexOf("anonymous write access is present") > sql.indexOf("revoke insert, update, delete"), true);
+  assert.equal(/\bgrant\s+(select|insert|update|delete|all)\b/i.test(sql), false);
+  assert.equal(/disable row level security/i.test(sql), false);
+  assert.equal(/enable row level security/i.test(sql), false);
+  assert.equal(/exception\s+when/i.test(sql), false);
   assert.equal(/update\s+public\.market_sku_facts/i.test(sql), false);
   assert.equal(/insert\s+into\s+public\.market_sku_facts/i.test(sql), false);
   assert.equal(/update\s+public\.store_state/i.test(sql), false);
@@ -66,6 +81,109 @@ test("migration 12 adds nullable provider and activation without backfilling or 
   assert.equal(sql.includes("store_state.units"), false);
   assert.equal(ten.includes("warranty_provider"), false);
   assert.equal(eleven.includes("warranty_provider"), false);
+});
+
+const silverUnit = {id: "u-stage-1", m: "17promax", c: "Silver", st: 256, cond: "new", sim: "psim", qty: 2, p: 900, bat: 0, note: "staging-synthetic"};
+const blueUnit = {id: "u-stage-2", m: "17promax", c: "Deep Blue", st: 256, cond: "new", sim: "psim", qty: 1, p: 910, bat: 0, note: "staging-synthetic"};
+const phoneFixture = { "stage-ph": { v: { "0": { p: 25, q: 4 } } } };
+
+function staffPolicies() {
+  return [
+    {name: "staff read market facts", cmd: "SELECT", roles: ["authenticated"], qual: "public.is_staff()", withCheck: null},
+    {name: "staff insert market facts", cmd: "INSERT", roles: ["authenticated"], qual: null, withCheck: "public.is_staff()"},
+    {name: "staff update market facts", cmd: "UPDATE", roles: ["authenticated"], qual: "public.is_staff()", withCheck: "public.is_staff()"}
+  ];
+}
+
+function readyStaging() {
+  return {
+    projectRef: "akgilfixljswqljmedmg",
+    commitPrice: true,
+    revisionColumn: true,
+    trigger: {name: "store_state_revision_guard", table: "store_state", enabled: "O"},
+    units: [silverUnit, blueUnit],
+    orders: [
+      {code: "C-STAGE-CONF", type: "order", status: "confirmed", stockApplied: true},
+      {code: "C-STAGE-NEW", type: "order", status: "new", stockApplied: false}
+    ],
+    ph: phoneFixture,
+    automation: false,
+    writes: false,
+    scheduler: false,
+    rls: true,
+    policies: staffPolicies(),
+    grants: [
+      {grantee: "anon", privilege: "SELECT"},
+      {grantee: "authenticated", privilege: "SELECT"},
+      {grantee: "authenticated", privilege: "INSERT"},
+      {grantee: "authenticated", privilege: "UPDATE"}
+    ]
+  };
+}
+
+function enforcesStaff(text) {
+  return text != null && /is_staff\s*\(/i.test(String(text));
+}
+
+function migrationGuard(state) {
+  if (state.projectRef !== "akgilfixljswqljmedmg") return "project ref";
+  if (!state.commitPrice) return "market_commit_price is missing";
+  if (!state.revisionColumn) return "store revision is missing";
+  const trigger = state.trigger;
+  if (!trigger || trigger.name !== "store_state_revision_guard" || trigger.table !== "store_state" || !["O", "A"].includes(trigger.enabled)) {
+    return "store_state_revision_guard is missing or disabled";
+  }
+  if (!Array.isArray(state.units) || state.units.length !== 2 || JSON.stringify(state.units[0]) !== JSON.stringify(silverUnit) || JSON.stringify(state.units[1]) !== JSON.stringify(blueUnit)) {
+    return "unexpected or missing synthetic units";
+  }
+  const orders = state.orders || [];
+  const confirmed = orders.find(row => row.code === "C-STAGE-CONF" && row.type === "order" && row.status === "confirmed" && row.stockApplied === true);
+  const fresh = orders.find(row => row.code === "C-STAGE-NEW" && row.type === "order" && row.status === "new" && row.stockApplied === false);
+  if (orders.length !== 2 || !confirmed || !fresh) return "unexpected or missing synthetic orders";
+  if (JSON.stringify(state.ph) !== JSON.stringify(phoneFixture)) return "unexpected or missing synthetic phone fixture";
+  if (state.automation || state.writes) return "automation or writes are enabled";
+  if (state.scheduler !== false) return "scheduler is enabled or missing";
+  if (state.rls !== true) return "row level security is not enabled on market_sku_facts";
+  const policies = state.policies || [];
+  const read = policies.find(row => row.name === "staff read market facts" && row.cmd === "SELECT" && row.roles.includes("authenticated") && enforcesStaff(row.qual) && row.withCheck == null);
+  const insert = policies.find(row => row.name === "staff insert market facts" && row.cmd === "INSERT" && row.roles.includes("authenticated") && row.qual == null && enforcesStaff(row.withCheck));
+  const update = policies.find(row => row.name === "staff update market facts" && row.cmd === "UPDATE" && row.roles.includes("authenticated") && enforcesStaff(row.qual) && enforcesStaff(row.withCheck));
+  if (!read || !insert || !update) return "staff fact policies do not enforce is_staff()";
+  if (policies.some(row => !enforcesStaff(row.qual) && !enforcesStaff(row.withCheck))) return "a market_sku_facts policy does not enforce is_staff()";
+  if (policies.some(row => ["INSERT", "UPDATE", "DELETE", "ALL"].includes(row.cmd) && row.roles.some(role => role === "anon" || role === "public"))) {
+    return "anonymous write policy is present";
+  }
+  if ((state.grants || []).some(row => ["anon", "public"].includes(row.grantee) && ["INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"].includes(row.privilege))) {
+    return "anonymous write access is present";
+  }
+  return "";
+}
+
+test("migration 12 guards reject missing RLS, a disabled trigger, a bad phone fixture, and a weak policy", () => {
+  assert.equal(migrationGuard(readyStaging()), "");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {rls: false})), "row level security is not enabled on market_sku_facts");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {trigger: {name: "store_state_revision_guard", table: "store_state", enabled: "D"}})), "store_state_revision_guard is missing or disabled");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {trigger: null})), "store_state_revision_guard is missing or disabled");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {revisionColumn: false})), "store revision is missing");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {commitPrice: false})), "market_commit_price is missing");
+  const wrongPhone = {"stage-ph": {v: {"0": {p: 26, q: 4}}}};
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {ph: wrongPhone})), "unexpected or missing synthetic phone fixture");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {ph: {"stage-ph": {v: []}}})), "unexpected or missing synthetic phone fixture");
+  const openRead = staffPolicies();
+  openRead[0] = {name: "staff read market facts", cmd: "SELECT", roles: ["authenticated"], qual: "true", withCheck: null};
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {policies: openRead})), "staff fact policies do not enforce is_staff()");
+  const publicWrite = staffPolicies().concat([{name: "anon write", cmd: "INSERT", roles: ["anon"], qual: null, withCheck: "public.is_staff()"}]);
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {policies: publicWrite})), "anonymous write policy is present");
+  const wideOpen = staffPolicies().concat([{name: "public read", cmd: "SELECT", roles: ["public"], qual: "true", withCheck: null}]);
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {policies: wideOpen})), "a market_sku_facts policy does not enforce is_staff()");
+  const anonInsert = readyStaging();
+  anonInsert.grants = anonInsert.grants.concat([{grantee: "anon", privilege: "INSERT"}]);
+  assert.equal(migrationGuard(anonInsert), "anonymous write access is present");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {automation: true})), "automation or writes are enabled");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {scheduler: true})), "scheduler is enabled or missing");
+  const changedPrice = readyStaging();
+  changedPrice.units = [Object.assign({}, silverUnit, {p: 901}), blueUnit];
+  assert.equal(migrationGuard(changedPrice), "unexpected or missing synthetic units");
 });
 
 test("unknown provider and activation stay null and are rejected when invalid", () => {
