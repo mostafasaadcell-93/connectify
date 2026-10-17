@@ -120,7 +120,9 @@ test("weak evidence, stale quotes, margin failures, and bad currency stay inelig
   const stale = simulatePrices({catalog: [item], observations: [old], settings, now});
   assert.equal(row(stale).eligibility, "Stale quote");
   assert.equal(row(stale).target, null);
-  assert.equal(row(stale).observed, 1515);
+  assert.equal(row(stale).observed, null);
+  assert.equal(row(stale).excluded.length, 1);
+  assert.match(row(stale).reason, /Najem Starcall \$1515 \(quote_older_than_72h\)/);
   const eur = simulatePrices({catalog: [item], observations: [quote({currency: "EUR"})], settings, now});
   assert.match(row(eur).reason, /unsupported_currency/);
   const noCost = simulatePrices({catalog: [phone({specs: {}, cost: null})], observations: [quote()], settings, now});
@@ -153,6 +155,103 @@ test("duplicate offers keep the newest listing and the lowest fresh verified pri
   assert.equal(row(lowest).observed, 1500);
   assert.equal(row(lowest).store, "Gadgetlb");
   assert.equal(row(lowest).eligible, true);
+});
+
+test("a stale cheaper quote does not hide a fresh eligible quote", () => {
+  const item = phone();
+  const settings = {minMarginPct: 2};
+  const stale = quote({
+    store: "Old Shop", price: 1500, url: "https://old-shop.example/p/1", checkedAt: "2026-10-07T12:00:00Z"
+  });
+  const freshOffer = quote({
+    store: "Fresh Shop", price: 1515, url: "https://fresh-shop.example/p/1", checkedAt: "2026-10-17T11:00:00Z"
+  });
+  const manual = evaluate([item], [stale, freshOffer], settings, []);
+  assert.equal(manual.proposals[0].competitor, 1500);
+  assert.equal(manual.proposals[0].store, "Old Shop");
+  assert.equal(manual.proposals[0].target, 1497);
+  const report = simulatePrices({catalog: [item], observations: [stale, freshOffer], settings, now});
+  const result = row(report);
+  assert.equal(result.eligibility, "Eligible for review");
+  assert.equal(result.eligible, true);
+  assert.equal(result.observed, 1515);
+  assert.equal(result.store, "Fresh Shop");
+  assert.equal(result.target, 1511.97);
+  assert.equal(result.excluded.length, 1);
+  assert.equal(result.excluded[0].store, "Old Shop");
+  assert.equal(result.excluded[0].price, 1500);
+  assert.equal(result.excluded[0].reason, "quote_older_than_72h");
+  assert.match(result.reason, /Excluded: Old Shop \$1500 \(quote_older_than_72h\)/);
+  assert.equal(stale.price, 1500);
+  assert.equal(freshOffer.price, 1515);
+});
+
+test("all-stale and future-dated quotes are rejected before selection", () => {
+  const item = phone();
+  const settings = {minMarginPct: 2};
+  const older = quote({store: "Old Shop", price: 1480, url: "https://old-shop.example/p/1", checkedAt: "2026-10-01T12:00:00Z"});
+  const alsoOld = quote({store: "Older Shop", price: 1500, url: "https://older-shop.example/p/1", checkedAt: "2026-10-07T12:00:00Z"});
+  const manual = evaluate([item], [older, alsoOld], settings, []);
+  assert.equal(manual.proposals[0].competitor, 1480);
+  const stale = simulatePrices({catalog: [item], observations: [older, alsoOld], settings, now});
+  assert.equal(row(stale).eligibility, "Stale quote");
+  assert.equal(row(stale).eligible, false);
+  assert.equal(row(stale).target, null);
+  assert.equal(row(stale).observed, null);
+  assert.equal(row(stale).excluded.length, 2);
+  assert.match(row(stale).reason, /Old Shop \$1480 \(quote_older_than_72h\)/);
+  assert.match(row(stale).reason, /Older Shop \$1500 \(quote_older_than_72h\)/);
+  const future = quote({store: "Future Shop", price: 1490, url: "https://future-shop.example/p/1", checkedAt: "2026-10-18T12:00:00Z"});
+  const ahead = simulatePrices({catalog: [item], observations: [future], settings, now});
+  assert.equal(row(ahead).eligibility, "Needs verification");
+  assert.equal(row(ahead).eligible, false);
+  assert.equal(row(ahead).target, null);
+  assert.equal(row(ahead).observed, null);
+  assert.equal(row(ahead).excluded[0].reason, "quote_in_future");
+  assert.match(row(ahead).reason, /Future Shop \$1490 \(quote_in_future\)/);
+  const mixed = simulatePrices({catalog: [item], observations: [future, quote()], settings, now});
+  assert.equal(row(mixed).eligible, true);
+  assert.equal(row(mixed).observed, 1515);
+  assert.equal(row(mixed).excluded[0].reason, "quote_in_future");
+  const wrongSim = quote({store: "Wrong SIM", price: 1400, url: "https://wrong-sim.example/p/1", specs: {sim: "esim"}});
+  const hidden = simulatePrices({catalog: [item], observations: [wrongSim, alsoOld], settings, now});
+  assert.equal(row(hidden).eligibility, "Stale quote");
+  assert.equal(row(hidden).observed, null);
+  assert.equal(row(hidden).target, null);
+  assert.equal(row(hidden).excluded.length, 1);
+  assert.equal(row(hidden).excluded[0].store, "Older Shop");
+  assert.equal(JSON.stringify(row(hidden)).includes("Wrong SIM"), false);
+});
+
+test("several fresh competitors use the lowest verified price", () => {
+  const item = phone();
+  const settings = {minMarginPct: 2};
+  const offers = [
+    quote({store: "Class Cellulars", price: 1600, url: "https://classcellulars.com/p/1"}),
+    quote({store: "Gadgetlb", price: 1500, url: "https://gadgetlb.com/p/1"}),
+    quote({store: "Third Shop", price: 1550, url: "https://third-shop.example/p/1"}),
+    quote({store: "Old Shop", price: 1400, url: "https://old-shop.example/p/1", checkedAt: "2026-10-07T12:00:00Z"})
+  ];
+  const manual = evaluate([item], offers, settings, []);
+  assert.equal(manual.proposals[0].competitor, 1400);
+  const report = simulatePrices({catalog: [item], observations: offers, settings, now});
+  assert.equal(row(report).eligible, true);
+  assert.equal(row(report).observed, 1500);
+  assert.equal(row(report).store, "Gadgetlb");
+  assert.equal(row(report).target, 1497);
+  assert.equal(row(report).excluded.length, 1);
+  assert.equal(row(report).excluded[0].reason, "quote_older_than_72h");
+  const blocked = simulatePrices({
+    catalog: [item],
+    observations: [quote({price: 1800}), offers[3]],
+    settings,
+    now
+  });
+  assert.equal(row(blocked).eligibility, "Needs verification");
+  assert.equal(row(blocked).reason.startsWith("unusual_change"), true);
+  assert.equal(row(blocked).observed, 1800);
+  assert.equal(row(blocked).target, null);
+  assert.match(row(blocked).reason, /Old Shop \$1400 \(quote_older_than_72h\)/);
 });
 
 test("requested automation flags are not executed by the simulation", () => {

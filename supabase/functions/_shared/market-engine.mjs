@@ -937,6 +937,45 @@ function simulationEligibility(proposal, now) {
   return {eligibility: "Eligible for review", reason: "ready_for_manual_review", eligible: true};
 }
 
+function usableExceptAge(sku, obs, settings, history) {
+  if (!sku || !obs || matchPair(sku, obs).level !== "high" || !listingEvidence(obs).ok) return null;
+  const money = toUsd(obs.price, obs.currency, settings);
+  if (!money.ok || jumped(obs, history)) return null;
+  return money;
+}
+
+function ageExclusionReason(age) {
+  if (age != null && age < 0) return "quote_in_future";
+  if (age != null && age > PROPOSED_QUOTE_MAX_AGE_HOURS) return "quote_older_than_" + PROPOSED_QUOTE_MAX_AGE_HOURS + "h";
+  return "";
+}
+
+function exclusionText(excluded) {
+  return "Excluded: " + excluded.map(row => row.store + " $" + row.price + " (" + row.reason + ")").join("; ");
+}
+
+function simulationCandidates(catalog, observations, settings, history, now) {
+  const excludedBySku = new Map((catalog || []).map(sku => [sku.sku, []]));
+  if (!now) return {considered: observations || [], excludedBySku};
+  const considered = [];
+  for (const obs of latestObservations(observations)) {
+    const reason = ageExclusionReason(quoteAgeHours(obs && obs.checkedAt, now));
+    if (!reason) {
+      considered.push(obs);
+      continue;
+    }
+    let held = false;
+    for (const sku of catalog || []) {
+      const money = usableExceptAge(sku, obs, settings, history);
+      if (!money) continue;
+      held = true;
+      excludedBySku.get(sku.sku).push({store: obs.store || "", price: money.usd, reason});
+    }
+    if (!held) considered.push(obs);
+  }
+  return {considered, excludedBySku};
+}
+
 function quoteProblem(sku, observations) {
   let failed = false;
   for (const obs of observations || []) {
@@ -960,15 +999,25 @@ export function simulatePrices(input) {
   const facts = source.facts || {};
   const catalog = (source.catalog || []).map(sku => applyVerifiedFacts(sku, facts[sku.sku]));
   const observations = source.observations || [];
-  const result = evaluate(catalog, observations, settings, source.history || []);
+  const history = source.history || [];
   const now = source.now || null;
+  const candidates = simulationCandidates(catalog, observations, settings, history, now);
+  const result = evaluate(catalog, candidates.considered, settings, history);
   const bySku = new Map(catalog.map(sku => [sku.sku, sku]));
   const rows = result.proposals.map(proposal => {
+    const excluded = candidates.excludedBySku.get(proposal.sku) || [];
     const decision = simulationEligibility(proposal, now);
     const problem = quoteProblem(bySku.get(proposal.sku), observations);
-    if (!decision.eligible && decision.eligibility === "No reliable competitor match" && problem) {
+    if (!decision.eligible && decision.eligibility === "No reliable competitor match" && problem && !excluded.length) {
       decision.eligibility = problem === "out_of_stock" ? "Needs verification" : "No reliable competitor match";
       decision.reason = problem;
+    }
+    if (excluded.length && proposal.confidence !== "high") {
+      decision.eligibility = excluded.some(row => row.reason !== "quote_in_future") ? "Stale quote" : "Needs verification";
+      decision.reason = exclusionText(excluded);
+      decision.eligible = false;
+    } else if (excluded.length) {
+      decision.reason = decision.reason + ". " + exclusionText(excluded);
     }
     const observed = proposal.competitor;
     const calculatedTarget = proposal.target;
@@ -992,7 +1041,8 @@ export function simulatePrices(input) {
       eligibility: decision.eligibility,
       eligible: decision.eligible,
       reason: decision.reason,
-      block: proposal.block
+      block: proposal.block,
+      excluded
     };
   });
   return {

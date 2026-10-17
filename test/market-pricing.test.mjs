@@ -416,10 +416,19 @@ test("a fresh read confirms the exact variant and a disabled scheduler cannot st
 });
 
 test("the storefront diff does not rewrite checkout or availability markup", () => {
-  const diff = execSync("git diff -U0 main -- index.html", {encoding: "utf8"});
-  for (const needle of ["cardPill", "phoneActsHTML", "applyStock", "Ask for availability", "availText", "CX_UPRICE", "store_state"]) {
-    assert.equal(diff.includes(needle), false, needle);
-  }
+  // main has checkout and WhatsApp commits that landed after this branch forked.
+  // The protected check is this PR versus that fork, including uncommitted edits.
+  const base = execSync("git merge-base HEAD main", {encoding: "utf8"}).trim();
+  assert.match(base, /^[0-9a-f]{40}$/);
+  execSync("git merge-base --is-ancestor " + base + " HEAD", {stdio: "ignore"});
+  execSync("git merge-base --is-ancestor " + base + " main", {stdio: "ignore"});
+  const diff = execSync("git diff -U0 " + base + " -- index.html", {encoding: "utf8"});
+  const changed = diff.split("\n").filter(line => /^[+-]/.test(line) && !line.startsWith("+++") && !line.startsWith("---"));
+  const needles = [
+    "cardPill", "phoneActsHTML", "applyStock", "Ask for availability", "availText", "availInquiry",
+    "cxOrderMessage", "CX_UPRICE", "stock_applied", "stockApplied", "waURL"
+  ];
+  for (const needle of needles) assert.equal(changed.some(line => line.includes(needle)), false, needle);
   assert.match(diff, /data-go="market"/);
   assert.match(diff, /market\/admin\.js/);
 });
