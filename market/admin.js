@@ -1,21 +1,55 @@
 import {
   DEFAULT_SETTINGS, parseManualCsv, parseSpecs, evaluate, canApply, canRestore, applyVerifiedFacts, inspectStored, confirmReadback
 } from "./engine.mjs";
+import {
+  AUDIT_LIMIT, auditLabel, collectionSummary, explainCollectionError, priceGap, safeHttpUrl, summarizeAudit, verificationLabel
+} from "./admin-status.mjs";
 
 const state = {
   observations: [],
+  history: [],
   ledger: [],
   decisions: {},
+  restoreKey: {},
   facts: {},
   selected: new Set(),
   settings: Object.assign({}, DEFAULT_SETTINGS, {productAuto: {}, appliedKeys: []}),
   quiet: false,
   loaded: false,
+  busy: false,
+  auditTruncated: false,
+  actionsOpen: true,
   collection: {errors: [], checked: [], skipped: [], requests: null, run: null},
   note: "Scheduled automatic updates are off. You can approve and apply one verified price at a time. Nothing changes until a fresh database read confirms that exact variant."
 };
 
+function adoptAudit(rows, limit) {
+  const summary = summarizeAudit(rows, limit);
+  state.decisions = summary.decisions;
+  state.ledger = summary.ledger;
+  state.restoreKey = summary.restoreKey;
+  state.settings.appliedKeys = summary.appliedKeys;
+  state.auditTruncated = summary.truncated;
+  state.actionsOpen = summary.actionsOpen;
+}
+
 function money(n) { return n == null || n === "" ? "—" : "$" + n; }
+
+function formatGap(current, target) {
+  const gap = priceGap(current, target);
+  if (gap == null) return "—";
+  if (gap === 0) return "$0";
+  return (gap > 0 ? "+" : "−") + "$" + Math.abs(gap);
+}
+
+function decisionText(sku) {
+  return auditLabel(state.decisions[sku]) || "No decision";
+}
+
+function badge(kind, label) {
+  const safe = ["approved", "rejected", "applied", "restored", "verified", "review", "blocked", "none"].includes(kind) ? kind : "none";
+  return `<span class="mkbadge mk-${safe}">${esc(label)}</span>`;
+}
 
 function previewReadOnly() {
   return !!window.CX_STAGING_PREVIEW;
@@ -74,16 +108,22 @@ function renderMarket() {
   const query = kept.trim().toLowerCase();
   const rank = row => row.confidence === "high" && !row.block ? 0 : row.confidence === "high" ? 1 : row.confidence === "review" ? 2 : 3;
   const rows = result.proposals.filter(row => !query || (row.title + " " + row.detail).toLowerCase().includes(query)).sort((a, b) => rank(a) - rank(b)).slice(0, 80);
-  const failures = state.collection.errors || [];
+  const failures = (state.collection.errors || []).map(row => {
+    const explained = explainCollectionError(row && (row.error || row.reason) || "");
+    return {store: row && row.store || "Source", message: explained.message, detail: explained.detail};
+  });
+  const runError = state.collection.run && state.collection.run.error ? explainCollectionError(state.collection.run.error) : null;
   const accessorySkips = (state.collection.skipped || []).filter(row => row.reason === "accessory");
   const otherSkips = (state.collection.skipped || []).filter(row => row.reason !== "accessory");
   const locked = previewReadOnly();
-  const off = locked ? " disabled" : "";
+  const held = locked || state.busy;
+  const off = held ? " disabled" : "";
+  const applyOff = held || !state.actionsOpen ? " disabled" : "";
   root.innerHTML = `<div class="stockbar">
       <button class="btn btn-main" type="button" id="marketRefresh"${off}>Refresh quotes</button>
       <button class="abtn" type="button" id="marketApprove"${off}>Approve selected</button>
       <button class="abtn" type="button" id="marketReject"${off}>Reject selected</button>
-      <button class="abtn" type="button" id="marketApply"${off}>Apply approved prices</button>
+      <button class="abtn" type="button" id="marketApply"${applyOff}>Apply approved prices</button>
     </div>
     <p class="mktnote">${esc(state.note)}</p>
     ${locked ? `<p class="mktnote">Staging preview is read-only on ${esc(String(window.CX_STAGING_PREVIEW.host || "the staging project"))}. Stored competitor quotes, match explanations, justified proposals, and decision history stay visible. Refresh, approval, apply, restore, imports, and rule saves are not sent.</p>` : ""}
@@ -110,36 +150,43 @@ function renderMarket() {
     <div class="mkstatus">
       <p>Automatic pricing ${state.settings.automationEnabled && state.settings.writesEnabled ? "on" : "off"}</p>
       <p>Scheduler off</p>
+      ${state.busy ? "<p>Working…</p>" : ""}
+      ${state.auditTruncated ? "<p>Decision history is incomplete, so apply and restore stay off.</p>" : ""}
       ${state.collection.requests == null ? "" : `<p>${esc(String(state.collection.requests))} catalog requests</p>`}
-      ${failures.map(row => `<p>${esc(row.store || "Source")}: ${esc(row.error || "failed")}</p>`).join("")}
+      ${state.collection.errors && state.collection.errors.length ? `<p>${esc(collectionSummary(state.collection.errors))}</p>` : ""}
+      ${failures.map(row => `<p>${esc(row.store)}: ${esc(row.message)}</p>`).join("")}
       ${accessorySkips.length ? `<p>Accessories left out of phone comparison: ${accessorySkips.reduce((sum, row) => sum + (Number(row.count) || 1), 0)}</p>` : ""}
-      ${otherSkips.slice(0, 6).map(row => `<p>${esc(row.store || "Source")} skipped: ${esc(row.reason || "")}</p>`).join("")}
-      ${state.collection.run ? `<p>Last run ${esc(state.collection.run.status || "")}${state.collection.run.error ? " · " + esc(String(state.collection.run.error).slice(0, 180)) : ""}</p>` : ""}
+      ${otherSkips.slice(0, 6).map(row => `<p>${esc(row.store || "Source")} skipped: ${esc(explainCollectionError(row.reason || "").message)}</p>`).join("")}
+      ${state.collection.run ? `<p>Last run ${esc(state.collection.run.status || "")}${runError ? " · " + esc(runError.message) : ""}</p>` : ""}
     </div>
-    <div class="mkwrap"><table class="mktable"><thead><tr><th></th><th>Product</th><th>Our price</th><th>Competitor</th><th>Recommended</th><th>Profit</th><th>Source</th><th>Checked</th><th>Confidence</th><th>Status</th><th></th></tr></thead><tbody>
+    ${failures.some(row => row.detail) || (runError && runError.detail) ? `<details class="mkdiag"><summary>Technical collection detail</summary>${failures.filter(row => row.detail).map(row => `<p>${esc(row.store)}: ${esc(row.detail)}</p>`).join("")}${runError && runError.detail ? `<p>Last run: ${esc(runError.detail)}</p>` : ""}</details>` : ""}
+    <div class="mkwrap"><table class="mktable"><thead><tr><th></th><th>Product</th><th>Our price</th><th>Competitor</th><th>Recommended</th><th>Difference</th><th>Profit</th><th>Source</th><th>Checked</th><th>Verification</th><th>Decision</th><th></th></tr></thead><tbody>
     ${rows.map(row => {
       const recommended = row.confidence === "high" && !row.block && row.target > 0;
-      const offerUrl = row.url || row.reviewUrl || "";
-      const offerStore = row.store || row.reviewStore || "";
-      const offerWhen = row.checkedAt || row.reviewCheckedAt || "";
-      const offerPrice = row.competitor != null ? row.competitor : row.reviewPrice;
+      const offerUrl = safeHttpUrl(row.url || "");
+      const verified = row.competitor != null && row.confidence === "high";
+      const decision = state.decisions[row.sku] || "";
       return `<tr>
       <td><input type="checkbox" data-sku="${esc(row.sku)}" ${state.selected.has(row.sku) ? "checked" : ""}></td>
       <td><b>${esc(row.title)}</b><br><span class="mktnote">${esc(row.detail)}</span></td>
       <td>${money(row.current)}</td>
-      <td>${offerPrice == null ? "—" : money(offerPrice) + (row.competitor == null && row.reviewPrice != null ? " review" : "")}</td>
+      <td>${verified ? money(row.competitor) : "Not verified"}</td>
       <td>${recommended ? money(row.target) : "—"}</td>
+      <td>${recommended ? formatGap(row.current, row.target) : "—"}</td>
       <td>${recommended && row.profit != null ? money(row.profit) + " (" + row.margin + "%)" : "—"}</td>
-      <td>${offerUrl ? `<a href="${esc(offerUrl)}" target="_blank" rel="noopener">${esc(offerStore || "Listing")}</a>` : esc(offerStore || "—")}</td>
-      <td>${esc(offerWhen || "—")}</td>
-      <td>${esc(row.confidence)}</td>
-      <td>${esc(state.decisions[row.sku] || row.status)}${row.explanation ? "<br><span class='mktnote'>" + esc(row.explanation) + "</span>" : ""}</td>
+      <td>${offerUrl ? `<a class="mkurl" href="${esc(offerUrl)}" title="${esc(offerUrl)}" target="_blank" rel="noopener">${esc(row.store || "Listing")}</a>` : esc(verified ? (row.store || "—") : "No verified listing")}</td>
+      <td>${esc(verified ? (row.checkedAt || "—") : "—")}</td>
+      <td>${badge(Number(row.competitor) > 0 && row.confidence === "high" ? "verified" : (row.confidence === "review" ? "review" : "none"), verificationLabel(row))}</td>
+      <td>${badge(decision, decisionText(row.sku))}${row.explanation ? "<br><span class='mktnote'>" + esc(row.explanation) + "</span>" : ""}${!recommended ? "<br><span class='mktnote'>Not ready for approval.</span>" : ""}</td>
       <td><label class="mktnote"><input type="checkbox" data-auto="${esc(row.sku)}" ${state.settings.productAuto[row.sku] ? "checked" : ""}${off}> Auto</label></td>
     </tr>`;
-    }).join("") || `<tr><td colspan="11">No catalog rows to review.</td></tr>`}
+    }).join("") || `<tr><td colspan="12">No catalog rows to review.</td></tr>`}
     </tbody></table></div>
     <h3>Recent decisions</h3>
-    <div class="olist">${state.ledger.slice(0, 12).map(item => `<div class="drow"><span class="grow"><b>${esc(item.sku)}</b><small>${esc(item.status)} ${item.price == null ? "" : "$" + item.price}</small></span>${item.status === "applied" ? `<button class="abtn" type="button" data-restore="${esc(item.key || "")}"${off}>Restore previous</button>` : ""}</div>`).join("") || "<p class='mktnote'>No price has been changed from this screen.</p>"}</div>`;
+    <div class="olist">${state.ledger.slice(0, 12).map(item => {
+      const restorable = state.actionsOpen && item.status === "applied" && item.key && state.restoreKey[item.sku] === item.key;
+      return `<div class="drow"><span class="grow"><b>${esc(item.sku)}</b><small>${badge(item.status, auditLabel(item.status) || item.status)} ${item.price == null ? "" : "$" + item.price}</small></span>${restorable ? `<button class="abtn" type="button" data-restore="${esc(item.key)}"${applyOff}>Restore previous</button>` : ""}</div>`;
+    }).join("") || "<p class='mktnote'>No pricing decisions yet.</p>"}</div>`;
   $("marketRefresh").onclick = refreshQuotes;
   $("marketImport").onclick = importCsv;
   $("marketApprove").onclick = () => decideSelected("approved", rows);
@@ -302,25 +349,15 @@ async function loadAudit() {
     state.settings.productAuto = {};
     flags.data.forEach(row => { state.settings.productAuto[row.sku] = row.auto_enabled === true; });
   }
-  const saved = await LIVE.sb.from("market_decisions").select("sku,status,target_price,previous_price,apply_key,created_at").order("created_at", {ascending: false}).limit(200);
+  const saved = await LIVE.sb.from("market_decisions").select("sku,status,target_price,previous_price,apply_key,created_at").order("created_at", {ascending: false}).limit(AUDIT_LIMIT);
   if (saved.error) {
     state.note = "Saved decisions could not be loaded. " + saved.error.message;
+    state.actionsOpen = false;
     renderMarket();
     return;
   }
-  state.decisions = {};
-  state.ledger = [];
-  state.settings.appliedKeys = [];
-  (saved.data || []).slice().reverse().forEach(row => {
-    if (row.status === "approved" || row.status === "rejected") state.decisions[row.sku] = row.status;
-    if (row.status === "applied" && row.apply_key) state.settings.appliedKeys.push(row.apply_key);
-    if (row.status === "applied" || row.status === "restored") {
-      state.ledger.unshift({
-        sku: row.sku, status: row.status, price: row.target_price == null ? null : Number(row.target_price),
-        previous: row.previous_price == null ? null : Number(row.previous_price), key: row.apply_key || ""
-      });
-    }
-  });
+  state.history = Array.isArray(saved.data) ? saved.data : [];
+  adoptAudit(state.history, AUDIT_LIMIT);
   const runs = await LIVE.sb.from("market_runs").select("status,error,started_at,finished_at").order("started_at", {ascending: false}).limit(1);
   if (!runs.error && Array.isArray(runs.data) && runs.data[0]) state.collection.run = runs.data[0];
   const facts = await LIVE.sb.from("market_sku_facts").select("sku,warranty_years,region,sim,condition,verified");
@@ -368,36 +405,51 @@ async function refreshQuotes() {
   state.collection.requests = data && data.requests != null ? data.requests : null;
   const checked = state.collection.checked.length;
   const skipped = state.collection.skipped.length;
-  const failedStores = state.collection.errors.map(row => row.store).filter(Boolean);
-  state.note = "Loaded " + state.observations.length + " stored quotes" + (checked || skipped ? ". Checked " + checked + ", skipped " + skipped : "") + (failedStores.length ? ". Unavailable or failed: " + failedStores.join(", ") + "." : ".") + " Selling prices were not changed.";
+  const summary = collectionSummary(state.collection.errors);
+  const messages = [...new Set((state.collection.errors || []).map(row => explainCollectionError(row && row.error).message))];
+  state.note = "Loaded " + state.observations.length + " stored quotes" + (checked || skipped ? ". Checked " + checked + ", skipped " + skipped : "") + ". " + summary + (messages.length ? " " + messages.join(" ") : "") + " Selling prices were not changed.";
   renderMarket();
+}
+
+function rememberDecision(entry) {
+  state.history.push(entry);
+  adoptAudit(state.history, state.auditTruncated ? AUDIT_LIMIT : state.history.length + 1);
 }
 
 async function decideSelected(status, rows) {
   if (refusePreview(status === "approved" ? "Approval" : "Rejection")) return;
+  if (state.busy) return;
   const picked = rows.filter(row => state.selected.has(row.sku));
   if (!picked.length) { state.note = "Select a row first."; renderMarket(); return; }
   if (!window.LIVE || !LIVE.sb) { state.note = "Decisions stay empty until the audit table is available. Nothing was stored."; renderMarket(); return; }
-  let saved = 0;
-  for (const row of picked) {
-    if (status === "approved" && (row.block || !(row.target > 0))) {
-      state.note = "That row is not a verified price yet (" + (row.block || "no price") + "). It was not approved.";
-      renderMarket();
-      return;
-    }
-    const {error} = await LIVE.sb.rpc("market_decide", {
-      p_sku: row.sku, p_status: status, p_target: row.target, p_previous: row.current,
-      p_apply_key: null, p_proposal: row, p_mode: "manual"
-    });
-    if (error) { state.note = "The decision was not saved. " + error.message; renderMarket(); return; }
-    state.decisions[row.sku] = status;
-    state.ledger.unshift({sku: row.sku, status, price: row.target, previous: row.current, key: ""});
-    saved++;
-  }
-  state.note = status === "approved"
-    ? "Saved " + saved + " approval" + (saved === 1 ? "" : "s") + ". The store price is unchanged until you apply it."
-    : "Saved " + saved + " rejection" + (saved === 1 ? "" : "s") + ".";
+  state.busy = true;
+  state.note = "Working…";
   renderMarket();
+  let saved = 0;
+  try {
+    for (const row of picked) {
+      if (status === "approved" && (row.block || !(row.target > 0))) {
+        state.note = "That row is not a verified price yet (" + (row.block || "no price") + "). It was not approved.";
+        return;
+      }
+      const {error} = await LIVE.sb.rpc("market_decide", {
+        p_sku: row.sku, p_status: status, p_target: row.target, p_previous: row.current,
+        p_apply_key: null, p_proposal: row, p_mode: "manual"
+      });
+      if (error) { state.note = "The decision was not saved. " + error.message; return; }
+      rememberDecision({
+        sku: row.sku, status, target_price: row.target, previous_price: row.current,
+        apply_key: null, created_at: new Date().toISOString(), ref: row.ref, kind: row.kind
+      });
+      saved++;
+    }
+    state.note = status === "approved"
+      ? "Saved " + saved + " approval" + (saved === 1 ? "" : "s") + ". The store price is unchanged until you apply it."
+      : "Saved " + saved + " rejection" + (saved === 1 ? "" : "s") + ".";
+  } finally {
+    state.busy = false;
+    renderMarket();
+  }
 }
 
 function storedKey(gate) {
@@ -428,10 +480,6 @@ async function fetchStored(key) {
   return {ok: true, record: data};
 }
 
-function markPrice(entry) {
-  state.ledger.unshift(entry);
-}
-
 async function confirmCommitted(gate, expected, target) {
   const again = await fetchStored(storedKey(gate));
   if (!again.ok) return {ok: false, reason: "no_readback"};
@@ -453,9 +501,17 @@ async function commitPrice(gate, action, target, previous, applyKey, identity, p
 
 async function applyApproved(rows) {
   if (refusePreview("Applying a price")) return;
+  if (state.busy) return;
+  if (!state.actionsOpen) {
+    state.note = "Decision history is incomplete, so no price was applied.";
+    renderMarket();
+    return;
+  }
   readSettingsForm();
   let changed = 0;
+  state.busy = true;
   state.quiet = true;
+  state.note = "Working…";
   try {
     for (const row of rows) {
       if (state.decisions[row.sku] !== "approved") continue;
@@ -487,20 +543,24 @@ async function applyApproved(rows) {
         return;
       }
       const seen = await confirmCommitted(gate, identity, gate.price);
-      if (!seen.ok && duplicate) {
-        state.note = "That price change was already recorded, and the stored price does not match it. No second write was made.";
-        return;
-      }
-      if (!state.settings.appliedKeys.includes(gate.key)) state.settings.appliedKeys.push(gate.key);
-      markPrice({sku: row.sku, status: "applied", price: gate.price, previous: previousPrice, key: gate.key, ref: gate.ref, kind: gate.kind});
-      changed++;
       if (!seen.ok) {
-        state.note = "The price change was committed, but a later read did not match it. No second write was made.";
+        state.note = duplicate
+          ? "That price change was already recorded, and the stored price does not match it. No second write was made."
+          : "The price change was committed, but a later read did not match it. No second write was made.";
         return;
       }
+      const recorded = state.history.some(item => item.status === "applied" && item.apply_key === gate.key);
+      if (!recorded) {
+        rememberDecision({
+          sku: row.sku, status: "applied", target_price: gate.price, previous_price: previousPrice,
+          apply_key: gate.key, created_at: new Date().toISOString(), ref: gate.ref, kind: gate.kind
+        });
+      } else adoptAudit(state.history, state.auditTruncated ? AUDIT_LIMIT : state.history.length + 1);
+      changed++;
     }
     state.note = changed ? "Applied " + changed + " approved price" + (changed === 1 ? "" : "s") + ". Scheduled updates stay " + (state.settings.automationEnabled ? "on" : "off") + ". Stock and past orders were left as they were." : "Nothing was applied. Approve a verified row that is inside the margin and has not already been applied.";
   } finally {
+    state.busy = false;
     state.quiet = false;
     if (typeof renderStore === "function") renderStore();
     renderMarket();
@@ -509,7 +569,13 @@ async function applyApproved(rows) {
 
 async function restore(key) {
   if (refusePreview("Restoring a price")) return;
-  const entry = state.ledger.find(item => item.key === key && item.previous > 0);
+  if (state.busy) return;
+  if (!state.actionsOpen) {
+    state.note = "Decision history is incomplete, so no price was restored.";
+    renderMarket();
+    return;
+  }
+  const entry = state.ledger.find(item => item.key === key && item.previous > 0 && state.restoreKey[item.sku] === key);
   const gate = canRestore(entry);
   if (!gate.ok) { state.note = "No previous price is stored for that row."; renderMarket(); return; }
   if (!window.confirm("Put the previous price back for " + entry.sku + "?")) return;
@@ -518,35 +584,45 @@ async function restore(key) {
     renderMarket();
     return;
   }
-  const stored = await fetchStored(storedKey(gate));
-  const before = stored.ok ? inspectStored(stored.record, gate, null) : {ok: false, reason: "no_readback"};
-  if (!before.ok) {
-    state.note = before.reason === "variant_changed"
-      ? "The stored variant no longer matches this SKU, so no price was changed and it was not marked restored."
-      : "The current database row could not be read, so no price was changed and it was not marked restored.";
-    renderMarket();
-    return;
-  }
-  const identity = identityFromOffer(gate, before.offer);
-  const {error} = await commitPrice(gate, "restore", gate.price, before.offer.price, null, identity, entry);
-  const duplicate = error && /already restored/i.test(error.message || "");
-  if (error && !duplicate) {
-    state.note = "The price was not changed and it was not marked restored. " + error.message;
-    renderMarket();
-    return;
-  }
-  const seen = await confirmCommitted(gate, identity, gate.price);
-  if (!seen.ok && duplicate) {
-    state.note = "That restore was already recorded, and the stored price does not match it. No second write was made.";
-    renderMarket();
-    return;
-  }
-  markPrice({sku: entry.sku, status: "restored", price: gate.price, previous: entry.price, key: ""});
-  state.note = seen.ok
-    ? "Previous price restored. Stock was not changed."
-    : "The previous price was committed, but a later read did not match it. No second write was made.";
-  if (typeof renderStore === "function") renderStore();
+  state.busy = true;
+  state.note = "Working…";
   renderMarket();
+  try {
+    const stored = await fetchStored(storedKey(gate));
+    const before = stored.ok ? inspectStored(stored.record, gate, null) : {ok: false, reason: "no_readback"};
+    if (!before.ok) {
+      state.note = before.reason === "variant_changed"
+        ? "The stored variant no longer matches this SKU, so no price was changed and it was not marked restored."
+        : "The current database row could not be read, so no price was changed and it was not marked restored.";
+      return;
+    }
+    const identity = identityFromOffer(gate, before.offer);
+    const {error} = await commitPrice(gate, "restore", gate.price, before.offer.price, null, identity, entry);
+    const duplicate = error && /already restored/i.test(error.message || "");
+    if (error && !duplicate) {
+      state.note = "The price was not changed and it was not marked restored. " + error.message;
+      return;
+    }
+    const seen = await confirmCommitted(gate, identity, gate.price);
+    if (!seen.ok) {
+      state.note = duplicate
+        ? "That restore was already recorded, and the stored price does not match it. No second write was made."
+        : "The previous price was committed, but a later read did not match it. No second write was made.";
+      return;
+    }
+    const recorded = state.history.some(item => item.sku === entry.sku && item.status === "restored" && item.created_at > (state.history.find(row => row.apply_key === key && row.status === "applied") || {}).created_at);
+    if (!recorded) {
+      rememberDecision({
+        sku: entry.sku, status: "restored", target_price: gate.price, previous_price: entry.price,
+        apply_key: null, created_at: new Date().toISOString(), ref: entry.ref, kind: entry.kind
+      });
+    }
+    state.note = "Previous price restored. Stock was not changed.";
+  } finally {
+    state.busy = false;
+    if (typeof renderStore === "function") renderStore();
+    renderMarket();
+  }
 }
 
 window.CX_MARKET_PARSE = parseSpecs;

@@ -212,7 +212,7 @@ test("manual approval persists, confirms the staff save, and can roll back witho
   await page2.waitForFunction(() => window.LIVE && typeof DB !== "undefined" && DB.units && DB.units.length, null, {timeout: 60000});
   await install(page2);
   await page2.evaluate(() => { setAdmin(true); go("market"); });
-  await page2.waitForFunction(() => document.body.innerText.includes("approved"));
+  await page2.waitForFunction(() => document.body.innerText.includes("Approved"));
   assert.equal(await page2.locator("#marketAuto").isChecked(), false);
   await page.locator("#marketApply").click();
   await page.waitForFunction(() => document.body.innerText.includes("Applied 1 approved price"));
@@ -269,7 +269,7 @@ test("manual approval persists, confirms the staff save, and can roll back witho
   await page2.waitForFunction(() => window.LIVE && typeof DB !== "undefined" && DB.units && DB.units.length, null, {timeout: 60000});
   await install(page2);
   await page2.evaluate(() => { setAdmin(true); go("market"); });
-  await page2.waitForFunction(() => document.body.innerText.includes("restored"));
+  await page2.waitForFunction(() => document.body.innerText.includes("Restored"));
   assert.equal(writes.length, 0);
   } finally {
     await browser.close();

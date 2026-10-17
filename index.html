@@ -222,12 +222,26 @@ footer{border-top:1px solid var(--line);padding:64px 0 40px;background:var(--dee
 .foot ul{list-style:none;display:grid;gap:8px;color:var(--mist);font-size:15px}
 .concept{margin-top:48px;padding-top:24px;border-top:1px solid var(--line);font-size:13px;color:var(--mist);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .mktable{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
-.mktable th,.mktable td{border-bottom:1px solid var(--line);text-align:left;vertical-align:top;padding:8px 6px}
-.mktnote{color:var(--mist);font-size:13px}
-.mkwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.mktable th,.mktable td{border-bottom:1px solid var(--line);text-align:left;vertical-align:top;padding:10px 8px}
+.mktable th{white-space:nowrap}
+.mktnote{color:var(--mist);font-size:13px;overflow-wrap:anywhere}
+.mkwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
 .mkstatus{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
-.mkstatus p{margin:0;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--mist)}
+.mkstatus p{margin:0;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--mist);max-width:100%}
+.mkbadge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;font-size:12px;line-height:1.4;white-space:nowrap}
+.mk-approved,.mk-verified{color:var(--ice)}
+.mk-applied{color:var(--ice);border-color:var(--ice)}
+.mk-restored,.mk-rejected,.mk-blocked{color:var(--mist)}
+.mkurl{display:inline-block;max-width:18ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+.mkdiag{margin:8px 0;color:var(--mist);font-size:12px}
+.mkdiag p{overflow-wrap:anywhere}
 #marketCsv,#marketQ{width:100%;margin:8px 0}
+@media (max-width:760px){
+  .mktable{min-width:640px;font-size:12px}
+  .mktable th,.mktable td{padding:8px 6px}
+  #marketRoot .stockbar .btn,#marketRoot .stockbar .abtn{flex:1 1 140px}
+  #marketRoot .drow{align-items:flex-start;flex-wrap:wrap}
+}
 
 /* OVERLAYS */
 .scrim{position:fixed;inset:0;background:rgba(6,6,6,.6);opacity:0;pointer-events:none;transition:opacity .3s;z-index:50}
