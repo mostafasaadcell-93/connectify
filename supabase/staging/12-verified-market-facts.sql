@@ -20,6 +20,7 @@ declare
   order_count int;
   silver jsonb;
   blue jsonb;
+  staff_expr text := '^[[:space:]]*(\([[:space:]]*)?(public\.)?is_staff[[:space:]]*\([[:space:]]*\)[[:space:]]*\)?[[:space:]]*$';
 begin
   if project_ref is distinct from 'akgilfixljswqljmedmg' then
     raise exception 'refusing to install verified facts: set connectify.project_ref to akgilfixljswqljmedmg in this session only after the SQL Editor shows that reference. This script cannot read the hosted project id. Stop if the editor shows yxkzjwcmmtiljakttyfh.';
@@ -138,25 +139,28 @@ begin
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'market_sku_facts'
       and policyname = 'staff read market facts' and cmd = 'SELECT' and 'authenticated' = any(roles)
-      and coalesce(qual, '') ~* 'public\.is_staff\s*\(' and with_check is null
+      and coalesce(qual, '') ~* staff_expr and with_check is null
   ) or not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'market_sku_facts'
       and policyname = 'staff insert market facts' and cmd = 'INSERT' and 'authenticated' = any(roles)
-      and qual is null and coalesce(with_check, '') ~* 'public\.is_staff\s*\('
+      and qual is null and coalesce(with_check, '') ~* staff_expr
   ) or not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'market_sku_facts'
       and policyname = 'staff update market facts' and cmd = 'UPDATE' and 'authenticated' = any(roles)
-      and coalesce(qual, '') ~* 'public\.is_staff\s*\(' and coalesce(with_check, '') ~* 'public\.is_staff\s*\('
+      and coalesce(qual, '') ~* staff_expr and coalesce(with_check, '') ~* staff_expr
   ) then
     raise exception 'refusing to install verified facts: staff fact policies do not enforce is_staff()';
   end if;
   if exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'market_sku_facts'
-      and coalesce(qual, '') !~* 'is_staff\s*\('
-      and coalesce(with_check, '') !~* 'is_staff\s*\('
+      and (
+        (qual is null and with_check is null)
+        or (qual is not null and qual !~* staff_expr)
+        or (with_check is not null and with_check !~* staff_expr)
+      )
   ) then
     raise exception 'refusing to install verified facts: a market_sku_facts policy does not enforce is_staff()';
   end if;

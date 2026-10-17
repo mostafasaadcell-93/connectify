@@ -51,7 +51,7 @@ test("migration 12 adds nullable provider and activation without backfilling or 
   assert.match(sql, /automation_enabled is false/);
   assert.match(sql, /enabled is false/);
   assert.match(sql, /relrowsecurity is true/);
-  assert.match(sql, /public\\\.is_staff/);
+  assert.match(sql, /\(public\\\.\)\?is_staff/);
   assert.match(sql, /store_state_revision_guard/);
   assert.match(sql, /tgenabled in \('O', 'A'\)/);
   assert.match(sql, /staff read market facts/);
@@ -87,11 +87,11 @@ const silverUnit = {id: "u-stage-1", m: "17promax", c: "Silver", st: 256, cond: 
 const blueUnit = {id: "u-stage-2", m: "17promax", c: "Deep Blue", st: 256, cond: "new", sim: "psim", qty: 1, p: 910, bat: 0, note: "staging-synthetic"};
 const phoneFixture = { "stage-ph": { v: { "0": { p: 25, q: 4 } } } };
 
-function staffPolicies() {
+function staffPolicies(expr = "is_staff()") {
   return [
-    {name: "staff read market facts", cmd: "SELECT", roles: ["authenticated"], qual: "public.is_staff()", withCheck: null},
-    {name: "staff insert market facts", cmd: "INSERT", roles: ["authenticated"], qual: null, withCheck: "public.is_staff()"},
-    {name: "staff update market facts", cmd: "UPDATE", roles: ["authenticated"], qual: "public.is_staff()", withCheck: "public.is_staff()"}
+    {name: "staff read market facts", cmd: "SELECT", roles: ["authenticated"], qual: expr, withCheck: null},
+    {name: "staff insert market facts", cmd: "INSERT", roles: ["authenticated"], qual: null, withCheck: expr},
+    {name: "staff update market facts", cmd: "UPDATE", roles: ["authenticated"], qual: expr, withCheck: expr}
   ];
 }
 
@@ -121,8 +121,8 @@ function readyStaging() {
   };
 }
 
-function enforcesStaff(text) {
-  return text != null && /is_staff\s*\(/i.test(String(text));
+function exactStaff(text) {
+  return text != null && /^\s*(\(\s*)?(public\.)?is_staff\s*\(\s*\)\s*\)?\s*$/i.test(String(text));
 }
 
 function migrationGuard(state) {
@@ -145,11 +145,13 @@ function migrationGuard(state) {
   if (state.scheduler !== false) return "scheduler is enabled or missing";
   if (state.rls !== true) return "row level security is not enabled on market_sku_facts";
   const policies = state.policies || [];
-  const read = policies.find(row => row.name === "staff read market facts" && row.cmd === "SELECT" && row.roles.includes("authenticated") && enforcesStaff(row.qual) && row.withCheck == null);
-  const insert = policies.find(row => row.name === "staff insert market facts" && row.cmd === "INSERT" && row.roles.includes("authenticated") && row.qual == null && enforcesStaff(row.withCheck));
-  const update = policies.find(row => row.name === "staff update market facts" && row.cmd === "UPDATE" && row.roles.includes("authenticated") && enforcesStaff(row.qual) && enforcesStaff(row.withCheck));
+  const read = policies.find(row => row.name === "staff read market facts" && row.cmd === "SELECT" && row.roles.includes("authenticated") && exactStaff(row.qual) && row.withCheck == null);
+  const insert = policies.find(row => row.name === "staff insert market facts" && row.cmd === "INSERT" && row.roles.includes("authenticated") && row.qual == null && exactStaff(row.withCheck));
+  const update = policies.find(row => row.name === "staff update market facts" && row.cmd === "UPDATE" && row.roles.includes("authenticated") && exactStaff(row.qual) && exactStaff(row.withCheck));
   if (!read || !insert || !update) return "staff fact policies do not enforce is_staff()";
-  if (policies.some(row => !enforcesStaff(row.qual) && !enforcesStaff(row.withCheck))) return "a market_sku_facts policy does not enforce is_staff()";
+  if (policies.some(row => (row.qual == null && row.withCheck == null) || (row.qual != null && !exactStaff(row.qual)) || (row.withCheck != null && !exactStaff(row.withCheck)))) {
+    return "a market_sku_facts policy does not enforce is_staff()";
+  }
   if (policies.some(row => ["INSERT", "UPDATE", "DELETE", "ALL"].includes(row.cmd) && row.roles.some(role => role === "anon" || role === "public"))) {
     return "anonymous write policy is present";
   }
@@ -161,6 +163,12 @@ function migrationGuard(state) {
 
 test("migration 12 guards reject missing RLS, a disabled trigger, a bad phone fixture, and a weak policy", () => {
   assert.equal(migrationGuard(readyStaging()), "");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {policies: staffPolicies("is_staff()")})), "");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {policies: staffPolicies("public.is_staff()")})), "");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {policies: staffPolicies("(is_staff())")})), "");
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {policies: staffPolicies("is_staff() OR true")})), "staff fact policies do not enforce is_staff()");
+  const looseExtra = staffPolicies().concat([{name: "loose", cmd: "SELECT", roles: ["authenticated"], qual: "is_staff() OR true", withCheck: null}]);
+  assert.equal(migrationGuard(Object.assign(readyStaging(), {policies: looseExtra})), "a market_sku_facts policy does not enforce is_staff()");
   assert.equal(migrationGuard(Object.assign(readyStaging(), {rls: false})), "row level security is not enabled on market_sku_facts");
   assert.equal(migrationGuard(Object.assign(readyStaging(), {trigger: {name: "store_state_revision_guard", table: "store_state", enabled: "D"}})), "store_state_revision_guard is missing or disabled");
   assert.equal(migrationGuard(Object.assign(readyStaging(), {trigger: null})), "store_state_revision_guard is missing or disabled");
