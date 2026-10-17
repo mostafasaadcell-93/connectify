@@ -413,26 +413,17 @@ function identityFromOffer(gate, offer) {
   return null;
 }
 
-function rememberStored(key, data) {
-  try {
-    if (typeof snap === "undefined" || !snap || !key) return;
-    snap[key] = JSON.stringify(data);
-  } catch (error) {
-    /* A later whole-row staff save can still overwrite this price. */
-  }
-}
-
 function adoptDatabase(gate, record) {
   if (!record || !gate) return;
   const key = storedKey(gate);
   if (key === "units" && Array.isArray(record.data)) DB.units = record.data;
   if (key === "ph" && record.data && typeof record.data === "object") DB.ph = record.data;
-  rememberStored(key, key === "units" ? DB.units : DB.ph);
+  if (window.CX_ADOPT_STORE) window.CX_ADOPT_STORE(key, key === "units" ? DB.units : DB.ph, record.revision);
 }
 
 async function fetchStored(key) {
   if (!window.LIVE || !LIVE.sb || !key) return {ok: false, reason: "no_readback"};
-  const {data, error} = await LIVE.sb.from("store_state").select("key,data").eq("key", key).maybeSingle();
+  const {data, error} = await LIVE.sb.from("store_state").select("key,data,revision").eq("key", key).maybeSingle();
   if (error || !data || data.key !== key) return {ok: false, reason: "no_readback", message: error && error.message};
   return {ok: true, record: data};
 }

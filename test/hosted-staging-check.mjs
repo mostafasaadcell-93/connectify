@@ -1,6 +1,13 @@
 /* Hosted staging check for Connectify PR #5.
    It refuses the production project. It uses the staging anon key and two staging users.
-   It does not read a service-role key and it does not deploy anything. */
+   It does not read a service-role key and it does not deploy anything.
+
+   INCOMPATIBLE WITH MIGRATION 10 AND MIGRATION 11.
+   This file writes store_state and then calls market_decide with status applied.
+   Do not run it after supabase/staging/10-atomic-market-pricing.sql or
+   supabase/staging/11-store-revision.sql is installed. A run after migration 10
+   can save a price and then fail the audit. It has not been adapted to
+   market_commit_price or to the inventory revision check. */
 
 export const PRODUCTION_HOST = "yxkzjwcmmtiljakttyfh.supabase.co";
 

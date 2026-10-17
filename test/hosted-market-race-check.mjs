@@ -1,4 +1,9 @@
-/* Hosted staging concurrency check for one manual price approval.
+/* INCOMPATIBLE WITH MIGRATION 10 AND MIGRATION 11.
+   Do not run this file after supabase/staging/10-atomic-market-pricing.sql or
+   supabase/staging/11-store-revision.sql is installed. It still calls market_decide
+   with status applied for a fake SKU. Adapt it before using it again.
+
+   Hosted staging concurrency check for one manual price approval.
 
    Run it only after review, with the same staging variables as
    supabase/staging/HOSTED.md section 5. This process does not run the
