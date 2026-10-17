@@ -221,6 +221,30 @@ footer{border-top:1px solid var(--line);padding:64px 0 40px;background:var(--dee
 .foot p{color:var(--mist);max-width:36ch;margin-top:14px;font-size:15px}
 .foot ul{list-style:none;display:grid;gap:8px;color:var(--mist);font-size:15px}
 .concept{margin-top:48px;padding-top:24px;border-top:1px solid var(--line);font-size:13px;color:var(--mist);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.mktable{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+.mktable th,.mktable td{border-bottom:1px solid var(--line);text-align:left;vertical-align:top;padding:10px 8px}
+.mktable th{white-space:nowrap}
+.mktnote{color:var(--mist);font-size:13px;overflow-wrap:anywhere}
+.mkwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.mkstatus{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.mkstatus p{margin:0;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--mist);max-width:100%}
+.mkbadge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;font-size:12px;line-height:1.4;white-space:nowrap}
+.mk-approved,.mk-verified{color:var(--ice)}
+.mk-applied{color:var(--ice);border-color:var(--ice)}
+.mk-restored,.mk-rejected,.mk-blocked{color:var(--mist)}
+.mkurl{display:inline-block;max-width:18ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+.mkdiag{margin:8px 0;color:var(--mist);font-size:12px}
+.mkdiag p{overflow-wrap:anywhere}
+#marketCsv,#marketQ{width:100%;margin:8px 0}
+@media (max-width:760px){
+  .mktable{min-width:640px;font-size:12px}
+  .mktable th,.mktable td{padding:8px 6px}
+  #marketRoot .stockbar{display:grid;grid-template-columns:1fr}
+  #marketRoot .stockbar label{min-width:0}
+  #marketRoot .stockbar select,#marketRoot .stockbar input[type="number"]{width:100%;max-width:100%}
+  #marketRoot .stockbar .btn,#marketRoot .stockbar .abtn{flex:1 1 140px}
+  #marketRoot .drow{align-items:flex-start;flex-wrap:wrap}
+}
 
 /* OVERLAYS */
 .scrim{position:fixed;inset:0;background:rgba(6,6,6,.6);opacity:0;pointer-events:none;transition:opacity .3s;z-index:50}
@@ -2095,6 +2119,7 @@ select option:disabled{color:#6A6A6A}
         <button data-go="trade"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>Trade-in prices</button>
         <button data-go="front"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>Storefront</button>
         <button data-go="add" id="navAdd"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Add a model</button>
+        <button data-go="market"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/></svg>Market pricing</button>
       </nav>
       <div class="afoot">
         <button class="abtn" id="aExit">View store</button>
@@ -2312,6 +2337,7 @@ select option:disabled{color:#6A6A6A}
           <button class="btn btn-main" type="submit">Add this phone</button>
         </form>
       </section>
+      <section class="apage" id="ap-market" hidden><div id="marketRoot"></div></section>
     </main>
   </div>
 </div>
@@ -13517,6 +13543,7 @@ if(!sb)return;
 const KEYS=["ph","units","newp","content","trade","custom","priv"];   // priv = cost prices and private notes, readable by staff only
 const L=window.LIVE={sb,staff:false,user:null,ready:false};
 const snap={};           // what the database has, per key (JSON text)
+const rev={};            // revision last read for units and ph; a save must send this plus one
 let pushT=null,busy=false,lastNew=-1;
 
 /* first visit on the live site: drop demo orders, demo stats and any demo edits */
@@ -13538,7 +13565,21 @@ async function push(){pushT=null;if(!L.staff||busy){if(busy)schedulePush();retur
     const ch=KEYS.filter(k=>(k in snap)&&JSON.stringify(DB[k]??null)!==snap[k]);
     ch.filter(k=>DB[k]==null).forEach(k=>snap[k]="null");   // nothing to store for this key yet (the column can't be empty)
     const rows=ch.filter(k=>DB[k]!=null).map(k=>({key:k,data:DB[k],updated_at:new Date().toISOString()}));
-    const pub=rows.filter(r=>r.key!="priv"),pr=rows.find(r=>r.key=="priv");
+    const guarded=rows.filter(r=>r.key==="units"||r.key==="ph");
+    const pub=rows.filter(r=>r.key!="priv"&&r.key!=="units"&&r.key!=="ph"),pr=rows.find(r=>r.key=="priv");
+    for(const row of guarded){
+      const seen=rev[row.key];
+      if(!Number.isInteger(seen)||seen<1){const missing=new Error("stale store save");missing.stale=true;throw missing}
+      const next=seen+1;
+      const{data,error}=await sb.from("store_state").update({data:row.data,updated_at:row.updated_at,revision:next}).eq("key",row.key).eq("revision",seen).select("key,revision");
+      const detail=error?String(error.message||"")+" "+String(error.details||"")+" "+String(error.hint||""):"";
+      if(error||!data||!data.length||Number(data[0].revision)!==next){
+        const rejected=error||new Error("stale store save");
+        if(!error||/stale store save/i.test(detail))rejected.stale=true;
+        throw rejected;
+      }
+      rev[row.key]=next;snap[row.key]=JSON.stringify(row.data);
+    }
     if(pub.length){const{error}=await sb.from("store_state").upsert(pub);
       if(error)throw error;pub.forEach(r=>snap[r.key]=JSON.stringify(r.data))}
     if(pr){const{error}=await sb.from("store_state").upsert(pr);   // saved on its own, so a problem here never blocks prices and stock
@@ -13548,8 +13589,26 @@ async function push(){pushT=null;if(!L.staff||busy){if(busy)schedulePush();retur
       const{error}=await sb.from("orders").update({status:o.status,stock_applied:!!o.stockApplied}).eq("id",o.dbid);
       if(error)throw error;o._sig=sig}
     _save();setSync("ok");
-  }catch(e){console.warn(e);setSync("err",e&&(e.message||e.code));toast("Couldn't save to the database. Check the internet, it will retry.");setTimeout(schedulePush,8000)}
-  busy=false}
+    busy=false;
+    return true;
+  }catch(e){
+    console.warn(e);busy=false;
+    const text=String((e&&(e.message||e.details||e.hint))||"");
+    if(e&&(e.stale||/stale store save/i.test(text)||(/revision/i.test(text)&&/column|schema cache/i.test(text)))){
+      clearTimeout(pushT);pushT=null;setSync("err","stale");
+      toast("This tab is out of date. The save was refused. Your unsaved edits are still on this device.");
+      return false;
+    }
+    setSync("err",e&&(e.message||e.code));toast("Couldn't save to the database. Check the internet, it will retry.");setTimeout(schedulePush,8000);return false}
+}
+window.CX_STAFF_SAVE=async function(){
+  if(!L.staff)return false;
+  if(!_save())return false;
+  clearTimeout(pushT);pushT=null;
+  for(let i=0;i<30&&busy;i++)await new Promise(r=>setTimeout(r,100));
+  if(busy)return false;
+  return (await push())===true;
+};
 
 /* ---------- customer orders and trade-in requests ---------- */
 /* CXREL_START
@@ -14179,14 +14238,26 @@ track=(kind,key)=>{if(L.staff||!key)return;const k=kind+"|"+key;if(seen.has(k))r
   evq.push({kind,key:String(key).slice(0,80)});clearTimeout(evT);evT=setTimeout(()=>{const b=evq;evq=[];sb.from("events").insert(b).then(({error})=>{if(error)console.warn(error)})},4000)};
 
 /* ---------- reading the store ---------- */
-async function pullState(){const{data,error}=await sb.from("store_state").select("key,data");if(error){console.warn(error);return false}
-  if(dirty()&&L.staff)return false;   // don't overwrite edits that are still being saved
+async function pullState(force){const{data,error}=await sb.from("store_state").select("key,data,revision");if(error){console.warn(error);return null}
+  if(dirty()&&L.staff&&!force)return false;   // don't overwrite edits that are still being saved
   let changed=false;
-  data.forEach(r=>{if(!KEYS.includes(r.key))return;const j=JSON.stringify(r.data??null);if(snap[r.key]!==j)changed=true;DB[r.key]=r.data;snap[r.key]=j});
+  data.forEach(r=>{if(!KEYS.includes(r.key))return;const j=JSON.stringify(r.data??null);if(snap[r.key]!==j)changed=true;DB[r.key]=r.data;snap[r.key]=j;
+    if((r.key==="units"||r.key==="ph")&&Number.isInteger(Number(r.revision))&&Number(r.revision)>=1)rev[r.key]=Number(r.revision)});
   if(data.some(r=>r.key=="units"))fillUnitPrices();
   if(data.some(r=>r.key=="content"||r.key=="trade"))load2();
   KEYS.forEach(k=>{if(!(k in snap))snap[k]="__none__"});   // never saved yet: first staff login uploads it
   return changed}
+window.CX_ADOPT_STORE=function(key,data,revision){
+  if(key!=="units"&&key!=="ph")return false;
+  const n=Number(revision);
+  if(!Number.isInteger(n)||n<1)return false;
+  snap[key]=JSON.stringify(data??null);rev[key]=n;return true};
+window.CX_LOAD_LATEST=async function(){
+  if(!L.staff)return false;
+  const result=await pullState(true);
+  if(result==null){toast("The latest inventory could not be loaded. Your unsaved edits are still on this device.");return false}
+  if(result)rerender();else{_save();if(ADMIN_ON)try{renderPage()}catch(e){}}
+  setSync("ok");toast("Loaded the latest inventory. Pending edits on this tab were replaced by that copy.");return true};
 function rerender(){_save();try{applyOwnerPhotos();renderStore();if(typeof tradeCalc=="function")tradeCalc();   /* new trade-in prices: only recalculate, never rebuild the customer's choices */renderCart()}catch(e){console.warn(e)}
   if(ADMIN_ON&&L.staff)try{renderPage()}catch(e){}}
 
@@ -14232,6 +14303,10 @@ shrink=async f=>{const u=await _shrinkU(f);if(!L.staff)return u;
 
 /* ---------- admin look in live mode ---------- */
 function setSync(s,why){const d=document.querySelector(".demo-strip");if(!d)return;d.classList.add("live");d.classList.toggle("err",s=="err");
+  if(s==="err"&&why==="stale"){d.textContent="Not saved: this tab is out of date. The newer inventory was kept. Your unsaved edits are still on this device. ";
+    const b=document.createElement("button");b.type="button";b.id="loadLatestInventory";b.textContent="Load the latest inventory";
+    b.style.cssText="margin-left:8px;background:transparent;color:inherit;border:1px solid currentColor;border-radius:999px;padding:4px 10px;cursor:pointer;font:inherit";
+    b.onclick=function(){CX_LOAD_LATEST()};d.appendChild(b);return}
   d.textContent=s=="err"?"Not saved yet: "+(why?why+". ":"no connection to the database. ")+"Your changes are kept on this device and will retry.":"Live: changes save to the store's database and show to customers right away."}
 document.querySelectorAll(".ldemo").forEach(e=>e.hidden=true);
 setSync("ok");
@@ -14328,5 +14403,6 @@ try{CX.restore()}catch(err){console.warn(err)}
 sendOrders();
 })();
 </script>
+<script type="module" src="market/admin.js"></script>
 </body>
 </html>

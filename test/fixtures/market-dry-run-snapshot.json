@@ -1,0 +1,198 @@
+{
+  "snapshotAt": "2026-10-17T12:00:00Z",
+  "executedAt": "2026-10-17T12:00:00Z",
+  "settings": {
+    "minMarginPct": 2,
+    "automationEnabled": true,
+    "writesEnabled": true,
+    "automation_enabled": true,
+    "writes_enabled": true
+  },
+  "facts": {},
+  "catalog": [
+    {
+      "sku": "unit:eligible",
+      "kind": "phone",
+      "title": "iPhone 17 Pro Max",
+      "detail": "256GB, Silver, new, psim",
+      "price": 1542,
+      "cost": 1400,
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "silver", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "sku": "unit:specs",
+      "kind": "phone",
+      "title": "iPhone 17 Pro Max",
+      "detail": "256GB, Blue, new, psim",
+      "price": 1542,
+      "cost": 1400,
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "blue", "warrantyYears": 1, "warrantyProvider": null, "region": "us", "activation": null}
+    },
+    {
+      "sku": "unit:sim",
+      "kind": "phone",
+      "title": "iPhone 17 Pro Max",
+      "detail": "256GB, Black, new, psim",
+      "price": 1542,
+      "cost": 1400,
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "black", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "sku": "unit:cost",
+      "kind": "phone",
+      "title": "iPhone 17 Pro Max",
+      "detail": "256GB, Gold, new, psim",
+      "price": 1542,
+      "cost": null,
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "gold", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "sku": "unit:eur",
+      "kind": "phone",
+      "title": "iPhone 17 Pro Max",
+      "detail": "256GB, Green, new, psim",
+      "price": 1542,
+      "cost": 1400,
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "green", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "sku": "unit:jump",
+      "kind": "phone",
+      "title": "iPhone 17 Pro Max",
+      "detail": "256GB, Natural, new, psim",
+      "price": 1542,
+      "cost": 1400,
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "natural", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "sku": "unit:stale",
+      "kind": "phone",
+      "title": "iPhone 17 Pro Max",
+      "detail": "256GB, White, new, psim",
+      "price": 1542,
+      "cost": 1400,
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "white", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "sku": "unit:future",
+      "kind": "phone",
+      "title": "iPhone 17 Pro Max",
+      "detail": "256GB, Desert, new, psim",
+      "price": 1542,
+      "cost": 1400,
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "desert", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    }
+  ],
+  "observations": [
+    {
+      "store": "Fresh Shop",
+      "name": "iPhone 17 Pro Max 256GB Silver",
+      "price": 1515,
+      "currency": "USD",
+      "url": "https://fresh-shop.example/p/eligible",
+      "available": true,
+      "checkedAt": "2026-10-17T00:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "silver", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "Higher Shop",
+      "name": "iPhone 17 Pro Max 256GB Silver",
+      "price": 1600,
+      "currency": "USD",
+      "url": "https://higher-shop.example/p/eligible",
+      "available": true,
+      "checkedAt": "2026-10-17T06:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "silver", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "Old Shop",
+      "name": "iPhone 17 Pro Max 256GB Silver",
+      "price": 1500,
+      "currency": "USD",
+      "url": "https://old-shop.example/p/eligible",
+      "available": true,
+      "checkedAt": "2026-10-07T12:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "silver", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "Spec Shop",
+      "name": "iPhone 17 Pro Max 256GB Blue",
+      "price": 1515,
+      "currency": "USD",
+      "url": "https://spec-shop.example/p/1",
+      "available": true,
+      "checkedAt": "2026-10-17T00:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "blue", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "SIM Shop",
+      "name": "iPhone 17 Pro Max 256GB Black eSIM",
+      "price": 1515,
+      "currency": "USD",
+      "url": "https://sim-shop.example/p/1",
+      "available": true,
+      "checkedAt": "2026-10-17T00:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "esim", "color": "black", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "Cost Shop",
+      "name": "iPhone 17 Pro Max 256GB Gold",
+      "price": 1515,
+      "currency": "USD",
+      "url": "https://cost-shop.example/p/1",
+      "available": true,
+      "checkedAt": "2026-10-17T00:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "gold", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "Euro Shop",
+      "name": "iPhone 17 Pro Max 256GB Green",
+      "price": 1515,
+      "currency": "EUR",
+      "url": "https://euro-shop.example/p/1",
+      "available": true,
+      "checkedAt": "2026-10-17T00:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "green", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "Jump Shop",
+      "name": "iPhone 17 Pro Max 256GB Natural",
+      "price": 1800,
+      "currency": "USD",
+      "url": "https://jump-shop.example/p/1",
+      "available": true,
+      "checkedAt": "2026-10-17T00:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "natural", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "Stale Shop",
+      "name": "iPhone 17 Pro Max 256GB White",
+      "price": 1500,
+      "currency": "USD",
+      "url": "https://stale-shop.example/p/1",
+      "available": true,
+      "checkedAt": "2026-10-01T12:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "white", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    },
+    {
+      "store": "Future Shop",
+      "name": "iPhone 17 Pro Max 256GB Desert",
+      "price": 1490,
+      "currency": "USD",
+      "url": "https://future-shop.example/p/1",
+      "available": true,
+      "checkedAt": "2026-10-18T12:00:00Z",
+      "status": "ok",
+      "specs": {"brand": "apple", "model": "17promax", "storage": 256, "ram": null, "condition": "new", "sim": "psim", "color": "desert", "warrantyYears": 1, "warrantyProvider": "apple", "region": "us", "activation": "inactive"}
+    }
+  ]
+}
