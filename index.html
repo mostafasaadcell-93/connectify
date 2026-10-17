@@ -11714,7 +11714,10 @@ function bindPhoneAdd(){const a=$("pvAdd");if(!a)return;a.onclick=()=>{
   const m=pvs.m;if(!m||!comboOK(m,pvs)){renderPV();return}
   const unit=bestUnit(m,pvs);if(!unit||!(unit.qty>0)){renderPV();return}
   const key=variantKey();if(cartHas(key))return;
-  cart.push({key,kind:"phone",id:m.id,unit:unit.id,price:unit.p>0?unit.p:null,title:m.name,hex:hexOf(m,pvs.color),detail:`${fmtGB(pvs.st)}, ${pvs.color}, ${CONDS[pvs.cond].label}, ${SIMS[pvs.sim].label}`});
+  const row={key,kind:"phone",id:m.id,unit:unit.id,price:unit.p>0?unit.p:null,title:m.name,hex:hexOf(m,pvs.color),detail:`${fmtGB(pvs.st)}, ${pvs.color}, ${CONDS[pvs.cond].label}, ${SIMS[pvs.sim].label}`};
+  const phoneCond=CONDS[unit.cond]?unit.cond:(CONDS[pvs.cond]?pvs.cond:"");
+  if(phoneCond)row.cond=phoneCond;
+  cart.push(row);
   renderCart();closeModals();openCart(true)}}
 function refreshPhoneCTA(){const box=document.querySelector("#pvBody .pvacts");if(!box||!pvs.m||PV_KIND!="phone")return;box.innerHTML=phoneActsHTML();bindPhoneAdd()}
 function renderPV(){
@@ -11811,7 +11814,10 @@ $("waGo").addEventListener("click",()=>setTimeout(()=>closeWA(),300));
 $("waClose").onclick=()=>closeWA();
 const cart=[];
 const cartHas=k=>cart.some(i=>i.key==k);
-function addAcc(id){const a=accById(id);if(!a||!accOK(a)||cartHas("acc:"+id))return;cart.push({key:"acc:"+id,kind:"acc",id,title:a.name,detail:a.spec});renderCart();renderGrid();openCart(true)}
+function addAcc(id){const a=accById(id);if(!a||!accOK(a)||cartHas("acc:"+id))return;
+  const row={key:"acc:"+id,kind:"acc",id,title:a.name,detail:a.spec};
+  if(CONDS[a.cond])row.cond=a.cond;
+  cart.push(row);renderCart();renderGrid();openCart(true)}
 function renderCart(){
   const c=$("count");c.textContent=cart.length;c.classList.remove("bump");void c.offsetWidth;c.classList.add("bump");
   $("items").innerHTML=cart.length?cart.map((it,i)=>{const pic=it.kind=="phone"?mSVG(modelById(it.id),it.hex):(accById(it.id)?art(accById(it.id)):"");
@@ -12222,8 +12228,17 @@ $("pvBody").addEventListener("click",e=>{const c=e.target.closest("[data-pc]");i
   const k=+b.dataset.po;pvp.sel[k]=b.dataset.v;pvp.pc=null;
   if(phVarIdx(pvp.p,pvp.sel)<0){const j=pvp.p.vars.findIndex(v=>(v.t||"").split(" / ")[k]==b.dataset.v);if(j>=0)pvp.sel=(pvp.p.vars[j].t||"").split(" / ")}
   const y=$("pvBody").scrollTop;renderPH(true);$("pvBody").scrollTop=y},true);
+function cxListedCond(variant,desc){
+  const fromVariant=condScan(variant);
+  if(fromVariant)return fromVariant;
+  const field=(String(desc||"").match(/condition:\s*([^\n.]+)/i)||[])[1]||"";
+  return condScan(field)||"";
+}
 function addPH(p,vi){const v=phV(p,vi),key="ph:"+p.id+":"+vi;if(!p||cartHas(key)||!v.ok||phHidden(p))return;
-  cart.push({key,kind:"ph",id:p.id,vi,title:p.name,detail:v.t||p.brand,price:v.p,img:phImg(hasImg(v.img)?v.img:p.imgs[0],160),dept:p.dept});renderCart();renderGrid();openCart(true)}
+  const row={key,kind:"ph",id:p.id,vi,title:p.name,detail:v.t||p.brand,price:v.p,img:phImg(hasImg(v.img)?v.img:p.imgs[0],160),dept:p.dept};
+  const listed=cxListedCond(v.t,((phO(p.id)||{}).desc??p.desc)||"");
+  if(CONDS[listed])row.cond=listed;
+  cart.push(row);renderCart();renderGrid();openCart(true)}
 
 /* ---------- cart with prices ---------- */
 function renderCart(){
@@ -13729,11 +13744,28 @@ function cxOrderMessage(p,money,waShow){
   const parts=["*CONNECTIFY — NEW ORDER*","Order: "+(p.id||"")];
   if(customer.length)parts.push("","*CUSTOMER DETAILS*",customer.join("\n"));
   parts.push("","*ORDER ITEMS*",items?"\n"+items:"");
-  parts.push("","*ORDER SUMMARY*",summary.join("\n"),"","Can you confirm the prices and send me real photos?");
+  const knownCond=i=>{
+    const ok=c=>c==="new"||c==="open"||c==="likenew"||c==="used"||c==="refurb";
+    if(i&&ok(i.cond))return i.cond;
+    const pipe=String(i&&i.key||"").split("|");
+    if(i&&(i.kind==="phone"||pipe.length>=5)&&pipe.length>=5&&ok(pipe[3]))return pipe[3];
+    return "";
+  };
+  const photo=cart.filter(i=>knownCond(i)!=="new").map(i=>{
+    const at=cart.indexOf(i)+1;
+    return "item "+at+", "+(i.title||"item "+at)+(i.detail?", "+i.detail:"");
+  });
+  const close=!photo.length?"Please confirm the order details and prices.":(photo.length===cart.length?"Can you confirm the prices and send me real photos?":"Please confirm the order details and prices. Please send real photos of: "+photo.join("; ")+".");
+  const lead=!photo.length
+    ?"Last step: send it to us on WhatsApp ("+waShow+"). We reply to confirm the prices."
+    :(photo.length===cart.length
+      ?"Last step: send it to us on WhatsApp ("+waShow+"). We reply with prices and real photos."
+      :"Last step: send it to us on WhatsApp ("+waShow+"). We reply with prices and real photos of the items that are not sealed new.");
+  parts.push("","*ORDER SUMMARY*",summary.join("\n"),"",close);
   return {
     msg:parts.join("\n"),
     title:"Order "+p.id+" saved",
-    lead:"Last step: send it to us on WhatsApp ("+waShow+"). We reply with prices and real photos."
+    lead:lead
   };
 }
 function cxTradeMessage(p,waShow){
