@@ -54,8 +54,11 @@ test("one manual approval cannot be applied twice at the same time", async () =>
   const release = await holdLocalStagingLock();
   try {
   const migration = readFileSync(root + "/supabase/staging/09-approval-consumption-lock.sql", "utf8");
-  assert.match(migration, /refusing to replace market_decide: this database has orders that are not staging orders/);
-  assert.match(migration, /inventory is not marked staging-synthetic/);
+  const executable = migration.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter(line => !/^\s*--/.test(line)).join("\n");
+  assert.equal(/set_config\s*\(/i.test(executable), false);
+  assert.match(migration, /cannot read the hosted project id/);
+  assert.match(migration, /unexpected or missing synthetic orders/);
+  assert.match(migration, /unexpected or missing synthetic units/);
   assert.match(migration, /market_sku_locks/);
   assert.match(migration, /on conflict \(sku\) do update set sku = excluded.sku/);
   assert.equal(migration.includes("delete from public.market_decisions"), false);
@@ -259,7 +262,7 @@ select 'done-${skuKey}';
   } catch (error) {
     refused = true;
     const detail = String(error.stderr || error.stdout || error.message);
-    assert.match(detail, /not staging orders|staging-synthetic/);
+    assert.match(detail, /cannot read the hosted project id/);
     assert.equal(detail.includes("sb_publishable_"), false);
     assert.equal(detail.includes("sb_secret_"), false);
   }

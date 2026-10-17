@@ -1,35 +1,103 @@
 -- Serialize manual applies so one approval can be consumed only once.
--- Paste this whole file once in the staging SQL editor. Confirm the project is akgilfixljswqljmedmg.
--- If the editor shows yxkzjwcmmtiljakttyfh, stop. Do not run this on production.
--- It refuses live order codes and inventory that is not staging-synthetic.
--- It does not change prices, stock, orders, or the scheduler, and it does not delete market_decisions.
--- Do not rerun the synthetic seed.
-
-select set_config('connectify.project_ref', 'akgilfixljswqljmedmg', false);
+-- This script cannot read the hosted Supabase project id.
+-- In the SQL Editor, read the project reference yourself.
+-- If it is yxkzjwcmmtiljakttyfh, stop. Do not run this on production.
+-- If it is akgilfixljswqljmedmg, run this in the same SQL Editor session before pasting this file:
+--   select set_config('connectify.project_ref', 'akgilfixljswqljmedmg', false);
+-- That setting is your confirmation of the editor. It is not proof of which database this is.
+-- The checks below require the known synthetic staging fixtures and refuse anything else.
+-- This file does not change prices, stock, orders, or the scheduler, and it does not delete market_decisions.
+-- Do not rerun the synthetic seed. Do not enable automatic pricing.
 
 do $migration$
+declare
+  project_ref text := current_setting('connectify.project_ref', true);
+  unit_count int;
+  order_count int;
+  silver jsonb;
+  blue jsonb;
 begin
-  if current_setting('connectify.project_ref', true) is distinct from 'akgilfixljswqljmedmg' then
-    raise exception 'refusing to replace market_decide unless connectify.project_ref is akgilfixljswqljmedmg';
+  if project_ref is distinct from 'akgilfixljswqljmedmg' then
+    raise exception 'refusing to replace market_decide: set connectify.project_ref to akgilfixljswqljmedmg in this session only after the SQL Editor shows that reference. This script cannot read the hosted project id. Stop if the editor shows yxkzjwcmmtiljakttyfh.';
   end if;
-  if to_regclass('public.orders') is not null and exists (
-    select 1 from public.orders
-    where code not like 'C-STAGE-%' and code not like 'T-STAGE-%'
-  ) then
-    raise exception 'refusing to replace market_decide: this database has orders that are not staging orders';
+  if to_regclass('public.store_state') is null
+     or to_regclass('public.orders') is null
+     or to_regclass('public.market_settings') is null
+     or to_regclass('public.market_query_config') is null
+     or to_regclass('public.market_decisions') is null then
+    raise exception 'refusing to replace market_decide: required staging tables are missing';
   end if;
-  if to_regclass('public.store_state') is not null and exists (
+  if not exists (
     select 1 from public.store_state
-    where key = 'units'
-      and jsonb_typeof(data) = 'array'
-      and jsonb_array_length(data) > 0
-      and exists (
-        select 1 from jsonb_array_elements(data) unit
-        where coalesce(unit->>'note', '') is distinct from 'staging-synthetic'
-           or coalesce(unit->>'id', '') not like 'u-stage-%'
-      )
+    where key = 'units' and jsonb_typeof(data) = 'array'
   ) then
-    raise exception 'refusing to replace market_decide: inventory is not marked staging-synthetic';
+    raise exception 'refusing to replace market_decide: unexpected or missing synthetic units';
+  end if;
+
+  select count(*) into unit_count
+  from public.store_state, lateral jsonb_array_elements(data) unit
+  where key = 'units';
+  select unit into silver
+  from public.store_state, lateral jsonb_array_elements(data) unit
+  where key = 'units' and unit->>'id' = 'u-stage-1';
+  select unit into blue
+  from public.store_state, lateral jsonb_array_elements(data) unit
+  where key = 'units' and unit->>'id' = 'u-stage-2';
+  if unit_count is distinct from 2
+     or silver is distinct from '{"id":"u-stage-1","m":"17promax","c":"Silver","st":256,"cond":"new","sim":"psim","qty":2,"p":900,"bat":0,"note":"staging-synthetic"}'::jsonb
+     or blue is distinct from '{"id":"u-stage-2","m":"17promax","c":"Deep Blue","st":256,"cond":"new","sim":"psim","qty":1,"p":910,"bat":0,"note":"staging-synthetic"}'::jsonb then
+    raise exception 'refusing to replace market_decide: unexpected or missing synthetic units';
+  end if;
+
+  select count(*) into order_count from public.orders;
+  if order_count is distinct from 2
+     or not exists (
+       select 1 from public.orders
+       where code = 'C-STAGE-CONF' and type = 'order' and status = 'confirmed' and stock_applied is true
+     )
+     or not exists (
+       select 1 from public.orders
+       where code = 'C-STAGE-NEW' and type = 'order' and status = 'new' and stock_applied is false
+     ) then
+    raise exception 'refusing to replace market_decide: unexpected or missing synthetic orders';
+  end if;
+
+  if not exists (
+    select 1 from public.store_state
+    where key = 'ph'
+      and jsonb_typeof(data) = 'object'
+      and (select array_agg(phone_key order by phone_key) from jsonb_object_keys(data) phone_key) = array['stage-ph']
+  ) then
+    raise exception 'refusing to replace market_decide: unexpected or missing synthetic phone fixture';
+  end if;
+  if not exists (
+    select 1 from public.store_state
+    where key = 'priv'
+      and jsonb_typeof(data) = 'object'
+      and (select array_agg(priv_key order by priv_key) from jsonb_object_keys(data) priv_key) = array['u']
+      and (select array_agg(unit_key order by unit_key) from jsonb_object_keys(data->'u') unit_key) = array['u-stage-1','u-stage-2']
+      and data #> '{u,u-stage-1}' is not null
+      and data #> '{u,u-stage-2}' is not null
+  ) then
+    raise exception 'refusing to replace market_decide: unexpected or missing synthetic private fixture';
+  end if;
+
+  if not exists (
+    select 1 from public.market_settings
+    where id = 1 and automation_enabled is false and writes_enabled is false
+  ) or exists (
+    select 1 from public.market_settings
+    where automation_enabled is true or writes_enabled is true
+  ) then
+    raise exception 'refusing to replace market_decide: automation or writes are enabled';
+  end if;
+  if not exists (
+    select 1 from public.market_query_config
+    where id = 1 and enabled is false
+  ) or exists (
+    select 1 from public.market_query_config where enabled is true
+  ) then
+    raise exception 'refusing to replace market_decide: scheduler is enabled or missing';
   end if;
 
   execute 'create table if not exists public.market_sku_locks (sku text primary key)';

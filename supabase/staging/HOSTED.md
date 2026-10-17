@@ -149,11 +149,19 @@ The `node` process itself does not connect to Supabase. Stop it with Ctrl+C when
 
 ## 10. One approval, one apply
 
-Do this only after reviewing `supabase/staging/09-approval-consumption-lock.sql`. In the staging SQL editor, confirm the reference is `akgilfixljswqljmedmg`. If it is `yxkzjwcmmtiljakttyfh`, stop.
+Review `supabase/staging/09-approval-consumption-lock.sql` before running it. The file cannot see the hosted project id, and it does not set `connectify.project_ref` itself. That value is only your confirmation of what the SQL Editor shows. It is not an independent project check.
 
-Paste and run that file once, as one query. It adds a per-SKU lock and replaces `market_decide` only. Two manual applies of the same approval cannot both succeed, even when their apply keys differ. It refuses live order codes and inventory that is not marked `staging-synthetic`. It does not delete decisions, rerun the seed, or change prices, stock, orders, or the scheduler.
+In the Supabase dashboard, read the project reference. If it is `yxkzjwcmmtiljakttyfh`, stop. If it is `akgilfixljswqljmedmg`, open the SQL Editor and run this by itself:
 
-Do not run it until you have reviewed it. This repository copy has not been executed on the hosted staging project.
+```sql
+select set_config('connectify.project_ref', 'akgilfixljswqljmedmg', false);
+```
+
+Then paste and run `09-approval-consumption-lock.sql` in that same session. The script refuses to continue unless the fixtures are exactly the synthetic ones: units `u-stage-1` (Silver, 256, new, psim, qty 2, price 900, note `staging-synthetic`) and `u-stage-2` (Deep Blue, qty 1, price 910, same other fields); orders `C-STAGE-CONF` (confirmed, stock applied) and `C-STAGE-NEW` (new, stock not applied); phone key `stage-ph`; and private entries for those two units only. A missing fixture or any extra unit, order, or marker stops it. It also stops if automation, price writes, or the scheduler are enabled. It adds a per-SKU lock and replaces `market_decide` only. It does not delete decisions, rerun the seed, or change prices, stock, orders, or the scheduler.
+
+Saving a price and recording the audit row are still separate. This migration does not make those two steps atomic. The admin page can still write a price before the audit insert.
+
+Do not run the file until you have reviewed it. The hosted staging project has not had this version applied yet.
 
 ## What stays off
 
