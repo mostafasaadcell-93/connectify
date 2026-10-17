@@ -108,7 +108,7 @@ test("order message is a receipt with one exact link under every item", () => {
   const built = cx.cxOrderMessage(pending, money, "+961 71 062 768");
   const msg = built.msg;
   assert.equal(built.title, "Order C-0123456789abcdef01 saved");
-  assert.equal(built.lead, "Last step: send it to us on WhatsApp (+961 71 062 768). We reply with prices and real photos.");
+  assert.equal(built.lead, "Last step: send it to us on WhatsApp (+961 71 062 768). We reply with prices and real photos of the items that are not sealed new.");
   const urls = [
     PHONE,
     PHONE_BLUE,
@@ -185,7 +185,7 @@ test("order message is a receipt with one exact link under every item", () => {
     "Subtotal: $4888 + delivery",
     "Delivery to Beirut, cash on delivery",
     "",
-    "Can you confirm the prices and send me real photos?"
+    "Please confirm the order details and prices. Please send real photos of: item 4, Silicone Case, iPhone 16; item 5, Silicone Case, Galaxy S24 Ultra; item 6, Galaxy Tab A11, Gray, 8GB/128GB, New; item 7, Galaxy Tab A11, Silver, 8GB/128GB, New; item 8, Tempered Glass Screen Protector, iPhone 12 Pro Max; item 9, Samsung Adapter 25W, Black 25W; item 10, Karl Lagerfeld silicone cover, iPhone 16 Pro Max, pink or black."
   ].join("\n");
   assert.equal(msg, expected);
   assert.equal(msg.split("\n").filter(line => line.startsWith("https://")).length, pending.cart.length);
@@ -257,6 +257,91 @@ test("order message is a receipt with one exact link under every item", () => {
   assert.equal(html.includes("cart.map(i=>`• ${i.title}"), false);
 });
 
+test("the receipt asks for real photos only when an item is not confirmed new", () => {
+  const money = n => "$" + n;
+  const customer = {name: "Karim", area: "Beirut", address: "Hamra street building 4"};
+  const phone = (cond, title) => ({
+    key: "17promax|Silver|256|" + cond + "|psim",
+    kind: "phone",
+    id: "17promax",
+    unit: "u12",
+    title: title || "iPhone 17 Pro Max",
+    detail: "256GB, Silver, " + cond,
+    price: 1542,
+    cond
+  });
+  const sealed = cx.cxOrderMessage({
+    id: "C-eeeeeeeeeeeeeeeeee",
+    cart: [phone("new")],
+    form: customer
+  }, money, "+961 71 062 768");
+  assert.match(sealed.msg, /Please confirm the order details and prices\.$/);
+  assert.equal(sealed.msg.includes("real photos"), false);
+  assert.equal(sealed.lead, "Last step: send it to us on WhatsApp (+961 71 062 768). We reply to confirm the prices.");
+  assert.match(sealed.msg, /https:\/\/connectifystore\.vercel\.app\/\?p=phone&id=17promax&unit=u12&color=Silver&st=256&cond=new&sim=psim/);
+  assert.match(sealed.msg, /Subtotal: \$1542 \+ delivery/);
+
+  const charger = cx.cxOrderMessage({
+    id: "C-ffffffffffffffffff",
+    cart: [{key: "ph:cx14:0", kind: "ph", id: "cx14", vi: 0, title: "Samsung Adapter 25W", detail: "White, 25W", price: 17.5, cond: "new"}],
+    form: customer
+  }, money, "+961 71 062 768");
+  assert.match(charger.msg, /Please confirm the order details and prices\.$/);
+  assert.equal(charger.msg.includes("real photos"), false);
+  assert.match(charger.msg, /Price: \$17\.5\nhttps:\/\/connectifystore\.vercel\.app\/\?p=ph&id=cx14&v=0/);
+
+  const accessory = cx.cxOrderMessage({
+    id: "C-111111111111111111",
+    cart: [{key: "acc:a18", kind: "acc", id: "a18", title: "Karl Lagerfeld silicone cover", detail: "iPhone 16 Pro Max, pink or black", price: 12, cond: "new"}],
+    form: customer
+  }, money, "+961 71 062 768");
+  assert.equal(accessory.msg.includes("real photos"), false);
+  assert.match(accessory.msg, /https:\/\/connectifystore\.vercel\.app\/\?p=acc&id=a18/);
+
+  for (const cond of ["used", "open", "refurb", "likenew"]) {
+    const older = cx.cxOrderMessage({
+      id: "C-222222222222222222",
+      cart: [phone(cond)],
+      form: customer
+    }, money, "+961 71 062 768");
+    assert.match(older.msg, /Can you confirm the prices and send me real photos\?$/);
+    assert.equal(older.lead, "Last step: send it to us on WhatsApp (+961 71 062 768). We reply with prices and real photos.");
+    assert.match(older.msg, new RegExp("cond=" + cond));
+  }
+
+  const mixed = cx.cxOrderMessage({
+    id: "C-333333333333333333",
+    cart: [phone("new", "iPhone 17 Pro Max"), phone("used", "iPhone 14 Pro")],
+    form: customer
+  }, money, "+961 71 062 768");
+  assert.match(mixed.msg, /Please confirm the order details and prices\. Please send real photos of: item 2, iPhone 14 Pro, 256GB, Silver, used\.$/);
+  assert.equal(mixed.msg.includes("item 1, iPhone 17 Pro Max"), false);
+  assert.match(mixed.lead, /not sealed new/);
+  assert.match(mixed.msg, /Subtotal: \$3084 \+ delivery/);
+
+  const named = cx.cxOrderMessage({
+    id: "C-444444444444444444",
+    cart: [{key: "acc:case", kind: "acc", id: "case", title: "Brand New Silicone Case", detail: "Pink", price: 10}],
+    form: customer
+  }, money, "+961 71 062 768");
+  assert.match(named.msg, /Can you confirm the prices and send me real photos\?$/);
+  assert.equal(named.msg.includes("Please confirm the order details and prices."), false);
+
+  const variantText = cx.cxOrderMessage({
+    id: "C-555555555555555555",
+    cart: [{key: "ph:cx2:0", kind: "ph", id: "cx2", vi: 0, title: "Galaxy Tab A11", detail: "Gray, 8GB/128GB, New", price: 197}],
+    form: customer
+  }, money, "+961 71 062 768");
+  assert.match(variantText.msg, /Can you confirm the prices and send me real photos\?$/);
+
+  const coded = cx.cxOrderMessage({
+    id: "C-666666666666666666",
+    cart: [{key: "17promax|Silver|256|new|psim", kind: "phone", id: "17promax", unit: "u12", title: "Used-looking name", detail: "256GB, Silver, New, Nano-SIM + eSIM", price: 1542}],
+    form: customer
+  }, money, "+961 71 062 768");
+  assert.equal(coded.msg.includes("real photos"), false);
+});
+
 test("a phone-width order receipt stays readable for phones, chargers, and a tablet", async () => {
   await boot;
   const context = await browser.newContext({viewport: {width: 390, height: 844}, locale: "en-US"});
@@ -320,7 +405,15 @@ test("a phone-width order receipt stays readable for phones, chargers, and a tab
   assert.match(bubble, /Address: Hamra street building 4/);
   assert.match(bubble, /Subtotal: \$/);
   assert.match(bubble, /Delivery to Beirut, cash on delivery/);
-  assert.match(bubble, /Can you confirm the prices and send me real photos\?/);
+  const photoAsk = bubble.split("Please send real photos of:")[1] || "";
+  assert.match(bubble, /Please confirm the order details and prices\./);
+  assert.match(photoAsk, /Samsung Adapter 25W/);
+  assert.match(photoAsk, /Silicone Case/);
+  assert.equal(photoAsk.includes("Galaxy Tab A11"), false);
+  const phoneUrl = layout.urls.find(url => url.includes("p=phone&id=17promax"));
+  if (new URL(phoneUrl).searchParams.get("cond") === "new") assert.equal(photoAsk.includes("iPhone 17 Pro Max"), false);
+  const lead = await page.evaluate(() => document.querySelector("#waLead").textContent);
+  assert.match(lead, /not sealed new/);
   assert.equal(bubble.includes("70123456"), false);
   assert.equal(orderPosts.length, 1);
   const posted = JSON.parse(orderPosts[0]);
@@ -686,7 +779,14 @@ test("every orderable category gets its own link through checkout, including a c
   assert.match(bubble, /\*ORDER SUMMARY\*/);
   assert.match(bubble, /Subtotal: \$/);
   assert.match(bubble, /Delivery to Beirut, cash on delivery/);
-  assert.match(bubble, /Can you confirm the prices and send me real photos\?/);
+  const photoAsk = bubble.split("Please send real photos of:")[1] || "";
+  assert.match(bubble, /Please confirm the order details and prices\./);
+  assert.match(photoAsk, /Apple Adapter 25W/);
+  assert.equal(photoAsk.includes("Galaxy Tab A11"), false);
+  const sealedPhone = pairs.find(pair => pair.url.includes("p=phone&id=17promax"));
+  if (sealedPhone && new URL(sealedPhone.url).searchParams.get("cond") === "new") assert.equal(photoAsk.includes("iPhone 17 Pro Max"), false);
+  const lead = await page.evaluate(() => document.querySelector("#waLead").textContent);
+  assert.match(lead, /not sealed new/);
   assert.equal(bubble.includes("70123456"), false);
   const href = await page.evaluate(() => document.querySelector("#waGo").getAttribute("href"));
   const wa = new URL(href);
@@ -788,6 +888,8 @@ test("a failed charger checkout keeps the cart and the retry reuses one referenc
   await page.waitForFunction(() => document.querySelector("#waModal").classList.contains("on"), null, {timeout: 20000});
   const bubble = await page.evaluate(() => document.querySelector("#bubble").textContent);
   assert.match(bubble, /\*1\. Apple Adapter 25W\*\nWhite, 25W\nPrice: \$38\nhttps:\/\/connectifystore\.vercel\.app\/\?p=ph&id=cx12&v=0/);
+  assert.match(bubble, /Can you confirm the prices and send me real photos\?/);
+  assert.equal(bubble.includes("Please confirm the order details and prices."), false);
   assert.equal(codes.length, 2);
   assert.equal(codes[0], codes[1]);
   assert.match(codes[0], /^C-[0-9a-f]{18}$/);
