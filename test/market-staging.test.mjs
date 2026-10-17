@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {execFileSync} from "node:child_process";
+import {holdLocalStagingLock} from "./staging-db-lock.mjs";
 
 const psql = "/usr/lib/postgresql/16/bin/psql";
 
@@ -8,7 +9,9 @@ function sql(database, args) {
   return execFileSync("sudo", ["-u", "postgres", psql, "-d", database, "-v", "ON_ERROR_STOP=1", ...args], {encoding: "utf8"});
 }
 
-test("local staging enforces staff decisions, read-back rows, and a disabled scheduler", () => {
+test("local staging enforces staff decisions, read-back rows, and a disabled scheduler", async () => {
+  const release = await holdLocalStagingLock();
+  try {
   const databases = sql("postgres", ["-tAc", "select datname from pg_database where datname = 'connectify_staging'"]).trim();
   if (!databases) sql("postgres", ["-c", "create database connectify_staging"]);
   sql("connectify_staging", ["-f", "/workspace/test/staging-local.sql"]);
@@ -23,4 +26,7 @@ test("local staging enforces staff decisions, read-back rows, and a disabled sch
   assert.equal(price, "1542,2");
   const order = sql("connectify_staging", ["-tAc", "select status from public.orders where code = 'C-STAGING-1'"]).trim();
   assert.equal(order, "confirmed");
+  } finally {
+    release();
+  }
 });

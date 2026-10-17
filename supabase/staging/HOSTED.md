@@ -147,6 +147,14 @@ In Notepad, leave the URL as `https://akgilfixljswqljmedmg.supabase.co`. Set `ST
 
 The `node` process itself does not connect to Supabase. Stop it with Ctrl+C when you are done looking. Do not approve or apply a price from this screen.
 
+## 10. One approval, one apply
+
+Do this only after reviewing `supabase/staging/09-approval-consumption-lock.sql`. In the staging SQL editor, confirm the reference is `akgilfixljswqljmedmg`. If it is `yxkzjwcmmtiljakttyfh`, stop.
+
+Paste and run that file once, as one query. It adds a per-SKU lock and replaces `market_decide` only. Two manual applies of the same approval cannot both succeed, even when their apply keys differ. It refuses live order codes and inventory that is not marked `staging-synthetic`. It does not delete decisions, rerun the seed, or change prices, stock, orders, or the scheduler.
+
+Do not run it until you have reviewed it. This repository copy has not been executed on the hosted staging project.
+
 ## What stays off
 
 - `market_settings.automation_enabled` and `writes_enabled` stay false.

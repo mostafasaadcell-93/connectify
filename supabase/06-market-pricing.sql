@@ -84,9 +84,19 @@ create policy "staff read market decisions" on public.market_decisions for selec
 drop policy if exists "staff write market decisions" on public.market_decisions;
 -- No direct insert policy. Staff write decisions only through market_decide, which checks is_staff().
 
+-- One row per SKU. market_decide locks it for the whole decision so two applies cannot
+-- both pass the approval check. Clients have no privileges on this table.
+create table if not exists public.market_sku_locks (
+  sku text primary key
+);
+alter table public.market_sku_locks enable row level security;
+revoke all on table public.market_sku_locks from public, anon, authenticated;
+
 -- Manual approval is allowed while scheduled automation stays off.
 -- Applied is recorded only after the caller has confirmed the staff price save.
 -- This function does not write product prices, stock, or orders.
+-- A manual approval authorizes one later apply. The SKU lock is taken before that
+-- approval is read again, so a second apply waits and then sees the first one.
 drop function if exists public.market_decide(text, text, numeric, numeric, text, jsonb);
 create or replace function public.market_decide(p_sku text, p_status text, p_target numeric, p_previous numeric, p_apply_key text, p_proposal jsonb, p_mode text default 'manual')
 returns uuid
@@ -109,6 +119,11 @@ begin
     raise exception 'bad mode';
   end if;
   select * into settings from public.market_settings where id = 1;
+  -- Serialize approvals, rejections, applies, and restores for this SKU.
+  -- ON CONFLICT DO UPDATE locks the existing row until this transaction ends.
+  insert into public.market_sku_locks (sku)
+  values (p_sku)
+  on conflict (sku) do update set sku = excluded.sku;
   if p_status = 'applied' then
     if p_target is null or p_target <= 0 then
       raise exception 'missing target';
@@ -134,12 +149,14 @@ begin
       if latest.id is null or latest.status <> 'approved' or latest.target_price is distinct from p_target then
         raise exception 'not approved';
       end if;
-      -- An apply or a restore after that approval consumes it. A new apply key does not revive it.
+      -- Re-read after the SKU lock. An apply or a restore at or after that approval consumes it.
+      -- A different apply key does not revive it. An equal timestamp is consumed too.
       if exists (
         select 1 from public.market_decisions later
         where later.sku = p_sku
           and later.status in ('applied','restored')
-          and later.created_at > latest.created_at
+          and later.id is distinct from latest.id
+          and later.created_at >= latest.created_at
       ) then
         raise exception 'not approved: approval already used';
       end if;
