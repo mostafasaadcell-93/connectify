@@ -2,6 +2,10 @@ import {
   DEFAULT_SETTINGS, parseManualCsv, parseSpecs, evaluate, canApply, canRestore, applyVerifiedFacts, inspectStored, confirmReadback, simulatePrices
 } from "./engine.mjs";
 import {
+  ACTIVATIONS, LEGACY_FACT_COLUMNS, UPGRADED_FACT_COLUMNS, WARRANTY_PROVIDERS,
+  factSaveNote, factWrite, factsFromRow, missingFactColumn
+} from "./facts.mjs";
+import {
   AUDIT_LIMIT, auditLabel, collectionSummary, explainCollectionError, priceGap, safeHttpUrl, summarizeAudit, verificationLabel
 } from "./admin-status.mjs";
 
@@ -19,6 +23,7 @@ const state = {
   busy: false,
   auditTruncated: false,
   actionsOpen: true,
+  factsUpgrade: null,
   collection: {errors: [], checked: [], skipped: [], requests: null, run: null},
   note: "Scheduled automatic updates are off. You can approve and apply one verified price at a time. Nothing changes until a fresh database read confirms that exact variant."
 };
@@ -144,10 +149,13 @@ function renderMarket() {
       <label>Region <select id="factRegion"><option value="">Unknown</option><option value="uk">UK</option><option value="us">US</option><option value="hk">Hong Kong</option><option value="eu">EU</option><option value="ae">UAE</option><option value="japan">Japan</option><option value="china">China</option></select></label>
       <label>SIM <select id="factSim"><option value="">Unknown</option><option value="psim">Nano-SIM + eSIM</option><option value="esim">eSIM only</option><option value="dual">Dual physical</option></select></label>
       <label>Condition <select id="factCondition"><option value="">Unknown</option><option value="new">New</option><option value="open">Open box</option><option value="likenew">Like new</option><option value="used">Used</option><option value="refurb">Refurbished</option></select></label>
+      <label>Warranty provider <select id="factProvider"><option value="">Unknown</option><option value="apple">Apple</option><option value="samsung">Samsung</option><option value="seller">Seller/store</option><option value="international">International</option><option value="local">Local</option></select></label>
+      <label>Activation <select id="factActivation"><option value="">Unknown</option><option value="active">Activated</option><option value="inactive">Not activated</option></select></label>
       <label><input id="factVerified" type="checkbox"${off}> I verified these facts</label>
       <button class="abtn" type="button" id="marketSaveFacts"${off}>Save facts</button>
     </div>
-    <p class="mktnote">Unknown facts stay blank. Saving them does not change a price, the stock list, or a competitor quote. Only facts you mark as verified fill gaps, and they never replace a value the inventory already states.</p>
+    <p class="mktnote">Unknown facts stay blank. Warranty provider and activation are not guessed from the phone model. Saving them does not change a price, the stock list, or a competitor quote. Only facts you mark as verified fill gaps, and they never replace a value the inventory already states.</p>
+    ${state.factsUpgrade === false ? `<p class="mktnote" id="factUpgradeNote">The verified-facts upgrade is not installed. Warranty provider and activation stay unknown until that upgrade is added. Existing warranty, region, SIM, and condition facts still save. Prices are not changed.</p>` : ""}
     <textarea id="marketCsv" rows="4" placeholder="store,name,price,currency,url,available,storage,condition,sim,color,warranty,region"${off}></textarea>
     <button class="abtn" type="button" id="marketImport"${off}>Import manager prices</button>
     <input id="marketQ" placeholder="Filter shown matches" value="${esc(kept)}">
@@ -294,35 +302,6 @@ async function saveSettings() {
   renderMarket();
 }
 
-function factPayload(sku) {
-  const warranty = $("factWarranty").value;
-  const region = $("factRegion").value;
-  const sim = $("factSim").value;
-  const condition = $("factCondition").value;
-  const verified = $("factVerified").checked;
-  return {
-    sku,
-    warranty_years: warranty === "" ? null : Number(warranty),
-    region: region || null,
-    sim: sim || null,
-    condition: condition || null,
-    verified,
-    verified_at: verified ? new Date().toISOString() : null,
-    updated_at: new Date().toISOString()
-  };
-}
-
-function factsForSku(row) {
-  if (!row) return null;
-  return {
-    verified: row.verified === true,
-    warrantyYears: row.warranty_years == null ? null : Number(row.warranty_years),
-    region: row.region || null,
-    sim: row.sim || null,
-    condition: row.condition || null
-  };
-}
-
 function showFacts() {
   const sku = $("factSku") && $("factSku").value;
   const row = sku && state.facts[sku];
@@ -330,29 +309,71 @@ function showFacts() {
   if ($("factRegion")) $("factRegion").value = row && row.region || "";
   if ($("factSim")) $("factSim").value = row && row.sim || "";
   if ($("factCondition")) $("factCondition").value = row && row.condition || "";
+  if ($("factProvider")) $("factProvider").value = row && WARRANTY_PROVIDERS.includes(row.warrantyProvider) ? row.warrantyProvider : "";
+  if ($("factActivation")) $("factActivation").value = row && ACTIVATIONS.includes(row.activation) ? row.activation : "";
   if ($("factVerified")) $("factVerified").checked = !!(row && row.verified);
+}
+
+async function probeFactUpgrade() {
+  if (!window.LIVE || !LIVE.sb) return {error: {message: "audit table unavailable"}};
+  const probe = await LIVE.sb.from("market_sku_facts").select(UPGRADED_FACT_COLUMNS).limit(1);
+  if (missingFactColumn(probe.error)) {
+    state.factsUpgrade = false;
+    return {error: null};
+  }
+  if (!probe.error) state.factsUpgrade = true;
+  return probe;
 }
 
 async function saveFacts() {
   if (refusePreview("Saving facts")) return;
   const sku = $("factSku") && $("factSku").value;
   if (!sku) { state.note = "Choose a product before saving facts."; renderMarket(); return; }
-  const body = factPayload(sku);
   if (!window.LIVE || !LIVE.sb) {
     state.note = "Facts were not stored. The audit table is unavailable, and no price was changed.";
     renderMarket();
     return;
   }
-  const {error} = await LIVE.sb.from("market_sku_facts").upsert(body);
+  if (state.factsUpgrade == null) {
+    const probe = await probeFactUpgrade();
+    if (probe.error) {
+      state.note = "Facts were not stored. " + probe.error.message;
+      renderMarket();
+      return;
+    }
+  }
+  const now = new Date().toISOString();
+  const written = factWrite({
+    sku,
+    warrantyYears: $("factWarranty").value,
+    region: $("factRegion").value,
+    sim: $("factSim").value,
+    condition: $("factCondition").value,
+    warrantyProvider: $("factProvider").value,
+    activation: $("factActivation").value,
+    verified: $("factVerified").checked,
+    verifiedAt: now,
+    updatedAt: now
+  }, state.factsUpgrade === true);
+  if (!written.ok) {
+    state.note = "Facts were not stored. Selling prices were not changed.";
+    renderMarket();
+    return;
+  }
+  const {error} = await LIVE.sb.from("market_sku_facts").upsert(written.body);
+  if (missingFactColumn(error)) {
+    state.factsUpgrade = false;
+    state.note = "Facts were not stored. The verified-facts upgrade is not installed, so warranty provider and activation were not saved. Selling prices were not changed.";
+    renderMarket();
+    return;
+  }
   if (error) {
     state.note = "Facts were not stored. " + error.message;
     renderMarket();
     return;
   }
-  state.facts[sku] = factsForSku(body);
-  state.note = body.verified
-    ? "Verified facts saved for " + sku + ". Selling prices were not changed."
-    : "Facts saved as unverified, so matching still ignores them. Selling prices were not changed.";
+  state.facts[sku] = factsFromRow(written.body);
+  state.note = factSaveNote(written);
   renderMarket();
   if ($("factSku")) $("factSku").value = sku;
   showFacts();
@@ -392,10 +413,14 @@ async function loadAudit() {
   adoptAudit(state.history, AUDIT_LIMIT);
   const runs = await LIVE.sb.from("market_runs").select("status,error,started_at,finished_at").order("started_at", {ascending: false}).limit(1);
   if (!runs.error && Array.isArray(runs.data) && runs.data[0]) state.collection.run = runs.data[0];
-  const facts = await LIVE.sb.from("market_sku_facts").select("sku,warranty_years,region,sim,condition,verified");
+  let facts = await LIVE.sb.from("market_sku_facts").select(UPGRADED_FACT_COLUMNS);
+  if (missingFactColumn(facts.error)) {
+    state.factsUpgrade = false;
+    facts = await LIVE.sb.from("market_sku_facts").select(LEGACY_FACT_COLUMNS);
+  } else if (!facts.error) state.factsUpgrade = true;
   if (!facts.error && facts.data) {
     state.facts = {};
-    facts.data.forEach(row => { state.facts[row.sku] = factsForSku(row); });
+    facts.data.forEach(row => { state.facts[row.sku] = factsFromRow(row); });
   }
   const quotes = await LIVE.sb.from("market_observations").select("store,name,price,currency,url,available,checked_at,specs,status,error").order("checked_at", {ascending: false}).limit(1000);
   if (!quotes.error && quotes.data && quotes.data.length) {
@@ -404,6 +429,7 @@ async function loadAudit() {
   state.note = previewReadOnly()
     ? "Loaded stored quotes and decision history. Staging preview did not send an approval or a price change."
     : "Loaded saved decisions. Scheduled automatic updates are " + (automationOn() ? "on" : "off") + ".";
+  if (state.factsUpgrade === false) state.note += " The verified-facts upgrade is not installed.";
   renderMarket();
 }
 

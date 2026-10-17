@@ -239,6 +239,9 @@ footer{border-top:1px solid var(--line);padding:64px 0 40px;background:var(--dee
 @media (max-width:760px){
   .mktable{min-width:640px;font-size:12px}
   .mktable th,.mktable td{padding:8px 6px}
+  #marketRoot .stockbar{display:grid;grid-template-columns:1fr}
+  #marketRoot .stockbar label{min-width:0}
+  #marketRoot .stockbar select,#marketRoot .stockbar input[type="number"]{width:100%;max-width:100%}
   #marketRoot .stockbar .btn,#marketRoot .stockbar .abtn{flex:1 1 140px}
   #marketRoot .drow{align-items:flex-start;flex-wrap:wrap}
 }
