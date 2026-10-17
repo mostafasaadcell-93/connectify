@@ -5,8 +5,8 @@ import {once} from "node:events";
 import {readFileSync} from "node:fs";
 import {PRODUCTION_HOST} from "./hosted-staging-check.mjs";
 import {
-  BLUE, PRODUCTION_REF, RECOVERY_TEXT, SILVER, STAGING_HOST, STAGING_ORIGIN, WRITE_OPT_IN,
-  assertCompatibilitySpec, assertPublishableKey, assertReadyTarget, readinessConfig, runReadiness
+  BLUE, PHONE, PRODUCTION_REF, RECOVERY_TEXT, SILVER, STAGING_HOST, STAGING_ORIGIN, WRITE_OPT_IN,
+  assertCompatibilitySpec, assertPhone, assertPublishableKey, assertReadyTarget, readinessConfig, runReadiness
 } from "./hosted-migration-readiness.mjs";
 
 const root = "/workspace";
@@ -37,7 +37,7 @@ function fixture(options = {}) {
   const state = {
     units: JSON.parse(JSON.stringify([SILVER, BLUE])),
     revision: options.revision == null ? 4 : options.revision,
-    ph: {"stage-ph": {v: [{p: 25, q: 4}]}},
+    ph: JSON.parse(JSON.stringify(PHONE)),
     phRevision: 2,
     orders: [
       {code: "C-STAGE-CONF", status: "confirmed", stock_applied: true},
@@ -203,6 +203,43 @@ function assertStaffReadsAfterAuthentication(trace) {
   assert.equal(privateReads.every(call => call.audience === "anonymous"), true);
   assert.equal(trace.some((call, index) => index > probe && call.audience === "anonymous" && call.path === "/rest/v1/rpc/is_staff"), true);
 }
+
+test("synthetic phone matches the object-shaped seed variant", () => {
+  assert.deepEqual(PHONE, {"stage-ph": {v: {"0": {p: 25, q: 4}}}});
+  assert.doesNotThrow(() => assertPhone(JSON.parse(JSON.stringify(PHONE))));
+  const rejected = [
+    {"stage-ph": {v: [{p: 25, q: 4}]}},
+    {"stage-ph": {v: {"0": {p: 26, q: 4}}}},
+    {"stage-ph": {v: {"0": {p: 25, q: 3}}}},
+    {"stage-ph": {v: {"0": {p: "25", q: "4"}}}},
+    {"stage-ph": {v: {}}},
+    {"stage-ph": {v: {"1": {p: 25, q: 4}}}},
+    {"stage-ph": {v: {"0": {p: 25, q: 4}, "1": {p: 1, q: 1}}}},
+    {"stage-ph": {v: {"0": {p: 25, q: 4, note: "extra"}}}},
+    {"stage-ph": {name: "phone", v: {"0": {p: 25, q: 4}}}},
+    {"other-ph": {v: {"0": {p: 25, q: 4}}}},
+    {"stage-ph": {v: {"0": {p: 25, q: 4}}}, extra: {}},
+    null,
+    [{"p": 25, "q": 4}]
+  ];
+  for (const item of rejected) {
+    assert.throws(() => assertPhone(item), /synthetic phone fixture is missing/);
+  }
+});
+
+test("an unexpected phone shape stops the read-only preflight before staff sign-in", async () => {
+  const server = fixture();
+  server.ph = {"stage-ph": {v: [{p: 25, q: 4}]}};
+  await assert.rejects(() => runReadiness({env: env(), fetchImpl: server.fetchImpl}), /pass synthetic fixtures; fail synthetic phone: synthetic phone fixture is missing; pass anonymous private costs; pass anonymous staff permission/);
+  assert.equal(server.calls.some(call => call.includes("/auth/v1/token")), false);
+  assert.equal(server.trace.some(call => STAFF_ONLY.has(call.path)), false);
+  assert.equal(wrote(server), false);
+
+  const priced = fixture();
+  priced.ph["stage-ph"].v["0"].p = 26;
+  await assert.rejects(() => runReadiness({env: env(), fetchImpl: priced.fetchImpl}), /fail synthetic phone/);
+  assert.equal(priced.calls.some(call => call.includes("/auth/v1/token")), false);
+});
 
 test("bad hosts, keys, and write flags are refused before network activity", async () => {
   const cases = [

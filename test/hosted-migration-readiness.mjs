@@ -51,6 +51,7 @@ export const RECOVERY_TEXT = [
 
 export const SILVER = {id: "u-stage-1", m: "17promax", c: "Silver", st: 256, cond: "new", sim: "psim", qty: 2, p: 900, bat: 0, note: "staging-synthetic"};
 export const BLUE = {id: "u-stage-2", m: "17promax", c: "Deep Blue", st: 256, cond: "new", sim: "psim", qty: 1, p: 910, bat: 0, note: "staging-synthetic"};
+export const PHONE = {"stage-ph": {v: {"0": {p: 25, q: 4}}}};
 export const SILVER_IDENTITY = {color: "Silver", storage: "256", sim: "psim", cond: "new"};
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -266,12 +267,17 @@ function assertOriginalUnits(data) {
   }
 }
 
-function assertPhone(data) {
-  if (!data || typeof data !== "object" || Array.isArray(data) || Object.keys(data).join() !== "stage-ph") {
+export function assertPhone(data) {
+  const top = data && typeof data === "object" && !Array.isArray(data) ? Object.keys(data) : [];
+  const phone = top.length === 1 && top[0] === "stage-ph" ? data["stage-ph"] : null;
+  const phoneKeys = phone && typeof phone === "object" && !Array.isArray(phone) ? Object.keys(phone) : [];
+  const variants = phoneKeys.length === 1 && phoneKeys[0] === "v" ? phone.v : null;
+  const variantKeys = variants && typeof variants === "object" && !Array.isArray(variants) ? Object.keys(variants) : [];
+  const variant = variantKeys.length === 1 && variantKeys[0] === "0" ? variants["0"] : null;
+  const fields = variant && typeof variant === "object" && !Array.isArray(variant) ? Object.keys(variant).sort() : [];
+  if (!variant || fields.join() !== "p,q" || variant.p !== 25 || variant.q !== 4) {
     throw fail("synthetic phone fixture is missing");
   }
-  const variant = data["stage-ph"] && Array.isArray(data["stage-ph"].v) ? data["stage-ph"].v[0] : null;
-  if (!variant || Number(variant.p) !== 25 || Number(variant.q) !== 4) throw fail("synthetic phone fixture is missing");
 }
 
 function assertOrders(rows) {
