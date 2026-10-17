@@ -4,17 +4,55 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import {createRequire} from "node:module";
+import {fileURLToPath} from "node:url";
 
-const require = createRequire("/home/ubuntu/.npm/_npx/e41f203b7505f1fb/node_modules/playwright/index.js");
-const {chromium} = require("playwright");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function loadPlaywright() {
+  try {
+    return createRequire(import.meta.url)("playwright");
+  } catch (error) {
+    const detail = error && error.message ? error.message : String(error);
+    throw new Error("Playwright is not installed for this project. From the project root run `npm install`, then `npx playwright install chromium` if you want Playwright's own browser. " + detail);
+  }
+}
+
+async function launchBrowser(chromium) {
+  if (!chromium || typeof chromium.launch !== "function") {
+    throw new Error("Playwright loaded without a Chromium launcher. Reinstall playwright from the project root.");
+  }
+  const args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"];
+  const attempts = [
+    () => chromium.launch({headless: true, args}),
+    () => chromium.launch({headless: true, args, channel: "chrome"}),
+    () => chromium.launch({headless: true, args, channel: "msedge"})
+  ];
+  const errors = [];
+  for (const attempt of attempts) {
+    try { return await attempt(); }
+    catch (error) { errors.push(error && error.message ? error.message : String(error)); }
+  }
+  throw new Error("Playwright could not launch a browser. Install Google Chrome, Microsoft Edge, or run `npx playwright install chromium` from the project root.\n" + errors.join("\n"));
+}
+
+function projectFile(pathname) {
+  let decoded = pathname;
+  try { decoded = decodeURIComponent(pathname); }
+  catch { return null; }
+  const relative = decoded === "/" ? "index.html" : decoded.replace(/^[/\\]+/, "");
+  if (!relative || relative.includes("\0")) return null;
+  const file = path.resolve(root, relative);
+  const fromRoot = path.relative(root, file);
+  if (!fromRoot || fromRoot.startsWith("..") || path.isAbsolute(fromRoot)) return null;
+  return file;
+}
 
 function startServer() {
   return new Promise(resolve => {
     const server = http.createServer((req, res) => {
       const url = new URL(req.url, "http://127.0.0.1");
-      const name = decodeURIComponent(url.pathname);
-      const file = name === "/" ? "/workspace/index.html" : path.join("/workspace", name);
-      if (!file.startsWith("/workspace/")) { res.writeHead(403); res.end(); return; }
+      const file = projectFile(url.pathname);
+      if (!file) { res.writeHead(403); res.end(); return; }
       fs.readFile(file, (err, data) => {
         if (err) { res.writeHead(404); res.end(); return; }
         const type = file.endsWith(".html") ? "text/html" : (file.endsWith(".js") || file.endsWith(".mjs") ? "text/javascript" : "application/octet-stream");
@@ -37,6 +75,8 @@ async function install(page) {
     const run = op => {
       const box = load();
       if (op.table === "market_settings" && op.action === "update") {
+        window.__settingsUpdates = window.__settingsUpdates || [];
+        window.__settingsUpdates.push(op.body);
         box.settings = Object.assign(box.settings, op.body);
         save(box);
         return {data: null, error: null};
@@ -130,7 +170,8 @@ const quote = "store,name,price,currency,url,available,storage,condition,sim,col
 test("market admin status, collector copy, and preview writes stay accurate", async () => {
   const server = await startServer();
   const port = server.address().port;
-  const browser = await chromium.launch({executablePath: "/usr/bin/google-chrome", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]});
+  const {chromium} = loadPlaywright();
+  const browser = await launchBrowser(chromium);
   const context = await browser.newContext();
   try {
     const page = await context.newPage({viewport: {width: 1440, height: 1100}});
@@ -151,7 +192,60 @@ test("market admin status, collector copy, and preview writes stay accurate", as
     await page.locator("#marketCsv").fill(quote);
     await page.locator("#marketImport").click();
     await page.locator("#marketMargin").fill("2");
+    await page.evaluate(() => {
+      const key = "cx-market-audit-staging";
+      const box = JSON.parse(localStorage.getItem(key) || JSON.stringify({
+        settings: {automation_enabled: false, writes_enabled: false, min_margin_pct: null, lbp_per_usd: null, lbp_rate_verified: false},
+        flags: {}, decisions: [], facts: {}
+      }));
+      box.settings.automation_enabled = true;
+      box.settings.writes_enabled = true;
+      localStorage.setItem(key, JSON.stringify(box));
+      const input = document.querySelector("#marketAuto");
+      input.disabled = false;
+      input.checked = true;
+      window.__settingsUpdates = [];
+    });
     await page.locator("#marketSaveSettings").click();
+    await page.waitForFunction(() => document.body.innerText.includes("Rules saved. Scheduled automatic updates stay off."));
+    const rules = await page.evaluate(() => {
+      const box = JSON.parse(localStorage.getItem("cx-market-audit-staging"));
+      const input = document.querySelector("#marketAuto");
+      return {
+        automation: box.settings.automation_enabled,
+        writes: box.settings.writes_enabled,
+        margin: box.settings.min_margin_pct,
+        disabled: input.disabled,
+        checked: input.checked,
+        label: input.parentElement.textContent,
+        status: document.querySelector(".mkstatus").innerText,
+        updates: window.__settingsUpdates || []
+      };
+    });
+    assert.equal(rules.automation, false);
+    assert.equal(rules.writes, false);
+    assert.equal(rules.margin, 2);
+    assert.equal(rules.disabled, true);
+    assert.equal(rules.checked, false);
+    assert.match(rules.label, /Coming later — disabled/);
+    assert.equal(rules.status.includes("Automatic pricing on"), false);
+    assert.match(rules.status, /Automatic pricing off/);
+    assert.equal(rules.updates.length > 0, true);
+    for (const body of rules.updates) {
+      assert.equal(body.automation_enabled, false);
+      assert.equal(body.writes_enabled, false);
+    }
+    await page.locator("#factWarranty").selectOption("1");
+    await page.locator("#factVerified").check();
+    await page.locator("#marketSaveFacts").click();
+    await page.waitForFunction(() => document.body.innerText.includes("Verified facts saved"));
+    const facts = await page.evaluate(() => {
+      const box = JSON.parse(localStorage.getItem("cx-market-audit-staging"));
+      return {automation: box.settings.automation_enabled, writes: box.settings.writes_enabled, on: document.querySelector(".mkstatus").innerText.includes("Automatic pricing on")};
+    });
+    assert.equal(facts.automation, false);
+    assert.equal(facts.writes, false);
+    assert.equal(facts.on, false);
     await page.locator(".mktable input[data-sku]").first().check();
     await page.locator("#marketApprove").click();
     await page.waitForFunction(() => document.body.innerText.includes("The store price is unchanged until you apply it."));
@@ -168,8 +262,21 @@ test("market admin status, collector copy, and preview writes stay accurate", as
     });
     assert.equal(failed, false);
 
+    await page.evaluate(() => {
+      const input = document.querySelector("#marketAuto");
+      input.disabled = false;
+      input.checked = true;
+    });
     await page.locator("#marketApply").click();
     await page.waitForFunction(() => document.body.innerText.includes("Applied 1 approved price"));
+    await page.waitForFunction(() => document.body.innerText.includes("Scheduled updates stay off"));
+    const afterApply = await page.evaluate(() => {
+      const box = JSON.parse(localStorage.getItem("cx-market-audit-staging"));
+      return {automation: box.settings.automation_enabled, writes: box.settings.writes_enabled, on: document.body.innerText.includes("Automatic pricing on")};
+    });
+    assert.equal(afterApply.automation, false);
+    assert.equal(afterApply.writes, false);
+    assert.equal(afterApply.on, false);
     assert.equal(await page.locator(".mk-applied").count() > 0, true);
     assert.equal(await page.locator("[data-restore]").count(), 1);
     await page.locator("#marketApply").click();
@@ -261,6 +368,42 @@ test("market admin status, collector copy, and preview writes stay accurate", as
       return {orders: JSON.stringify(DB.orders) === start.orders, qty: unit.qty === start.qty, other: other.p === start.other};
     }, before);
     assert.deepEqual(after, {orders: true, qty: true, other: true});
+
+    await page.evaluate(() => {
+      const key = "cx-market-audit-staging";
+      const box = JSON.parse(localStorage.getItem(key));
+      const rows = [];
+      for (let i = 0; i < 200; i++) {
+        rows.push({
+          sku: "unit:" + window.__unitId,
+          status: "applied",
+          target_price: 1500,
+          previous_price: 1542,
+          apply_key: "unit:" + window.__unitId + "|1500|https://example.test/listing|1500",
+          created_at: new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString()
+        });
+      }
+      box.decisions = rows;
+      localStorage.setItem(key, JSON.stringify(box));
+    });
+    await page.reload({waitUntil: "domcontentloaded"});
+    await page.waitForFunction(() => window.LIVE && typeof DB !== "undefined" && DB.units && DB.units.length);
+    await install(page);
+    await page.evaluate(() => { setAdmin(true); go("market"); });
+    await page.waitForFunction(() => document.body.innerText.includes("Decision history is incomplete"));
+    assert.equal(await page.locator("#marketApply").isDisabled(), true);
+    assert.equal(await page.locator("[data-restore]").count(), 0);
+    const blocked = await page.evaluate(() => {
+      const price = window.__dbUnits.find(item => item.id === window.__unitId).p;
+      const before = window.__rpcCalls;
+      const apply = document.querySelector("#marketApply");
+      apply.disabled = false;
+      apply.click();
+      return {calls: window.__rpcCalls - before, price, next: window.__dbUnits.find(item => item.id === window.__unitId).p};
+    });
+    assert.equal(blocked.calls, 0);
+    assert.equal(blocked.next, blocked.price);
+    await page.waitForFunction(() => document.body.innerText.includes("no price was applied"));
 
     const preview = await context.newPage({viewport: {width: 1280, height: 900}});
     await preview.addInitScript(() => {

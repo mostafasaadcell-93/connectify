@@ -131,7 +131,7 @@ function renderMarket() {
       <label>Minimum margin % <input id="marketMargin" type="number" min="0" step="0.1" value="${state.settings.minMarginPct == null ? "" : esc(String(state.settings.minMarginPct))}"${off}></label>
       <label>Verified LBP per USD <input id="marketLbp" type="number" min="1" step="1" value="${state.settings.lbpPerUsd == null ? "" : esc(String(state.settings.lbpPerUsd))}"${off}></label>
       <label><input id="marketLbpOk" type="checkbox" ${state.settings.lbpRateVerified ? "checked" : ""}${off}> Rate was checked</label>
-      <label><input id="marketAuto" type="checkbox" ${state.settings.automationEnabled && state.settings.writesEnabled ? "checked" : ""}${off}> Scheduled automatic updates</label>
+      <label><input id="marketAuto" type="checkbox" disabled> Coming later — disabled</label>
       <button class="abtn" type="button" id="marketSaveSettings"${off}>Save rules</button>
     </div>
     <div class="stockbar">
@@ -148,7 +148,7 @@ function renderMarket() {
     <button class="abtn" type="button" id="marketImport"${off}>Import manager prices</button>
     <input id="marketQ" placeholder="Filter shown matches" value="${esc(kept)}">
     <div class="mkstatus">
-      <p>Automatic pricing ${state.settings.automationEnabled && state.settings.writesEnabled ? "on" : "off"}</p>
+      <p>Automatic pricing ${automationOn() ? "on" : "off"}</p>
       <p>Scheduler off</p>
       ${state.busy ? "<p>Working…</p>" : ""}
       ${state.auditTruncated ? "<p>Decision history is incomplete, so apply and restore stay off.</p>" : ""}
@@ -207,31 +207,31 @@ function renderMarket() {
   showFacts();
 }
 
+function automationOn() {
+  return state.settings.automationEnabled === true && state.settings.writesEnabled === true;
+}
+
 function readSettingsForm() {
   const margin = $("marketMargin").value.trim();
   const lbp = $("marketLbp").value.trim();
   state.settings.minMarginPct = margin === "" ? null : Number(margin);
   state.settings.lbpPerUsd = lbp === "" ? null : Number(lbp);
   state.settings.lbpRateVerified = $("marketLbpOk").checked;
-  const allow = $("marketAuto").checked;
-  state.settings.automationEnabled = allow;
-  state.settings.writesEnabled = allow;
 }
 
 async function saveSettings() {
   if (refusePreview("Saving rules")) return;
   readSettingsForm();
-  const requested = state.settings.automationEnabled && state.settings.writesEnabled;
+  state.settings.automationEnabled = false;
+  state.settings.writesEnabled = false;
   if (!window.LIVE || !LIVE.sb) {
-    state.settings.automationEnabled = false;
-    state.settings.writesEnabled = false;
     state.note = "Database settings are unavailable, so scheduled updates stay off. Selling prices were not changed.";
     renderMarket();
     return;
   }
   const {error} = await LIVE.sb.from("market_settings").update({
-    automation_enabled: requested,
-    writes_enabled: requested,
+    automation_enabled: false,
+    writes_enabled: false,
     min_margin_pct: state.settings.minMarginPct,
     lbp_per_usd: state.settings.lbpPerUsd,
     lbp_rate_verified: state.settings.lbpRateVerified,
@@ -254,11 +254,9 @@ async function saveSettings() {
       return;
     }
   }
-  state.settings.automationEnabled = requested;
-  state.settings.writesEnabled = requested;
-  state.note = requested
-    ? "Scheduled updates were saved for products marked Auto. They still do not run until that job is turned on."
-    : "Rules saved. Scheduled automatic updates stay off. You can still apply an approved price.";
+  state.settings.automationEnabled = false;
+  state.settings.writesEnabled = false;
+  state.note = "Rules saved. Scheduled automatic updates stay off. You can still apply an approved price.";
   renderMarket();
 }
 
@@ -371,7 +369,7 @@ async function loadAudit() {
   }
   state.note = previewReadOnly()
     ? "Loaded stored quotes and decision history. Staging preview did not send an approval or a price change."
-    : "Loaded saved decisions. Scheduled automatic updates are " + (state.settings.automationEnabled ? "on" : "off") + ".";
+    : "Loaded saved decisions. Scheduled automatic updates are " + (automationOn() ? "on" : "off") + ".";
   renderMarket();
 }
 
@@ -558,7 +556,7 @@ async function applyApproved(rows) {
       } else adoptAudit(state.history, state.auditTruncated ? AUDIT_LIMIT : state.history.length + 1);
       changed++;
     }
-    state.note = changed ? "Applied " + changed + " approved price" + (changed === 1 ? "" : "s") + ". Scheduled updates stay " + (state.settings.automationEnabled ? "on" : "off") + ". Stock and past orders were left as they were." : "Nothing was applied. Approve a verified row that is inside the margin and has not already been applied.";
+    state.note = changed ? "Applied " + changed + " approved price" + (changed === 1 ? "" : "s") + ". Scheduled updates stay " + (automationOn() ? "on" : "off") + ". Stock and past orders were left as they were." : "Nothing was applied. Approve a verified row that is inside the margin and has not already been applied.";
   } finally {
     state.busy = false;
     state.quiet = false;
