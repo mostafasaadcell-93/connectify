@@ -32,6 +32,13 @@ function executableSql(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter(line => !/^\s*--/.test(line)).join("\n");
 }
 
+function commitFunction(text) {
+  const start = text.indexOf("create or replace function public.market_commit_price");
+  const end = text.indexOf("$body$;", start);
+  if (start < 0 || end < 0) throw new Error("market_commit_price body missing");
+  return text.slice(start, end + "$body$;".length);
+}
+
 function withProjectRef(path, ref) {
   return ["-c", "select set_config('connectify.project_ref', '" + ref + "', false)", "-f", path];
 }
@@ -172,6 +179,14 @@ test("a stale staff save cannot overwrite units or ph", async () => {
   assert.match(migration, /is not proof of which database this is/);
   assert.match(migration, /stale store save/);
   assert.match(executable, /revision = revision \+ 1/);
+  assert.equal(executable.includes("pg_get_functiondef"), false);
+  assert.match(executable, /create or replace function public\.market_commit_price/);
+  const commit10 = commitFunction(readFileSync(migration10Path, "utf8"));
+  const commit11 = commitFunction(migration);
+  assert.equal(commit11, commit10.replace(
+    "set data = new_data, updated_at = clock_timestamp()",
+    "set data = new_data, updated_at = clock_timestamp(), revision = revision + 1"
+  ));
   assert.equal(executable.includes("automation_enabled = true"), false);
   assert.equal(executable.includes("enabled = true"), false);
   assert.equal(executable.includes("update public.orders"), false);

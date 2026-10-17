@@ -3,11 +3,11 @@
    It does not read a service-role key and it does not deploy anything.
 
    INCOMPATIBLE WITH MIGRATION 10 AND MIGRATION 11.
-   This file writes store_state and then calls market_decide with status applied.
-   Do not run it after supabase/staging/10-atomic-market-pricing.sql or
-   supabase/staging/11-store-revision.sql is installed. A run after migration 10
-   can save a price and then fail the audit. It has not been adapted to
-   market_commit_price or to the inventory revision check. */
+   The CLI refuses to run and makes no hosted request.
+   This file's historic flow writes store_state and then calls market_decide with
+   status applied. Do not run it after supabase/staging/10-atomic-market-pricing.sql
+   or supabase/staging/11-store-revision.sql is installed. Use
+   test/hosted-migration-readiness.mjs for staging checks. */
 
 export const PRODUCTION_HOST = "yxkzjwcmmtiljakttyfh.supabase.co";
 
@@ -90,6 +90,7 @@ async function rpc(base, anon, token, name, args) {
 }
 
 export async function main() {
+  throw new Error("refusing to run test/hosted-staging-check.mjs: this script uses the pre-migration-10 market_decide applied flow and can write a hosted price. It made no hosted request. Use test/hosted-migration-readiness.mjs.");
   const base = env("STAGING_SUPABASE_URL").replace(/\/$/, "");
   const anon = env("STAGING_ANON_KEY");
   const staffEmail = env("STAGING_STAFF_EMAIL");

@@ -364,7 +364,9 @@ test("running the file without staging variables exits before a request", async 
   const [code] = await once(child, "close");
   assert.equal(code, 1);
   assert.equal(stdout, "");
-  assert.match(stderr, /missing STAGING_SUPABASE_URL/);
+  assert.match(stderr, /refusing to run test\/hosted-market-race-check\.mjs/);
+  assert.match(stderr, /made no hosted request/);
+  assert.equal(stderr.includes("missing STAGING_SUPABASE_URL"), false);
 });
 
 test("running the file against production exits before a request", async () => {
@@ -383,7 +385,8 @@ test("running the file against production exits before a request", async () => {
   child.stderr.on("data", chunk => { stderr += chunk; });
   const [code] = await once(child, "close");
   assert.equal(code, 1);
-  assert.match(stderr, /refusing production/);
+  assert.match(stderr, /refusing to run test\/hosted-market-race-check\.mjs/);
+  assert.match(stderr, /made no hosted request/);
   assert.equal(stderr.includes(password), false);
   assert.equal(stderr.includes(anon), false);
 });

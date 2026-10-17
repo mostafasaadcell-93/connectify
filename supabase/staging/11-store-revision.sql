@@ -10,7 +10,9 @@
 -- This file does not enable automatic pricing, automatic writes, or the scheduler.
 -- Do not rerun the synthetic seed.
 -- test/hosted-staging-check.mjs and test/hosted-market-race-check.mjs use the pre-migration-10
--- audit path. Do not run either one after migration 10 or this file is installed.
+-- audit path. Their CLI entrypoints refuse to run. Use test/hosted-migration-readiness.mjs.
+-- market_commit_price below is the migration 10 body plus revision = revision + 1.
+-- Re-applying migration 10 after this file removes that bump. Re-apply this file immediately.
 
 do $migration$
 declare
@@ -19,7 +21,6 @@ declare
   order_count int;
   silver jsonb;
   blue jsonb;
-  fn_sql text;
 begin
   if project_ref is distinct from 'akgilfixljswqljmedmg' then
     raise exception 'refusing to install store revisions: set connectify.project_ref to akgilfixljswqljmedmg in this session only after the SQL Editor shows that reference. This script cannot read the hosted project id. Stop if the editor shows yxkzjwcmmtiljakttyfh.';
@@ -137,21 +138,215 @@ $guard$;
   execute 'create trigger store_state_revision_guard before insert or update on public.store_state for each row execute function public.store_state_revision_guard()';
   execute 'revoke all on function public.store_state_revision_guard() from public, anon, authenticated';
 
-  select pg_get_functiondef('public.market_commit_price(text,text,numeric,numeric,text,jsonb,jsonb)'::regprocedure) into fn_sql;
-  if fn_sql is null or position('search_path' in lower(fn_sql)) = 0 then
-    raise exception 'refusing to install store revisions: market_commit_price has no fixed search_path';
+  -- Install the reviewed migration 10 function with one added assignment.
+  -- Do not rewrite whatever body is currently installed by matching its text.
+  -- Re-applying migration 10 removes the revision bump. Re-apply this file immediately after that.
+  execute $commit$
+create or replace function public.market_commit_price(p_sku text, p_action text, p_target numeric, p_previous numeric, p_apply_key text, p_identity jsonb, p_proposal jsonb)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $body$
+declare
+  settings public.market_settings;
+  latest public.market_decisions;
+  applied_row public.market_decisions;
+  restored_row public.market_decisions;
+  existing public.market_decisions;
+  state_key text;
+  unit_id text;
+  phone_id text;
+  variant_index text;
+  locked jsonb;
+  unit_row jsonb;
+  variant_row jsonb;
+  idx int;
+  current_price numeric;
+  new_data jsonb;
+  new_id uuid;
+begin
+  if not public.is_staff() then
+    raise exception 'staff only';
   end if;
-  if position('revision = revision + 1' in fn_sql) = 0 then
-    if position('set data = new_data, updated_at = clock_timestamp()' in fn_sql) = 0 then
-      raise exception 'refusing to install store revisions: market_commit_price does not have the expected price update';
+  if p_action is distinct from 'apply' and p_action is distinct from 'restore' then
+    raise exception 'manual only';
+  end if;
+  if p_target is null or p_target <= 0 or p_previous is null or p_previous <= 0 then
+    raise exception 'missing target';
+  end if;
+  select * into settings from public.market_settings where id = 1;
+  if settings.id is null or settings.automation_enabled is true or settings.writes_enabled is true then
+    raise exception 'automation disabled';
+  end if;
+  if exists (select 1 from public.market_query_config where enabled is true) then
+    raise exception 'scheduler disabled';
+  end if;
+  if p_sku is null or p_sku ~ '[[:space:]]' then
+    raise exception 'unknown sku';
+  end if;
+  if p_sku ~ '^unit:[^:]+$' then
+    state_key := 'units';
+    unit_id := substring(p_sku from 6);
+  elsif p_sku ~ '^ph:[^:]+:[0-9]+$' then
+    state_key := 'ph';
+    phone_id := split_part(p_sku, ':', 2);
+    variant_index := split_part(p_sku, ':', 3);
+  else
+    raise exception 'unknown sku';
+  end if;
+
+  insert into public.market_sku_locks (sku)
+  values (p_sku)
+  on conflict (sku) do update set sku = excluded.sku;
+
+  select data into locked
+  from public.store_state
+  where key = state_key
+  for update;
+  if not found then
+    raise exception 'missing sku';
+  end if;
+
+  if state_key = 'units' then
+    if jsonb_typeof(locked) is distinct from 'array' then
+      raise exception 'missing sku';
     end if;
-    fn_sql := replace(
-      fn_sql,
-      'set data = new_data, updated_at = clock_timestamp()',
-      'set data = new_data, updated_at = clock_timestamp(), revision = revision + 1'
-    );
-    execute fn_sql;
+    begin
+      select (ordinality - 1)::int, unit
+      into strict idx, unit_row
+      from jsonb_array_elements(locked) with ordinality as found(unit, ordinality)
+      where unit->>'id' = unit_id;
+    exception
+      when no_data_found then
+        raise exception 'missing sku';
+      when too_many_rows then
+        raise exception 'ambiguous sku';
+    end;
+    if not (unit_row ? 'p') or unit_row->>'p' is null then
+      raise exception 'missing price';
+    end if;
+    if p_identity is null
+       or p_identity->>'color' is distinct from unit_row->>'c'
+       or p_identity->>'storage' is distinct from unit_row->>'st'
+       or p_identity->>'sim' is distinct from unit_row->>'sim'
+       or p_identity->>'cond' is distinct from unit_row->>'cond' then
+      raise exception 'variant changed';
+    end if;
+    current_price := (unit_row->>'p')::numeric;
+  else
+    if jsonb_typeof(locked) is distinct from 'object'
+       or locked->phone_id is null
+       or jsonb_typeof(locked->phone_id) is distinct from 'object' then
+      raise exception 'missing sku';
+    end if;
+    variant_row := locked #> array[phone_id, 'v', variant_index];
+    if variant_row is null or jsonb_typeof(variant_row) is distinct from 'object' or not (variant_row ? 'p') or variant_row->>'p' is null then
+      raise exception 'missing sku';
+    end if;
+    if p_identity is not null and (
+      (p_identity ? 'id' and p_identity->>'id' is distinct from phone_id)
+      or (p_identity ? 'variant' and p_identity->>'variant' is distinct from variant_index)
+    ) then
+      raise exception 'variant changed';
+    end if;
+    current_price := (variant_row->>'p')::numeric;
   end if;
+
+  if p_action = 'apply' then
+    if p_apply_key is null or char_length(p_apply_key) < 3 then
+      raise exception 'missing apply key';
+    end if;
+    select * into existing
+    from public.market_decisions
+    where status = 'applied' and apply_key = p_apply_key;
+    if existing.id is not null then
+      if existing.sku = p_sku
+         and existing.target_price is not distinct from p_target
+         and current_price is not distinct from p_target then
+        return existing.id;
+      end if;
+      raise exception 'already applied';
+    end if;
+    if current_price is distinct from p_previous then
+      raise exception 'stale price';
+    end if;
+    select * into latest
+    from public.market_decisions
+    where sku = p_sku and status in ('approved','rejected')
+    order by created_at desc, id desc
+    limit 1;
+    if latest.id is null or latest.status <> 'approved' or latest.target_price is distinct from p_target then
+      raise exception 'not approved';
+    end if;
+    if exists (
+      select 1 from public.market_decisions later
+      where later.sku = p_sku
+        and later.status in ('applied','restored')
+        and later.id is distinct from latest.id
+        and later.created_at >= latest.created_at
+    ) then
+      raise exception 'not approved: approval already used';
+    end if;
+  else
+    select * into applied_row
+    from public.market_decisions
+    where sku = p_sku and status = 'applied'
+    order by created_at desc, id desc
+    limit 1;
+    if applied_row.id is null then
+      raise exception 'not applied';
+    end if;
+    select * into restored_row
+    from public.market_decisions
+    where sku = p_sku
+      and status = 'restored'
+      and created_at >= applied_row.created_at
+    order by created_at desc, id desc
+    limit 1;
+    if restored_row.id is not null then
+      if restored_row.target_price is not distinct from p_target
+         and current_price is not distinct from p_target then
+        return restored_row.id;
+      end if;
+      raise exception 'already restored';
+    end if;
+    if applied_row.target_price is distinct from current_price
+       or applied_row.target_price is distinct from p_previous
+       or applied_row.previous_price is distinct from p_target then
+      raise exception 'stale price';
+    end if;
+  end if;
+
+  if state_key = 'units' then
+    new_data := jsonb_set(locked, array[idx::text, 'p'], to_jsonb(p_target), false);
+  else
+    new_data := jsonb_set(locked, array[phone_id, 'v', variant_index, 'p'], to_jsonb(p_target), false);
+  end if;
+  update public.store_state
+  set data = new_data, updated_at = clock_timestamp(), revision = revision + 1
+  where key = state_key;
+  if not found then
+    raise exception 'missing sku';
+  end if;
+
+  insert into public.market_decisions (sku, status, target_price, previous_price, apply_key, proposal, created_at)
+  values (
+    p_sku,
+    case when p_action = 'apply' then 'applied' else 'restored' end,
+    p_target,
+    p_previous,
+    case when p_action = 'apply' then p_apply_key else null end,
+    coalesce(p_proposal, '{}'::jsonb),
+    clock_timestamp()
+  )
+  returning id into new_id;
+  return new_id;
+exception when unique_violation then
+  raise exception 'already applied';
+end;
+$body$;
+$commit$;
 
   execute 'revoke all on function public.market_commit_price(text, text, numeric, numeric, text, jsonb, jsonb) from public, anon';
   execute 'grant execute on function public.market_commit_price(text, text, numeric, numeric, text, jsonb, jsonb) to authenticated';

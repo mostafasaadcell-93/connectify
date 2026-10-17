@@ -1,30 +1,13 @@
 /* INCOMPATIBLE WITH MIGRATION 10 AND MIGRATION 11.
+   The CLI refuses to run and makes no hosted request.
    Do not run this file after supabase/staging/10-atomic-market-pricing.sql or
-   supabase/staging/11-store-revision.sql is installed. It still calls market_decide
-   with status applied for a fake SKU. Adapt it before using it again.
+   supabase/staging/11-store-revision.sql is installed. Its historic flow still
+   calls market_decide with status applied for a fake SKU. Use
+   test/hosted-migration-readiness.mjs for staging checks.
 
    Hosted staging concurrency check for one manual price approval.
-
-   Run it only after review, with the same staging variables as
-   supabase/staging/HOSTED.md section 5. This process does not run the
-   hosted calls when the file is imported.
-
-   Windows PowerShell, from the Connectify repo:
-
-     git checkout cursor/market-pricing-7fc1
-     git pull origin cursor/market-pricing-7fc1
-     $env:STAGING_SUPABASE_URL='https://akgilfixljswqljmedmg.supabase.co'
-     $env:STAGING_ANON_KEY='the anon public key'
-     $env:STAGING_STAFF_EMAIL='the staging staff email'
-     $env:STAGING_STAFF_PASSWORD='the staging staff password'
-     node test/hosted-market-race-check.mjs
-
-   The script refuses every Supabase host except akgilfixljswqljmedmg.
-   It uses the anon key and two password grants for the existing staging
-   staff user. It does not read a service-role key. It writes audit rows
-   only for a new fake SKU, through market_decide. It does not change
-   prices, stock, orders, settings, or the scheduler, and it leaves the
-   new audit rows in place.
+   This process does not run the hosted calls when the file is imported.
+   Imported helpers remain available to local tests.
 */
 
 import {randomBytes} from "node:crypto";
@@ -572,15 +555,8 @@ export async function runHostedRace(options = {}) {
 }
 
 async function main() {
-  const secrets = [];
-  try {
-    const summary = await runHostedRace({secrets});
-    console.log(redact(JSON.stringify(summary, null, 2), secrets));
-  } catch (error) {
-    const text = error && error.message ? error.message : String(error);
-    console.error(redact(text, secrets));
-    process.exit(1);
-  }
+  console.error("refusing to run test/hosted-market-race-check.mjs: this script calls market_decide with status applied and is incompatible with migrations 10 and 11. It made no hosted request. Use test/hosted-migration-readiness.mjs.");
+  process.exit(1);
 }
 
 const entry = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
