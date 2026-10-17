@@ -58,13 +58,20 @@ function fixture(options = {}) {
     staleStatus: options.staleStatus || 409,
     privVisible: options.privVisible === true
   };
+  state.trace = [];
   state.fetchImpl = async (url, init) => {
     const parsed = new URL(url);
     const method = (init && init.method) || "GET";
-    state.calls.push(method + " " + parsed.pathname);
     const body = init && init.body ? JSON.parse(init.body) : null;
     const authorization = init && init.headers ? init.headers.authorization || "" : "";
     const staffToken = authorization.endsWith("staff-token");
+    state.calls.push(method + " " + parsed.pathname);
+    state.trace.push({
+      method,
+      path: parsed.pathname,
+      audience: staffToken ? "staff" : "anonymous",
+      key: parsed.searchParams.get("key") || ""
+    });
     if (parsed.pathname === "/rest/v1/store_state" && method === "GET") {
       const key = parsed.searchParams.get("key");
       const select = parsed.searchParams.get("select") || "";
@@ -80,7 +87,10 @@ function fixture(options = {}) {
         if (select.includes("revision")) row.revision = state.phRevision;
         return json(200, [row]);
       }
-      if (key === "eq.priv") return json(200, state.privVisible ? [{key: "priv"}] : []);
+      if (key === "eq.priv") {
+        if (staffToken || state.privVisible) return json(200, [{key: "priv"}]);
+        return json(200, []);
+      }
       if (key === "in.(units,ph)") {
         return json(200, [
           {key: "units", revision: state.revision},
@@ -88,11 +98,11 @@ function fixture(options = {}) {
         ]);
       }
     }
-    if (parsed.pathname === "/rest/v1/orders") return json(200, JSON.parse(JSON.stringify(state.orders)));
-    if (parsed.pathname === "/rest/v1/market_settings") return json(200, JSON.parse(JSON.stringify(state.settings)));
-    if (parsed.pathname === "/rest/v1/market_query_config") return json(200, JSON.parse(JSON.stringify(state.config)));
-    if (parsed.pathname === "/rest/v1/" ) {
-      if (!state.spec) return json(200, {paths: {}, definitions: {}});
+    if (parsed.pathname === "/rest/v1/orders") return json(200, staffToken ? JSON.parse(JSON.stringify(state.orders)) : []);
+    if (parsed.pathname === "/rest/v1/market_settings") return json(200, staffToken ? JSON.parse(JSON.stringify(state.settings)) : []);
+    if (parsed.pathname === "/rest/v1/market_query_config") return json(200, staffToken ? JSON.parse(JSON.stringify(state.config)) : []);
+    if (parsed.pathname === "/rest/v1/") {
+      if (!staffToken || !state.spec) return json(200, {paths: {}, definitions: {}});
       return json(200, {
         paths: {"/rpc/market_commit_price": {post: {}}},
         definitions: {store_state: {properties: {key: {}, data: {}, revision: {}}}}
@@ -107,8 +117,12 @@ function fixture(options = {}) {
       return json(200, state.staff === true);
     }
     if (parsed.pathname === "/rest/v1/market_decisions") {
+      if (!staffToken) return json(200, []);
       const rows = state.decisions.slice().sort((a, b) => b.created_at - a.created_at);
       return json(200, rows);
+    }
+    if (!staffToken && (parsed.pathname === "/rest/v1/rpc/market_decide" || parsed.pathname === "/rest/v1/rpc/market_commit_price" || method === "PATCH")) {
+      return json(401, {message: "permission denied"});
     }
     if (parsed.pathname === "/rest/v1/rpc/market_decide") {
       const id = nextId(state);
@@ -163,6 +177,33 @@ function wrote(state) {
   return state.calls.some(call => /market_commit_price|market_decide|PATCH/.test(call));
 }
 
+const STAFF_ONLY = new Set([
+  "/rest/v1/orders",
+  "/rest/v1/market_settings",
+  "/rest/v1/market_query_config",
+  "/rest/v1/market_decisions",
+  "/rest/v1/"
+]);
+
+function assertStaffReadsAfterAuthentication(trace) {
+  const signIn = trace.findIndex(call => call.method === "POST" && call.path === "/auth/v1/token");
+  const probe = trace.findIndex(call => call.method === "POST" && call.path === "/rest/v1/rpc/is_staff" && call.audience === "staff");
+  assert.equal(signIn >= 0, true);
+  assert.equal(probe > signIn, true);
+  trace.forEach((call, index) => {
+    if (!STAFF_ONLY.has(call.path)) return;
+    assert.equal(call.audience, "staff", call.method + " " + call.path);
+    assert.equal(index > probe, true, call.path);
+  });
+  const anonymousStaff = trace.filter(call => call.path === "/rest/v1/rpc/is_staff" && call.audience === "anonymous");
+  const privateReads = trace.filter(call => call.path === "/rest/v1/store_state" && call.key === "eq.priv");
+  assert.equal(anonymousStaff.length >= 1, true);
+  assert.equal(privateReads.length >= 1, true);
+  assert.equal(anonymousStaff.every(call => call.audience === "anonymous"), true);
+  assert.equal(privateReads.every(call => call.audience === "anonymous"), true);
+  assert.equal(trace.some((call, index) => index > probe && call.audience === "anonymous" && call.path === "/rest/v1/rpc/is_staff"), true);
+}
+
 test("bad hosts, keys, and write flags are refused before network activity", async () => {
   const cases = [
     env({STAGING_SUPABASE_URL: "https://" + PRODUCTION_HOST}),
@@ -196,6 +237,7 @@ test("authorization failures are rejected before a price write", async () => {
     await assert.rejects(() => runReadiness({env: env(), fetchImpl: server.fetchImpl}));
     assert.equal(wrote(server), false);
     assert.equal(server.calls.some(call => call.includes("market_commit_price")), false);
+    assert.equal(server.trace.some(call => STAFF_ONLY.has(call.path)), false);
   }
   const server = fixture({signInStatus: 401});
   await assert.rejects(() => runReadiness({env: env(), fetchImpl: server.fetchImpl}), error => {
@@ -203,6 +245,22 @@ test("authorization failures are rejected before a price write", async () => {
     assert.match(error.message, /staff sign-in was rejected/);
     return true;
   });
+});
+
+test("staff authentication happens before every staff-only read", async () => {
+  const ready = fixture();
+  const result = await runReadiness({env: env(), fetchImpl: ready.fetchImpl});
+  assert.equal(result.writes, false);
+  assertStaffReadsAfterAuthentication(ready.trace);
+
+  const missing = fixture({revisionColumn: false, spec: false});
+  await assert.rejects(() => runReadiness({
+    env: env({STAGING_SYNTHETIC_WRITE_CHECK: WRITE_OPT_IN}),
+    fetchImpl: missing.fetchImpl
+  }), /expected blocker before migrations 10 and 11 are installed[\s\S]*pass synthetic fixtures[\s\S]*pass staff permission[\s\S]*pass synthetic orders[\s\S]*pass disabled automation[\s\S]*fail revisions[\s\S]*fail migration compatibility[\s\S]*pass anonymous session stays anonymous/);
+  assert.equal(wrote(missing), false);
+  assertStaffReadsAfterAuthentication(missing.trace);
+  assert.equal(missing.units.find(item => item.id === "u-stage-1").p, 900);
 });
 
 test("read-only preflight passes without a write and reports a missing migration", async () => {
@@ -217,7 +275,7 @@ test("read-only preflight passes without a write and reports a missing migration
   assert.equal(ready.units.find(item => item.id === "u-stage-1").p, 900);
 
   const missing = fixture({revisionColumn: false, spec: false});
-  await assert.rejects(() => runReadiness({env: env({STAGING_SYNTHETIC_WRITE_CHECK: WRITE_OPT_IN}), fetchImpl: missing.fetchImpl}), /pass synthetic fixtures[\s\S]*fail revisions[\s\S]*fail migration compatibility/);
+  await assert.rejects(() => runReadiness({env: env({STAGING_SYNTHETIC_WRITE_CHECK: WRITE_OPT_IN}), fetchImpl: missing.fetchImpl}), /expected blocker before migrations 10 and 11 are installed[\s\S]*pass synthetic orders[\s\S]*fail migration compatibility/);
   assert.equal(wrote(missing), false);
   assert.equal(missing.units.find(item => item.id === "u-stage-1").p, 900);
 });

@@ -5,9 +5,10 @@
    Uses the anon or publishable key and one staging staff password.
    Does not read a service-role key.
 
-   The default run is read-only. It checks the synthetic fixtures, whether
-   market_commit_price and store_state.revision are visible, staff permission,
-   and that automation, writes, and the scheduler are off.
+   The default run is read-only. Anonymous requests read only the public
+   inventory and check that private costs and staff permission stay closed.
+   Staging staff is authenticated, and is_staff must be true, before orders,
+   market settings, the scheduler, or the price-function listing are read.
 
    Stored rows are read again after every write. An HTTP status is not proof.
    Write checks run only when STAGING_SYNTHETIC_WRITE_CHECK is exactly
@@ -219,14 +220,23 @@ function assertProbe(parsed, body) {
   }
 }
 
-async function request(ctx, method, path, body, extra) {
+function credentialFor(ctx, audience) {
+  if (audience === "session" || audience === "staff") {
+    if (!ctx.token) throw fail("refusing a staff request before sign-in");
+    if (audience === "staff" && ctx.staffVerified !== true) throw fail("refusing a staff read before is_staff is true");
+    return ctx.token;
+  }
+  return ctx.cfg.anon;
+}
+
+async function request(ctx, method, path, body, extra, audience) {
   const url = ctx.cfg.origin + path;
   assertAllowed(ctx, method, url, body);
   const response = await ctx.fetchImpl(url, {
     method,
     headers: Object.assign({
       apikey: ctx.cfg.anon,
-      authorization: "Bearer " + (ctx.token || ctx.cfg.anon),
+      authorization: "Bearer " + credentialFor(ctx, audience),
       "content-type": "application/json"
     }, extra || {}),
     body: body == null ? undefined : JSON.stringify(body)
@@ -287,34 +297,76 @@ function revisionOf(row) {
   return value;
 }
 
+function finishPreflight(checks) {
+  const failed = checks.filter(item => !item.ok);
+  if (!failed.length) return;
+  const blockers = new Set(["revisions", "migration compatibility"]);
+  const onlyBlockers = failed.every(item => blockers.has(item.name));
+  const prefix = onlyBlockers ? "expected blocker before migrations 10 and 11 are installed; " : "";
+  throw fail(prefix + summaryOf(checks));
+}
+
+function anonymousReady(checks) {
+  return ["synthetic fixtures", "synthetic phone", "anonymous private costs", "anonymous staff permission"].every(name => {
+    return checks.some(item => item.name === name && item.ok);
+  });
+}
+
+async function assertAnonymousStaff(ctx) {
+  const result = await request(ctx, "POST", "/rest/v1/rpc/is_staff", {});
+  if (result.body === true) throw fail("anonymous client is staff");
+  if (result.status < 400 && result.body !== false) throw fail("anonymous staff check was not rejected");
+}
+
+async function assertPrivateCostsHidden(ctx) {
+  const result = await request(ctx, "GET", "/rest/v1/store_state?key=eq.priv&select=key");
+  if (result.status === 401 || result.status === 403) return;
+  if (result.status !== 200 || !Array.isArray(result.body) || result.body.length !== 0) throw fail("anonymous client can see private costs");
+}
+
 async function readOnlyPreflight(ctx) {
   const checks = [];
-  const units = await check(checks, "synthetic fixtures", async () => {
+  await check(checks, "synthetic fixtures", async () => {
     const result = await request(ctx, "GET", "/rest/v1/store_state?key=eq.units&select=key,data");
     if (result.status !== 200 || !Array.isArray(result.body) || !result.body[0]) throw fail("units read failed (" + result.status + ")");
     assertOriginalUnits(result.body[0].data);
-    return result.body[0].data;
   });
   await check(checks, "synthetic phone", async () => {
     const result = await request(ctx, "GET", "/rest/v1/store_state?key=eq.ph&select=key,data");
     if (result.status !== 200 || !Array.isArray(result.body) || !result.body[0]) throw fail("phone read failed (" + result.status + ")");
     assertPhone(result.body[0].data);
   });
+  await check(checks, "anonymous private costs", assertPrivateCostsHidden.bind(null, ctx));
+  await check(checks, "anonymous staff permission", assertAnonymousStaff.bind(null, ctx));
+  if (!anonymousReady(checks)) finishPreflight(checks);
+
+  await check(checks, "staff permission", async () => {
+    const signIn = await request(ctx, "POST", "/auth/v1/token?grant_type=password", {
+      email: ctx.cfg.email,
+      password: ctx.cfg.password
+    });
+    if (signIn.status !== 200 || !signIn.body || !signIn.body.access_token) throw fail("staff sign-in was rejected (" + signIn.status + ")");
+    ctx.token = signIn.body.access_token;
+    ctx.staffVerified = false;
+    const staff = await request(ctx, "POST", "/rest/v1/rpc/is_staff", {}, null, "session");
+    if (staff.body !== true) {
+      ctx.token = "";
+      throw fail("staff authorization was rejected");
+    }
+    ctx.staffVerified = true;
+  });
+  if (ctx.staffVerified !== true) finishPreflight(checks);
+
   await check(checks, "synthetic orders", async () => {
-    const result = await request(ctx, "GET", "/rest/v1/orders?select=code,status,stock_applied&order=code.asc");
+    const result = await request(ctx, "GET", "/rest/v1/orders?select=code,status,stock_applied&order=code.asc", null, null, "staff");
     if (result.status !== 200) throw fail("orders read failed (" + result.status + ")");
     assertOrders(result.body);
   });
   await check(checks, "disabled automation", async () => {
-    const settings = await request(ctx, "GET", "/rest/v1/market_settings?id=eq.1&select=automation_enabled,writes_enabled");
-    const config = await request(ctx, "GET", "/rest/v1/market_query_config?id=eq.1&select=enabled");
+    const settings = await request(ctx, "GET", "/rest/v1/market_settings?id=eq.1&select=automation_enabled,writes_enabled", null, null, "staff");
+    const config = await request(ctx, "GET", "/rest/v1/market_query_config?id=eq.1&select=enabled", null, null, "staff");
     if (settings.status !== 200 || config.status !== 200) throw fail("settings read failed");
     assertFlags(settings.body, config.body);
-  });
-  await check(checks, "anonymous private costs", async () => {
-    const result = await request(ctx, "GET", "/rest/v1/store_state?key=eq.priv&select=key");
-    if (result.status === 401 || result.status === 403) return;
-    if (result.status !== 200 || !Array.isArray(result.body) || result.body.length !== 0) throw fail("anonymous client can see private costs");
   });
   const revisions = await check(checks, "revisions", async () => {
     const rows = await request(ctx, "GET", "/rest/v1/store_state?key=in.(units,ph)&select=key,revision");
@@ -324,32 +376,15 @@ async function readOnlyPreflight(ctx) {
     return {units: revisionOf(unitsRow), ph: revisionOf(phoneRow)};
   });
   await check(checks, "migration compatibility", async () => {
-    const result = await request(ctx, "GET", "/rest/v1/", null, {accept: "application/openapi+json"});
+    const result = await request(ctx, "GET", "/rest/v1/", null, {accept: "application/openapi+json"}, "staff");
     if (result.status !== 200) throw fail("market_commit_price is not installed");
     assertCompatibilitySpec(result.body);
   });
-  const fixtureOk = checks.filter(item => ["synthetic fixtures", "synthetic phone", "synthetic orders", "disabled automation"].includes(item.name)).every(item => item.ok);
-  if (fixtureOk) {
-    await check(checks, "anonymous staff permission", async () => {
-      const result = await request(ctx, "POST", "/rest/v1/rpc/is_staff", {});
-      if (result.body === true) throw fail("anonymous client is staff");
-      if (result.status < 400 && result.body !== false) throw fail("anonymous staff check was not rejected");
-    });
-    await check(checks, "staff permission", async () => {
-      const signIn = await request(ctx, "POST", "/auth/v1/token?grant_type=password", {
-        email: ctx.cfg.email,
-        password: ctx.cfg.password
-      });
-      if (signIn.status !== 200 || !signIn.body || !signIn.body.access_token) throw fail("staff sign-in was rejected (" + signIn.status + ")");
-      ctx.token = signIn.body.access_token;
-      const staff = await request(ctx, "POST", "/rest/v1/rpc/is_staff", {});
-      if (staff.body !== true) throw fail("staff authorization was rejected");
-      const again = await request(ctx, "GET", "/rest/v1/store_state?key=eq.units&select=key,data");
-      if (again.status !== 200 || !again.body[0]) throw fail("staff read did not match the synthetic inventory");
-      assertOriginalUnits(again.body[0].data);
-    });
-  }
-  if (checks.some(item => !item.ok)) throw fail(summaryOf(checks));
+  await check(checks, "anonymous session stays anonymous", async () => {
+    await assertPrivateCostsHidden(ctx);
+    await assertAnonymousStaff(ctx);
+  });
+  finishPreflight(checks);
   return {checks: checks.map(item => item.name), revisions};
 }
 
@@ -367,7 +402,7 @@ async function readUnits(ctx) {
 }
 
 async function readDecisions(ctx) {
-  const result = await request(ctx, "GET", "/rest/v1/market_decisions?sku=eq.unit:u-stage-1&select=id,sku,status,target_price,previous_price,apply_key&order=created_at.desc&limit=100");
+  const result = await request(ctx, "GET", "/rest/v1/market_decisions?sku=eq.unit:u-stage-1&select=id,sku,status,target_price,previous_price,apply_key&order=created_at.desc&limit=100", null, null, "staff");
   if (result.status === 401 || result.status === 403) throw fail("audit read was blocked. " + RECOVERY_TEXT);
   if (result.status !== 200 || !Array.isArray(result.body)) throw fail("audit read failed (" + result.status + "). " + RECOVERY_TEXT);
   if (result.body.length >= 100) throw fail("audit history for the synthetic sku is too large to verify. No audit rows were deleted. " + RECOVERY_TEXT);
@@ -395,7 +430,7 @@ async function commit(ctx, action, target, previous, applyKey) {
     p_apply_key: applyKey,
     p_identity: SILVER_IDENTITY,
     p_proposal: {}
-  });
+  }, null, "staff");
 }
 
 async function recoverSilver(ctx) {
@@ -417,10 +452,10 @@ async function recoverSilver(ctx) {
 async function syntheticWrites(ctx) {
   const before = await readUnits(ctx);
   assertOriginalUnits(before.data);
-  const orders = await request(ctx, "GET", "/rest/v1/orders?select=code,status,stock_applied&order=code.asc");
+  const orders = await request(ctx, "GET", "/rest/v1/orders?select=code,status,stock_applied&order=code.asc", null, null, "staff");
   const phone = await request(ctx, "GET", "/rest/v1/store_state?key=eq.ph&select=key,data,revision");
-  const settings = await request(ctx, "GET", "/rest/v1/market_settings?id=eq.1&select=automation_enabled,writes_enabled");
-  const config = await request(ctx, "GET", "/rest/v1/market_query_config?id=eq.1&select=enabled");
+  const settings = await request(ctx, "GET", "/rest/v1/market_settings?id=eq.1&select=automation_enabled,writes_enabled", null, null, "staff");
+  const config = await request(ctx, "GET", "/rest/v1/market_query_config?id=eq.1&select=enabled", null, null, "staff");
   if (orders.status !== 200 || phone.status !== 200) throw fail("refusing writes because the synthetic snapshot could not be reread. " + RECOVERY_TEXT);
   assertOrders(orders.body);
   assertPhone(phone.body[0].data);
@@ -439,7 +474,7 @@ async function syntheticWrites(ctx) {
     p_apply_key: null,
     p_proposal: {sku: "unit:u-stage-1"},
     p_mode: "manual"
-  });
+  }, null, "staff");
   const approvedRow = await requireNewDecision(ctx, beforeIds, approved, row => row.sku === "unit:u-stage-1" && row.status === "approved" && Number(row.target_price) === 890 && Number(row.previous_price) === 900, "approval");
   beforeIds.add(String(approvedRow.id));
   const unchanged = await readUnits(ctx);
@@ -466,7 +501,7 @@ async function syntheticWrites(ctx) {
   const probe = await request(ctx, "PATCH", "/rest/v1/store_state?key=eq.units&revision=eq." + afterRetry.revision, {
     data: afterRetry.data,
     revision: afterRetry.revision
-  }, {"prefer": "return=representation"});
+  }, {"prefer": "return=representation"}, "staff");
   const afterProbe = await readUnits(ctx);
   if (probe.status < 400 || !/stale store save/i.test(messageOf(probe.body)) || afterProbe.revision !== afterRetry.revision || JSON.stringify(afterProbe.data) !== JSON.stringify(afterRetry.data)) {
     throw fail("stale save was not rejected. HTTP " + probe.status + " is not a successful revision check. " + RECOVERY_TEXT);
@@ -489,10 +524,10 @@ async function syntheticWrites(ctx) {
   silverAt(afterRestoreRetry.data, 900);
   ctx.progress.restored = true;
 
-  const finalOrders = await request(ctx, "GET", "/rest/v1/orders?select=code,status,stock_applied&order=code.asc");
+  const finalOrders = await request(ctx, "GET", "/rest/v1/orders?select=code,status,stock_applied&order=code.asc", null, null, "staff");
   const finalPhone = await request(ctx, "GET", "/rest/v1/store_state?key=eq.ph&select=key,data,revision");
-  const finalSettings = await request(ctx, "GET", "/rest/v1/market_settings?id=eq.1&select=automation_enabled,writes_enabled");
-  const finalConfig = await request(ctx, "GET", "/rest/v1/market_query_config?id=eq.1&select=enabled");
+  const finalSettings = await request(ctx, "GET", "/rest/v1/market_settings?id=eq.1&select=automation_enabled,writes_enabled", null, null, "staff");
+  const finalConfig = await request(ctx, "GET", "/rest/v1/market_query_config?id=eq.1&select=enabled", null, null, "staff");
   if (JSON.stringify(finalOrders.body) !== orderBefore || JSON.stringify(finalPhone.body[0]) !== phoneBefore) {
     throw fail("orders or the phone fixture changed. " + RECOVERY_TEXT);
   }
@@ -512,7 +547,7 @@ async function syntheticWrites(ctx) {
 
 export async function runReadiness({env, fetchImpl} = {}) {
   const cfg = readinessConfig(env || {});
-  const ctx = {cfg, fetchImpl: fetchImpl || globalThis.fetch, token: "", writesArmed: false, progress: {applied: false, restored: false}};
+  const ctx = {cfg, fetchImpl: fetchImpl || globalThis.fetch, token: "", staffVerified: false, writesArmed: false, progress: {applied: false, restored: false}};
   const preflight = await readOnlyPreflight(ctx);
   if (!cfg.write) return {ok: true, mode: "read-only", host: STAGING_HOST, writes: false, preflight};
   try {
